@@ -1,0 +1,8 @@
+pchip = itp.PchipInterpolator([1,2,3,4,5,6,7], [0,0,0,3,6,5.7,6])
+spline = spl.Spline1D([1,2,3,4,5,6,7], [0,0,0,3,6,5.7,6], bc="extrapolate")
+plt.clf()
+plt.scatter([1,2,3,4,5,6,7], [0,0,0,3,6,5.7,6], marker="x", color="k", label="data")
+plt.plot(0:0.01:8,[pchip(i) for i in 0:0.01:8], label="pchip")
+plt.plot(0:0.01:8,spline(0:0.01:8), label="spline")
+plt.legend(); plt.grid(ls=":")
+plt.gcf()
