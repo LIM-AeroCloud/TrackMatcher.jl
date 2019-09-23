@@ -49,8 +49,7 @@ and locations as a vector of strings.
 """
 function findcsv(inventory::Vector{String}, folder::String)
   # Scan directory for files and folders and save directory
-  dir = readdir(folder)
-  path = abspath(folder)
+  dir = readdir(folder); path = abspath(folder)
   for file in dir
     cwd = joinpath(path, file)
     if endswith(file, ".csv")

@@ -54,6 +54,14 @@ struct flightDB
   remarks
 end
 
+export loadDB,
+       loadInventory,
+       loadArchive,
+       loadOnlineData,
+       flightDB,
+       flightData,
+       MetaData
+
 # Use constructor for flightData and MetaData:
 # - check vector length
 # - in MetaData: construct mins/maxs of area and date
@@ -62,6 +70,7 @@ end
 # - construct MetaData within flightData
 
 include("inventory.jl")
+include("archive.jl")
 
 
 """
@@ -88,7 +97,7 @@ function loadDB(DBtype::String, folder::Union{String, Vector{String}}...; remark
   else inventory = flightData[];  end
   if !isnothing(i2)
     ifiles = String[]
-    ifiles = findtextfiles(ifiles, folder[i2])
+    ifiles = findcsv(ifiles, folder[i2])
     archive = loadArchive(ifiles)
   else archive = flightData[];  end
   if !isnothing(i3)
