@@ -8,12 +8,11 @@ function loadArchive(files)
   archive = flightData[]
   for file in files
     # Load data
-    flights = DataFrame(csv.load(files[1], skiplines_begin=1,
-      header_exists=false, colnames=[:id, :ident, :orig, :dest,
+    flights = CSV.read(file, datarow=2, header=[:id, :ident, :orig, :dest,
       :aircraft, :time, :lat, :lon, :speed, :alt, :climb, :heading, :direction,
-      :facility, :description, :est]))
+      :facility, :description, :est])
     # Calculate time from individual columns and add as DateTime to DataFrame
-    flights.time = ZonedDateTime.(DateTime.(flights.time, "mm/dd/yyyy HH:MM:SS"), tz.tz"UTC")
+    flights.time = ZonedDateTime.(DateTime.(flights.time, "m/d/y H:M:S"), tz.tz"UTC")
 
     # Initialise loop over file
     global iStart = 1

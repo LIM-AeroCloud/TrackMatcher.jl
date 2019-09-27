@@ -1,20 +1,19 @@
 module TrackMatcher
 
 # Track changes during development
-using Revise
+# using Revise
 
 # Import Julia packages
-import CSVFiles; const csv = CSVFiles
+import CSV
 import DataFrames; const df = DataFrames
 import TimeZones; const tz = TimeZones
 import Dates
-import Dierckx; const spl = Dierckx
 import PyCall; const py = PyCall
-# import Conda
-import PyPlot; const plt = PyPlot
+# import PyPlot; const plt = PyPlot
+
 # Import structs from packages
 import DataFrames.DataFrame
-import Dates.DateTime
+import Dates.DateTime, Dates.Date, Dates.Time
 import TimeZones.ZonedDateTime
 # Import interpolations from scipy for PCHIP interpolations
 # Conda.add("pyplot")
@@ -69,9 +68,11 @@ export loadDB,
 # - check format of route
 # - construct MetaData within flightData
 
+# Outsource loop to save flightData to separate routine loadFlightData
+
 include("inventory.jl")
 include("archive.jl")
-
+include("onlineData.jl")
 
 """
     loadDB(DBtype, folder...)
@@ -80,7 +81,7 @@ documentation
 """
 function loadDB(DBtype::String, folder::Union{String, Vector{String}}...; remarks=[])
   # Save time of database creation
-  tc = DateTime(Dates.now())
+  tc = Dates.now()
   # Find database types
   if occursin('i', DBtype)  i1 = findfirst(isequal('i'), DBtype)
   else  i1 = findfirst(isequal('1'), DBtype);  end
@@ -93,17 +94,29 @@ function loadDB(DBtype::String, folder::Union{String, Vector{String}}...; remark
   if !isnothing(i1)
     ifiles = String[]
     ifiles = findcsv(ifiles, folder[i1])
-    inventory = loadInventory(ifiles)
+    inventory = try loadInventory(ifiles)
+    catch
+      @warn "Flight inventory couldn't be loaded."
+      FlightData[]
+    end
   else inventory = flightData[];  end
   if !isnothing(i2)
     ifiles = String[]
     ifiles = findcsv(ifiles, folder[i2])
-    archive = loadArchive(ifiles)
+    archive = try loadArchive(ifiles)
+    catch
+      @warn "FlightAware archive couldn't be loaded."
+      FlightData[]
+    end
   else archive = flightData[];  end
   if !isnothing(i3)
     ifiles = String[]
-    ifiles = findcsv(ifiles, folder[i3])
-    onlineData = loadOnlineData(ifiles)
+    ifiles = findtextfiles(ifiles, folder[i3])
+    onlineData = try loadOnlineData(ifiles)
+    catch
+      @warn "FlightAware online data couldn't be loaded."
+      FlightData[]
+    end
   else onlineData = flightData[];  end
 
   println("\ndone loading data to properties\n- inventory\n- archive\n- onlineData\n", "")
