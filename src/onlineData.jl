@@ -5,8 +5,8 @@ documentation
 """
 function loadOnlineData(files)
   # Initialise inventory file array
-  archive = Vector{flightData}(undef,length(files))
-  for (n, file) in enumerate(files)
+  archive = Vector{FlightData}(undef,length(files))
+  @pm.showprogress 1 "load online data..." for (n, file) in enumerate(files)
     # Read flight data
     flight = CSV.read(file, delim='\t', datarow=3,
       header=["time", "lat", "lon", "heading", "speed", "mph", "alt", "climb", "facility"])
@@ -86,8 +86,8 @@ function loadOnlineData(files)
     flight.climb = climb
     flight.heading = heading
     flight.alt = altitude
-    # Save data as flightData
-    archive[n] = flightData(flight.time, flight.lat, flight.lon, flight.alt,
+    # Save data as FlightData
+    archive[n] = FlightData(flight.time, flight.lat, flight.lon, flight.alt,
       flight.heading, flight.climb, flight.speed)
   end #loop over files
 

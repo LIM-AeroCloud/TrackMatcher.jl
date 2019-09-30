@@ -5,8 +5,8 @@ documentation
 """
 function loadArchive(files)
   # Initialise inventory file array
-  archive = flightData[]
-  for file in files
+  archive = FlightData[]
+  @pm.showprogress 1 "load archive..." for file in files
     # Load data
     flights = CSV.read(file, datarow=2, header=[:id, :ident, :orig, :dest,
       :aircraft, :time, :lat, :lon, :speed, :alt, :climb, :heading, :direction,
@@ -19,8 +19,8 @@ function loadArchive(files)
     # Loop over all data points
     for i = 1:length(flights.time)-1
       if flights.id[i] ≠ flights.id[i+1]
-        # When flight ID changes save data as flightData and set start index to next dataset
-        push!(archive, flightData(flights.time[iStart:i], flights.lat[iStart:i],
+        # When flight ID changes save data as FlightData and set start index to next dataset
+        push!(archive, FlightData(flights.time[iStart:i], flights.lat[iStart:i],
           flights.lon[iStart:i], flights.alt[iStart:i], flights.heading[iStart:i],
           flights.climb[iStart:i], flights.speed[iStart:i]))
         global iStart = i+1
@@ -28,7 +28,7 @@ function loadArchive(files)
     end
     # Save last flight of the dataset
     i = length(flights.time)
-    push!(archive, flightData(flights.time[iStart:i], flights.lat[iStart:i],
+    push!(archive, FlightData(flights.time[iStart:i], flights.lat[iStart:i],
       flights.lon[iStart:i], flights.alt[iStart:i], flights.heading[iStart:i],
       flights.climb[iStart:i], flights.speed[iStart:i]))
   end

@@ -5,8 +5,8 @@ documentation
 """
 function loadInventory(files)
   # Initialise inventory file array
-  inventory = flightData[]
-  for file in files
+  inventory = FlightData[]
+  @pm.showprogress 1 "load inventory..." for file in files
     # Load data
     flights = CSV.read(file, datarow=3, copycols=true)
     # Delete additional line at end of file
@@ -21,18 +21,20 @@ function loadInventory(files)
     # Loop over all data points
     for i = 1:length(flights.time)-1
       if flights.FLIGHT_ID[i] ≠ flights.FLIGHT_ID[i+1]
-        # When flight ID changes save data as flightData and set start index to next dataset
-        push!(inventory, flightData(flights.time[iStart:i], flights.LATITUDE[iStart:i],
-          flights.LONGITUDE[iStart:i], flights.ALTITUDE[iStart:i], [missing for j=iStart:i],
-          [missing for j=iStart:i], flights.SPEED[iStart:i]))
+        # When flight ID changes save data as FlightData and set start index to next dataset
+        push!(inventory, FlightData(flights.time[iStart:i], Float32.(flights.LATITUDE[iStart:i]),
+          Float32.(flights.LONGITUDE[iStart:i]), Float32.(flights.ALTITUDE[iStart:i]),
+          [missing for j=iStart:i], [missing for j=iStart:i], Float32.(flights.SPEED[iStart:i]),
+          flights.FLIGHT_ID[i], missing, missing, missing, file))
         global iStart = i+1
       end
     end
     # Save last flight of the dataset
     i = length(flights.time)
-    push!(inventory, flightData(flights.time[iStart:i], flights.LATITUDE[iStart:i],
-      flights.LONGITUDE[iStart:i], flights.ALTITUDE[iStart:i], [missing for j=iStart:i],
-      [missing for j=iStart:i], flights.SPEED[iStart:i]))
+    push!(inventory, FlightData(flights.time[iStart:i], Float32.(flights.LATITUDE[iStart:i]),
+      Float32.(flights.LONGITUDE[iStart:i]), Float32.(flights.ALTITUDE[iStart:i]),
+      [missing for j=iStart:i], [missing for j=iStart:i], Float32.(flights.SPEED[iStart:i]),
+      flights.FLIGHT_ID[i], missing, missing, missing, file))
   end
 
   return inventory

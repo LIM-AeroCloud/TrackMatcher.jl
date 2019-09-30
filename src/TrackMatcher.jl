@@ -10,7 +10,7 @@ import TimeZones; const tz = TimeZones
 import Dates
 import PyCall; const py = PyCall
 # import PyPlot; const plt = PyPlot
-
+import ProgressMeter; const pm = ProgressMeter
 # Import structs from packages
 import DataFrames.DataFrame
 import Dates.DateTime, Dates.Date, Dates.Time
@@ -26,29 +26,62 @@ end
 
 struct MetaData
   dbID::Union{Int32,String}
-  flightID::String
-  route::String
-  area::Vector{Float32}
-  date::Vector{Union{DateTime,tz.ZonedDateTime}}
-  filename::String
+  flightID::Union{Missing,String}
+  aircraft::Union{Missing,String}
+  route::Union{Missing,NamedTuple{(:orig,:dest),Tuple{String,String}}}
+  area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),
+        Tuple{Float32,Float32,Float32,Float32,Float32,Float32}}
+  date::NamedTuple{(:start,:stop),Tuple{ZonedDateTime,ZonedDateTime}}
+  file::String
+
+  function MetaData(dbID::Union{Int32,String}, flightID::Union{Missing,String},
+    aircraft::Union{Missing,String},
+    route::Union{Missing,NamedTuple{(:orig,:dest),Tuple{String,String}}},
+    lat::Vector{<:Union{Missing,Float32}}, lon::Vector{<:Union{Missing,Float32}},
+    date::Vector{ZonedDateTime}, file::String)
+    plonmax = isempty(lon[lon.≥0]) ? NaN32 : maximum(lon[lon.≥0])
+    plonmin = isempty(lon[lon.≥0]) ? NaN32 : minimum(lon[lon.≥0])
+    nlonmax = isempty(lon[lon.<0]) ? NaN32 : maximum(lon[lon.<0])
+    nlonmin = isempty(lon[lon.<0]) ? NaN32 : minimum(lon[lon.<0])
+    area = (latmin=minimum(lat), latmax=maximum(lat),
+      plonmin=plonmin, plonmax=plonmax, nlonmin=nlonmin, nlonmax=nlonmax)
+    new(dbID, flightID, aircraft, route, area, (start=date[1], stop=date[end]), file)
+  end
 end
 
-struct flightData
+struct FlightData
   time::Vector{ZonedDateTime}
-  lat::Vector{Union{Missing,Float32}}
-  lon::Vector{Union{Missing,Float32}}
-  alt::Vector{Union{Missing,Float32}}
-  heading::Vector{Union{Missing,Int32}}
-  climb::Vector{Union{Missing,Int32}}
-  speed::Vector{Union{Missing,Float32}}
-  # metadata::MetaData
-end #flightData
+  lat::Vector{<:Union{Missing,Float32}}
+  lon::Vector{<:Union{Missing,Float32}}
+  alt::Vector{<:Union{Missing,Float32}}
+  heading::Vector{<:Union{Missing,Int32}}
+  climb::Vector{<:Union{Missing,Int32}}
+  speed::Vector{<:Union{Missing,Float32}}
+  metadata::MetaData
+
+  function FlightData(time::Vector{ZonedDateTime}, lat::Vector{<:Union{Missing,Float32}},
+    lon::Vector{<:Union{Missing,Float32}}, alt::Vector{<:Union{Missing,Float32}},
+    heading::Vector{<:Union{Missing,Int32}}, climb::Vector{<:Union{Missing,Int32}},
+    speed::Vector{<:Union{Missing,Float32}}, dbID::Union{Int32,String},
+    flightID::Union{Missing,String}, aircraft::Union{Missing,String},
+    route::Union{Missing,NamedTuple{(:orig,:dest),Tuple{String,String}}},file::String)
+    lat = checklength(lat, time)
+    lon = checklength(lon, time)
+    alt = checklength(alt, time)
+    heading = checklength(heading, time)
+    climb = checklength(climb, time)
+    speed = checklength(speed, time)
+    metadata = MetaData(dbID,flightID,aircraft,route,lat,lon,time,file)
+
+    new(time,lat,lon,alt,heading,climb,speed,metadata)
+  end
+end #FlightData
 
 # Define own structs
-struct flightDB
-  inventory::Vector{flightData}
-  archive::Vector{flightData}
-  onlineData::Vector{flightData}
+struct FlightDB
+  inventory::Vector{FlightData}
+  archive::Vector{FlightData}
+  onlineData::Vector{FlightData}
   created::Union{DateTime,tz.ZonedDateTime}
   remarks
 end
@@ -57,18 +90,34 @@ export loadDB,
        loadInventory,
        loadArchive,
        loadOnlineData,
-       flightDB,
-       flightData,
+       FlightDB,
+       FlightData,
        MetaData
 
-# Use constructor for flightData and MetaData:
+# Use constructor for FlightData and MetaData:
 # - check vector length
 # - in MetaData: construct mins/maxs of area and date
 # - in area distinguish between pos/neg mins/maxs
 # - check format of route
-# - construct MetaData within flightData
+# - construct MetaData within FlightData
 
-# Outsource loop to save flightData to separate routine loadFlightData
+# Outsource loop to save FlightData to separate routine loadFlightData
+
+
+function checklength(vect, ref)
+  len = length(ref) - length(vect)
+  if len > 0
+    @warn string("$(len) entries missing in vector compared to reference. ",
+      "Missing entries are filled with `missing` at the end of the vector.")
+    vect = [vect; [missing for i = 1:len]]
+  elseif len < 0
+    @warn string("$(-len) additional entries found in vector compared to reference. ",
+      "Additional entries at the end of the vector are ignored.")
+    vect = vect[1:length(ref)]
+  end
+
+  return vect
+end
 
 include("inventory.jl")
 include("archive.jl")
@@ -99,7 +148,7 @@ function loadDB(DBtype::String, folder::Union{String, Vector{String}}...; remark
       @warn "Flight inventory couldn't be loaded."
       FlightData[]
     end
-  else inventory = flightData[];  end
+  else inventory = FlightData[];  end
   if !isnothing(i2)
     ifiles = String[]
     ifiles = findcsv(ifiles, folder[i2])
@@ -108,7 +157,7 @@ function loadDB(DBtype::String, folder::Union{String, Vector{String}}...; remark
       @warn "FlightAware archive couldn't be loaded."
       FlightData[]
     end
-  else archive = flightData[];  end
+  else archive = FlightData[];  end
   if !isnothing(i3)
     ifiles = String[]
     ifiles = findtextfiles(ifiles, folder[i3])
@@ -117,11 +166,11 @@ function loadDB(DBtype::String, folder::Union{String, Vector{String}}...; remark
       @warn "FlightAware online data couldn't be loaded."
       FlightData[]
     end
-  else onlineData = flightData[];  end
+  else onlineData = FlightData[];  end
 
   println("\ndone loading data to properties\n- inventory\n- archive\n- onlineData\n", "")
 
-  return flightDB(inventory, archive, onlineData, tc, remarks)
+  return FlightDB(inventory, archive, onlineData, tc, remarks)
 end # function loadDB
 
 end # module TrackMatcher
