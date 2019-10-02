@@ -1,9 +1,10 @@
 """
-    loadInventory(files)
+    loadInventory(files::Vector{String}) -> inventory
 
-documentation
+From a list of `files`, return an `inventory` as `Vector{FlightData}` that can
+be saved to the `inventory` field in `FlightDB`.
 """
-function loadInventory(files)
+function loadInventory(files::Vector{String})
   # Initialise inventory file array
   inventory = FlightData[]
   @pm.showprogress 1 "load inventory..." for file in files
@@ -42,11 +43,12 @@ end #function loadInventory
 
 
 """
-    loadArchive(files)
+    loadArchive(files::Vector{String}) -> archive
 
-documentation
+From a list of `files`, return an `archive` as `Vector{FlightData}` that can
+be saved to the `archive` field in `FlightDB`.
 """
-function loadArchive(files)
+function loadArchive(files::Vector{String})
   # Initialise inventory file array
   archive = FlightData[]
   @pm.showprogress 1 "load archive..." for file in files
@@ -87,11 +89,12 @@ end #function loadArchive
 
 
 """
-    loadOnlineData(files)
+    loadOnlineData(files::Vector{String}) -> archive
 
-documentation
+From a list of `files`, return an `archive` as `Vector{FlightData}` that can
+be saved to the `onlineData` field in `FlightDB`.
 """
-function loadOnlineData(files)
+function loadOnlineData(files::Vector{String})
   # Initialise inventory file array
   archive = Vector{FlightData}(undef,length(files))
   @pm.showprogress 1 "load online data..." for (n, file) in enumerate(files)
