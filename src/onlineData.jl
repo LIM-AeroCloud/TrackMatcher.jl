@@ -23,9 +23,11 @@ function loadOnlineData(files)
     elseif zone == "CEST"
       timezone = tz.tz"+0200"
     end
-    # Retrieve date from filename
-    m = match(r"_(.*?)_", basename(file))
-    date = Dates.Date(m.captures[1], "d-u-y", locale="english")
+    # Retrieve date and metadata from filename
+    filename = splitext(basename(file))[1]
+    flightID, datestr, course = match(r"(.*?)_(.*?)_(.*)", filename).captures
+    orig, dest = match(r"(.*)[-|_](.*)", course).captures
+    date = Dates.Date(datestr, "d-u-y", locale="english")
     # Set to 2 days prior to allow corrections for timezone diffences in the next step
     date -= Dates.Day(2)
     # Delete rows with invalid times
@@ -36,9 +38,9 @@ function loadOnlineData(files)
     flightdate = Vector{Union{Missing,Date}}(undef, length(flight.time))
     flighttime = Vector{Union{Missing,Time}}(undef, length(flight.time))
     # Initialise vectors for altitude, heading and climb to convert from strings to Int32
-    heading = Vector{Union{Missing,Int32}}(undef, length(flight.time))
-    climb = Vector{Union{Missing,Int32}}(undef, length(flight.time))
-    altitude = Vector{Union{Missing,Int32}}(undef, length(flight.time))
+    heading = Vector{Union{Missing,Int}}(undef, length(flight.time))
+    climb = Vector{Union{Missing,Int}}(undef, length(flight.time))
+    altitude = Vector{Union{Missing,AbstractFloat}}(undef, length(flight.time))
     # Loop over times
     for i=1:length(flight.time)
       # Derive date from day of week and filename
@@ -66,16 +68,17 @@ function loadOnlineData(files)
       flighttime[i] = t
       # Filter altitude, heading and climbing rate for numbers and convert to Int32
       altitude[i] = try
-        parse(Int32, flight.alt[i][findall([isdigit.(i) for i ∈ flight.alt[i]])])
-      catch; 0
+        alt=parse(Int, flight.alt[i][findall([isdigit.(i) for i ∈ flight.alt[i]])])
+        convert(AbstractFloat,alt)
+      catch; 0.
       end
       climb[i] = try
-        parse(Int32, flight.climb[i][findall([isdigit.(i) | (i == '-') for i ∈ flight.climb[i]])])
+        parse(Int, flight.climb[i][findall([isdigit.(i) | (i == '-') for i ∈ flight.climb[i]])])
       catch; 0
       end
       try
         idx = [j for j in eachindex(flight.heading) if isdigit(flight.heading[j])]
-        heading[i] = parse.(Int32, flight.heading[idx])
+        heading[i] = parse.(Int, flight.heading[idx])
       catch
         heading[i] = missing
       end
@@ -88,7 +91,8 @@ function loadOnlineData(files)
     flight.alt = altitude
     # Save data as FlightData
     archive[n] = FlightData(flight.time, flight.lat, flight.lon, flight.alt,
-      flight.heading, flight.climb, flight.speed)
+      flight.heading, flight.climb, convert.(Union{Missing,AbstractFloat},flight.speed),
+      n, flightID, missing, (orig=orig, dest=dest), file)
   end #loop over files
 
   return archive

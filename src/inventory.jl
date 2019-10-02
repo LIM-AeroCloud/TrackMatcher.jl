@@ -22,18 +22,18 @@ function loadInventory(files)
     for i = 1:length(flights.time)-1
       if flights.FLIGHT_ID[i] ≠ flights.FLIGHT_ID[i+1]
         # When flight ID changes save data as FlightData and set start index to next dataset
-        push!(inventory, FlightData(flights.time[iStart:i], Float32.(flights.LATITUDE[iStart:i]),
-          Float32.(flights.LONGITUDE[iStart:i]), Float32.(flights.ALTITUDE[iStart:i]),
-          [missing for j=iStart:i], [missing for j=iStart:i], Float32.(flights.SPEED[iStart:i]),
+        push!(inventory, FlightData(flights.time[iStart:i], flights.LATITUDE[iStart:i],
+          flights.LONGITUDE[iStart:i], flights.ALTITUDE[iStart:i],
+          [missing for j=iStart:i], [missing for j=iStart:i], flights.SPEED[iStart:i],
           flights.FLIGHT_ID[i], missing, missing, missing, file))
         global iStart = i+1
       end
     end
     # Save last flight of the dataset
     i = length(flights.time)
-    push!(inventory, FlightData(flights.time[iStart:i], Float32.(flights.LATITUDE[iStart:i]),
-      Float32.(flights.LONGITUDE[iStart:i]), Float32.(flights.ALTITUDE[iStart:i]),
-      [missing for j=iStart:i], [missing for j=iStart:i], Float32.(flights.SPEED[iStart:i]),
+    push!(inventory, FlightData(flights.time[iStart:i], flights.LATITUDE[iStart:i],
+      flights.LONGITUDE[iStart:i], flights.ALTITUDE[iStart:i],
+      [missing for j=iStart:i], [missing for j=iStart:i], flights.SPEED[iStart:i],
       flights.FLIGHT_ID[i], missing, missing, missing, file))
   end
 

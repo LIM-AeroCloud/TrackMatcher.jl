@@ -25,24 +25,24 @@ function __init__()
 end
 
 struct MetaData
-  dbID::Union{Int32,String}
-  flightID::Union{Missing,String}
-  aircraft::Union{Missing,String}
-  route::Union{Missing,NamedTuple{(:orig,:dest),Tuple{String,String}}}
+  dbID::Union{Int,AbstractString}
+  flightID::Union{Missing,AbstractString}
+  aircraft::Union{Missing,AbstractString}
+  route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}}
   area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),
-        Tuple{Float32,Float32,Float32,Float32,Float32,Float32}}
+        Tuple{AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat}}
   date::NamedTuple{(:start,:stop),Tuple{ZonedDateTime,ZonedDateTime}}
-  file::String
+  file::AbstractString
 
-  function MetaData(dbID::Union{Int32,String}, flightID::Union{Missing,String},
-    aircraft::Union{Missing,String},
-    route::Union{Missing,NamedTuple{(:orig,:dest),Tuple{String,String}}},
-    lat::Vector{<:Union{Missing,Float32}}, lon::Vector{<:Union{Missing,Float32}},
-    date::Vector{ZonedDateTime}, file::String)
-    plonmax = isempty(lon[lon.≥0]) ? NaN32 : maximum(lon[lon.≥0])
-    plonmin = isempty(lon[lon.≥0]) ? NaN32 : minimum(lon[lon.≥0])
-    nlonmax = isempty(lon[lon.<0]) ? NaN32 : maximum(lon[lon.<0])
-    nlonmin = isempty(lon[lon.<0]) ? NaN32 : minimum(lon[lon.<0])
+  function MetaData(dbID::Union{Int,AbstractString},
+    flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
+    route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
+    lat::Vector{<:Union{Missing,AbstractFloat}}, lon::Vector{<:Union{Missing,AbstractFloat}},
+    date::Vector{ZonedDateTime}, file::AbstractString)
+    plonmax = isempty(lon[lon.≥0]) ? NaN : maximum(lon[lon.≥0])
+    plonmin = isempty(lon[lon.≥0]) ? NaN : minimum(lon[lon.≥0])
+    nlonmax = isempty(lon[lon.<0]) ? NaN : maximum(lon[lon.<0])
+    nlonmin = isempty(lon[lon.<0]) ? NaN : minimum(lon[lon.<0])
     area = (latmin=minimum(lat), latmax=maximum(lat),
       plonmin=plonmin, plonmax=plonmax, nlonmin=nlonmin, nlonmax=nlonmax)
     new(dbID, flightID, aircraft, route, area, (start=date[1], stop=date[end]), file)
@@ -51,20 +51,22 @@ end
 
 struct FlightData
   time::Vector{ZonedDateTime}
-  lat::Vector{<:Union{Missing,Float32}}
-  lon::Vector{<:Union{Missing,Float32}}
-  alt::Vector{<:Union{Missing,Float32}}
-  heading::Vector{<:Union{Missing,Int32}}
-  climb::Vector{<:Union{Missing,Int32}}
-  speed::Vector{<:Union{Missing,Float32}}
+  lat::Vector{<:Union{Missing,AbstractFloat}}
+  lon::Vector{<:Union{Missing,AbstractFloat}}
+  alt::Vector{<:Union{Missing,AbstractFloat}}
+  heading::Vector{<:Union{Missing,Int}}
+  climb::Vector{<:Union{Missing,Int}}
+  speed::Vector{<:Union{Missing,AbstractFloat}}
   metadata::MetaData
 
-  function FlightData(time::Vector{ZonedDateTime}, lat::Vector{<:Union{Missing,Float32}},
-    lon::Vector{<:Union{Missing,Float32}}, alt::Vector{<:Union{Missing,Float32}},
-    heading::Vector{<:Union{Missing,Int32}}, climb::Vector{<:Union{Missing,Int32}},
-    speed::Vector{<:Union{Missing,Float32}}, dbID::Union{Int32,String},
-    flightID::Union{Missing,String}, aircraft::Union{Missing,String},
-    route::Union{Missing,NamedTuple{(:orig,:dest),Tuple{String,String}}},file::String)
+  function FlightData(time::Vector{ZonedDateTime}, lat::Vector{<:Union{Missing,AbstractFloat}},
+    lon::Vector{<:Union{Missing,AbstractFloat}}, alt::Vector{<:Union{Missing,AbstractFloat}},
+    heading::Vector{<:Union{Missing,Int}}, climb::Vector{<:Union{Missing,Int}},
+    speed::Vector{<:Union{Missing,AbstractFloat}}, dbID::Union{Int,AbstractString},
+    flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
+    route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
+    file::AbstractString)
+
     lat = checklength(lat, time)
     lon = checklength(lon, time)
     alt = checklength(alt, time)
