@@ -8,6 +8,7 @@ import CSV
 import DataFrames; const df = DataFrames
 import TimeZones; const tz = TimeZones
 import Dates
+import MATLAB; const mat = MATLAB
 import PyCall; const py = PyCall
 # import PyPlot; const plt = PyPlot
 import ProgressMeter; const pm = ProgressMeter
@@ -23,6 +24,9 @@ function __init__()
   copy!(itp, py.pyimport_conda("scipy.interpolate", "scipy"))
   # copy!(plt, py.pyimport("matplotlib.pyplot"))
 end
+
+
+### Define own structs
 
 struct MetaData
   dbID::Union{Int,AbstractString}
@@ -46,8 +50,8 @@ struct MetaData
     area = (latmin=minimum(lat), latmax=maximum(lat),
       plonmin=plonmin, plonmax=plonmax, nlonmin=nlonmin, nlonmax=nlonmax)
     new(dbID, flightID, aircraft, route, area, (start=date[1], stop=date[end]), file)
-  end
-end
+  end #constructor MetaData
+end #struct MetaData
 
 struct FlightData
   time::Vector{ZonedDateTime}
@@ -76,25 +80,79 @@ struct FlightData
     metadata = MetaData(dbID,flightID,aircraft,route,lat,lon,time,file)
 
     new(time,lat,lon,alt,heading,climb,speed,metadata)
-  end
-end #FlightData
+  end #constructor FlightData
+end #struct FlightData
 
-# Define own structs
 struct FlightDB
   inventory::Vector{FlightData}
   archive::Vector{FlightData}
   onlineData::Vector{FlightData}
   created::Union{DateTime,tz.ZonedDateTime}
   remarks
-end
+end #struct FlightDB
 
-export loadDB,
-       loadInventory,
-       loadArchive,
-       loadOnlineData,
+struct CLay
+  time::Vector{ZonedDateTime}
+  lat::Vector{AbstractFloat}
+  lon::Vector{AbstractFloat}
+
+  function CLay(files::String...)
+    utc = ZonedDateTime[]; lon = []; lat = []
+    for file in files
+      if occursin("CLay", basename(file))
+        t = mat.mxcall(:hdfread,1,file,"Profile_UTC_Time")[:,2]
+        utc = [utc; convertUTC.(t)]
+        lon = [lon; mat.mxcall(:hdfread,1,file, "Longitude")[:,2]]
+        lat = [lat; mat.mxcall(:hdfread,1,file, "Latitude")[:,2]]
+      end
+    end
+
+    new(utc, lat, lon)
+  end #constructor CLay
+end #struct CLay
+
+struct CPro
+  time::Vector{ZonedDateTime}
+  lat::Vector{AbstractFloat}
+  lon::Vector{AbstractFloat}
+
+  function CPro(files::String...)
+    utc = ZonedDateTime[]; lon = []; lat = []
+    for file in files
+      if occursin("CPro", basename(file))
+        t = mat.mxcall(:hdfread,1,file,"Profile_UTC_Time")[:,2]
+        utc = [utc; convertUTC.(t)]
+        lon = [lon; mat.mxcall(:hdfread,1,file, "Longitude")[:,2]]
+        lat = [lat; mat.mxcall(:hdfread,1,file, "Latitude")[:,2]]
+      end
+    end
+
+    new(utc, lat, lon)
+  end #constructor CPro
+end #struct CPro
+
+struct SatDB
+  CLay::CLay
+  CPro::CPro
+  created::DateTime
+  remarks
+
+  function SatDB(folder::String...; remarks=nothing)
+    cl = CLay(folder...)
+    cp = CPro(folder...)
+    tc = Dates.now()
+
+    new(cl, cp, tc, remarks)
+  end #constructor SatDB
+end #struct SatDB
+
+export loadFlightDB,
        FlightDB,
        FlightData,
-       MetaData
+       MetaData,
+       CLay,
+       CPro,
+       SatDB
 
 # Use constructor for FlightData and MetaData:
 # - check vector length
@@ -105,32 +163,16 @@ export loadDB,
 
 # Outsource loop to save FlightData to separate routine loadFlightData
 
+include("auxiliary.jl")
+include("loadFlightData.jl")
 
-function checklength(vect, ref)
-  len = length(ref) - length(vect)
-  if len > 0
-    @warn string("$(len) entries missing in vector compared to reference. ",
-      "Missing entries are filled with `missing` at the end of the vector.")
-    vect = [vect; [missing for i = 1:len]]
-  elseif len < 0
-    @warn string("$(-len) additional entries found in vector compared to reference. ",
-      "Additional entries at the end of the vector are ignored.")
-    vect = vect[1:length(ref)]
-  end
-
-  return vect
-end
-
-include("inventory.jl")
-include("archive.jl")
-include("onlineData.jl")
 
 """
-    loadDB(DBtype, folder...)
+    loadFlightDB(DBtype, folder...)
 
 documentation
 """
-function loadDB(DBtype::String, folder::Union{String, Vector{String}}...; remarks=[])
+function loadFlightDB(DBtype::String, folder::Union{String, Vector{String}}...; remarks=nothing)
   # Save time of database creation
   tc = Dates.now()
   # Find database types
@@ -144,7 +186,7 @@ function loadDB(DBtype::String, folder::Union{String, Vector{String}}...; remark
   # Load databases for each type
   if !isnothing(i1)
     ifiles = String[]
-    ifiles = findcsv(ifiles, folder[i1])
+    ifiles = findFiles(ifiles, folder[i1], ".csv")
     inventory = try loadInventory(ifiles)
     catch
       @warn "Flight inventory couldn't be loaded."
@@ -153,7 +195,7 @@ function loadDB(DBtype::String, folder::Union{String, Vector{String}}...; remark
   else inventory = FlightData[];  end
   if !isnothing(i2)
     ifiles = String[]
-    ifiles = findcsv(ifiles, folder[i2])
+    ifiles = findFiles(ifiles, folder[i2], ".csv")
     archive = try loadArchive(ifiles)
     catch
       @warn "FlightAware archive couldn't be loaded."
@@ -162,7 +204,7 @@ function loadDB(DBtype::String, folder::Union{String, Vector{String}}...; remark
   else archive = FlightData[];  end
   if !isnothing(i3)
     ifiles = String[]
-    ifiles = findtextfiles(ifiles, folder[i3])
+    ifiles = findFiles(ifiles, folder[i3], ".txt", ".dat")
     onlineData = try loadOnlineData(ifiles)
     catch
       @warn "FlightAware online data couldn't be loaded."
@@ -173,6 +215,6 @@ function loadDB(DBtype::String, folder::Union{String, Vector{String}}...; remark
   println("\ndone loading data to properties\n- inventory\n- archive\n- onlineData\n", "")
 
   return FlightDB(inventory, archive, onlineData, tc, remarks)
-end # function loadDB
+end # function loadFlightDB
 
 end # module TrackMatcher
