@@ -1,19 +1,19 @@
 module TrackMatcher
 
 # Track changes during development
-using Revise
+# using Revise
 
 # Import Julia packages
-import CSVFiles; const csv = CSVFiles
+import CSV
 import DataFrames; const df = DataFrames
 import TimeZones; const tz = TimeZones
-import Dierckx; const spl = Dierckx
+import Dates
 import PyCall; const py = PyCall
-# import Conda
-import PyPlot; const plt = PyPlot
+# import PyPlot; const plt = PyPlot
+import ProgressMeter; const pm = ProgressMeter
 # Import structs from packages
 import DataFrames.DataFrame
-import Dates.DateTime
+import Dates.DateTime, Dates.Date, Dates.Time
 import TimeZones.ZonedDateTime
 # Import interpolations from scipy for PCHIP interpolations
 # Conda.add("pyplot")
@@ -24,78 +24,155 @@ function __init__()
   # copy!(plt, py.pyimport("matplotlib.pyplot"))
 end
 
+struct MetaData
+  dbID::Union{Int,AbstractString}
+  flightID::Union{Missing,AbstractString}
+  aircraft::Union{Missing,AbstractString}
+  route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}}
+  area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),
+        Tuple{AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat}}
+  date::NamedTuple{(:start,:stop),Tuple{ZonedDateTime,ZonedDateTime}}
+  file::AbstractString
 
-pchip = itp.PchipInterpolator([1,2,3,4,5,6,7], [0,0,0,3,6,5.7,6])
-spline = spl.Spline1D([1,2,3,4,5,6,7], [0,0,0,3,6,5.7,6], bc="extrapolate")
-plt.clf()
-plt.scatter([1,2,3,4,5,6,7], [0,0,0,3,6,5.7,6], marker="x", color="k", label="data")
-plt.plot(0:0.01:8,[pchip(i) for i in 0:0.01:8], label="pchip")
-plt.plot(0:0.01:8,spline(0:0.01:8), label="spline")
-plt.legend(); plt.grid(ls=":")
-plt.gcf()
-
-# Define own structs
-struct flightDB
-  inventory::Vector{flightData}
-  archive::Vector{flightData}
-  onlineData::Vector{flightData}
-  created::Union{DateTime,tz.ZonedDateTime}
+  function MetaData(dbID::Union{Int,AbstractString},
+    flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
+    route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
+    lat::Vector{<:Union{Missing,AbstractFloat}}, lon::Vector{<:Union{Missing,AbstractFloat}},
+    date::Vector{ZonedDateTime}, file::AbstractString)
+    plonmax = isempty(lon[lon.≥0]) ? NaN : maximum(lon[lon.≥0])
+    plonmin = isempty(lon[lon.≥0]) ? NaN : minimum(lon[lon.≥0])
+    nlonmax = isempty(lon[lon.<0]) ? NaN : maximum(lon[lon.<0])
+    nlonmin = isempty(lon[lon.<0]) ? NaN : minimum(lon[lon.<0])
+    area = (latmin=minimum(lat), latmax=maximum(lat),
+      plonmin=plonmin, plonmax=plonmax, nlonmin=nlonmin, nlonmax=nlonmax)
+    new(dbID, flightID, aircraft, route, area, (start=date[1], stop=date[end]), file)
+  end
 end
 
-struct flightData
+struct FlightData
   time::Vector{ZonedDateTime}
-  lat::Vector{Union{Missing,Float32}}
-  lon::Vector{Union{Missing,Float32}}
-  alt::Vector{Union{Missing,Float32}}
-  heading::Vector{Union{Missing,Int32}}
-  climb::Vector{Union{Missing,Int32}}
-  speed::Vector{Union{Missing,Float32}}
-  # metadata::MetaData
-end #flightData
+  lat::Vector{<:Union{Missing,AbstractFloat}}
+  lon::Vector{<:Union{Missing,AbstractFloat}}
+  alt::Vector{<:Union{Missing,AbstractFloat}}
+  heading::Vector{<:Union{Missing,Int}}
+  climb::Vector{<:Union{Missing,Int}}
+  speed::Vector{<:Union{Missing,AbstractFloat}}
+  metadata::MetaData
 
-# Use constructor for flightData and MetaData:
+  function FlightData(time::Vector{ZonedDateTime}, lat::Vector{<:Union{Missing,AbstractFloat}},
+    lon::Vector{<:Union{Missing,AbstractFloat}}, alt::Vector{<:Union{Missing,AbstractFloat}},
+    heading::Vector{<:Union{Missing,Int}}, climb::Vector{<:Union{Missing,Int}},
+    speed::Vector{<:Union{Missing,AbstractFloat}}, dbID::Union{Int,AbstractString},
+    flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
+    route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
+    file::AbstractString)
+
+    lat = checklength(lat, time)
+    lon = checklength(lon, time)
+    alt = checklength(alt, time)
+    heading = checklength(heading, time)
+    climb = checklength(climb, time)
+    speed = checklength(speed, time)
+    metadata = MetaData(dbID,flightID,aircraft,route,lat,lon,time,file)
+
+    new(time,lat,lon,alt,heading,climb,speed,metadata)
+  end
+end #FlightData
+
+# Define own structs
+struct FlightDB
+  inventory::Vector{FlightData}
+  archive::Vector{FlightData}
+  onlineData::Vector{FlightData}
+  created::Union{DateTime,tz.ZonedDateTime}
+  remarks
+end
+
+export loadDB,
+       loadInventory,
+       loadArchive,
+       loadOnlineData,
+       FlightDB,
+       FlightData,
+       MetaData
+
+# Use constructor for FlightData and MetaData:
 # - check vector length
 # - in MetaData: construct mins/maxs of area and date
 # - in area distinguish between pos/neg mins/maxs
 # - check format of route
-# - construct MetaData within flightData
+# - construct MetaData within FlightData
+
+# Outsource loop to save FlightData to separate routine loadFlightData
 
 
-struct MetaData
-  dbID::Union{Int32,String}
-  flightID::String
-  route::String
-  area::Vector{Float32}
-  date::Vector{Union{DateTime,tz.ZonedDateTime}}
-end
-
-# Load data
-flights = DataFrame(csv.load("data/flightinventory/1_1_2012_SEGMENT.csv", skiplines_begin=3,
-  header_exists=false, colnames=[:id, :seg, :lat, :lon, :alt, :month, :day, :year,
-  :hour, :min, :sec, :emiss, :temp, :press, :rH, :speed, :segtime, :segdist, :thrust,
-  :weight, :fuel, :co, :hc, :nox, :pmnv, :pmso, :pmfo, :co2, :h2o, :sox],
-  colparsers=Dict(:id => Int32, :lat => Float32, :lon =>Float32, :alt => Float32, :speed => Float32)))
-df.deleterows!(flights, length(flights.id))
-flights.time = ZonedDateTime.(flights.year, flights.month, flights.day,
-  flights.hour, flights.min, flights.sec, tz.tz"UTC")
-
-# Initialise
-global iStart = 1
-inventory = flightData[];
-# Loop over all data points
-for i = 1:length(flights.time)-1
-  if flights.id[i] ≠ flights.id[i+1]
-    # When flight ID changes save data as flightData and set start index to next dataset
-    push!(inventory, flightData(flights.time[iStart:i], flights.lat[iStart:i],
-      flights.lon[iStart:i], flights.alt[iStart:i], [missing for j=iStart:i],
-      [missing for j=iStart:i], flights.speed[iStart:i]))
-    global iStart = i+1
+function checklength(vect, ref)
+  len = length(ref) - length(vect)
+  if len > 0
+    @warn string("$(len) entries missing in vector compared to reference. ",
+      "Missing entries are filled with `missing` at the end of the vector.")
+    vect = [vect; [missing for i = 1:len]]
+  elseif len < 0
+    @warn string("$(-len) additional entries found in vector compared to reference. ",
+      "Additional entries at the end of the vector are ignored.")
+    vect = vect[1:length(ref)]
   end
-end
-# Save last flight of the dataset
-i = length(flights.time)
-push!(inventory, flightData(flights.time[iStart:i], flights.lat[iStart:i],
-  flights.lon[iStart:i], flights.alt[iStart:i], [missing for j=iStart:i],
-  [missing for j=iStart:i], flights.speed[iStart:i]))
 
-end # module
+  return vect
+end
+
+include("inventory.jl")
+include("archive.jl")
+include("onlineData.jl")
+
+"""
+    loadDB(DBtype, folder...)
+
+documentation
+"""
+function loadDB(DBtype::String, folder::Union{String, Vector{String}}...; remarks=[])
+  # Save time of database creation
+  tc = Dates.now()
+  # Find database types
+  if occursin('i', DBtype)  i1 = findfirst(isequal('i'), DBtype)
+  else  i1 = findfirst(isequal('1'), DBtype);  end
+  if occursin('a', DBtype)  i2 = findfirst(isequal('a'), DBtype)
+  else  i2 = findfirst(isequal('2'), DBtype);  end
+  if occursin('o', DBtype)  i3 = findfirst(isequal('o'), DBtype)
+  else  i3 = findfirst(isequal('3'), DBtype);  end
+
+  # Load databases for each type
+  if !isnothing(i1)
+    ifiles = String[]
+    ifiles = findcsv(ifiles, folder[i1])
+    inventory = try loadInventory(ifiles)
+    catch
+      @warn "Flight inventory couldn't be loaded."
+      FlightData[]
+    end
+  else inventory = FlightData[];  end
+  if !isnothing(i2)
+    ifiles = String[]
+    ifiles = findcsv(ifiles, folder[i2])
+    archive = try loadArchive(ifiles)
+    catch
+      @warn "FlightAware archive couldn't be loaded."
+      FlightData[]
+    end
+  else archive = FlightData[];  end
+  if !isnothing(i3)
+    ifiles = String[]
+    ifiles = findtextfiles(ifiles, folder[i3])
+    onlineData = try loadOnlineData(ifiles)
+    catch
+      @warn "FlightAware online data couldn't be loaded."
+      FlightData[]
+    end
+  else onlineData = FlightData[];  end
+
+  println("\ndone loading data to properties\n- inventory\n- archive\n- onlineData\n", "")
+
+  return FlightDB(inventory, archive, onlineData, tc, remarks)
+end # function loadDB
+
+end # module TrackMatcher
