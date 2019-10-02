@@ -25,7 +25,7 @@ function loadInventory(files)
         push!(inventory, FlightData(flights.time[iStart:i], flights.LATITUDE[iStart:i],
           flights.LONGITUDE[iStart:i], flights.ALTITUDE[iStart:i],
           [missing for j=iStart:i], [missing for j=iStart:i], flights.SPEED[iStart:i],
-          flights.FLIGHT_ID[i], missing, missing, missing, file))
+          parse(Int, flights.FLIGHT_ID[i]), missing, missing, missing, file))
         global iStart = i+1
       end
     end
@@ -34,7 +34,7 @@ function loadInventory(files)
     push!(inventory, FlightData(flights.time[iStart:i], flights.LATITUDE[iStart:i],
       flights.LONGITUDE[iStart:i], flights.ALTITUDE[iStart:i],
       [missing for j=iStart:i], [missing for j=iStart:i], flights.SPEED[iStart:i],
-      flights.FLIGHT_ID[i], missing, missing, missing, file))
+      parse(Int, flights.FLIGHT_ID[i]), missing, missing, missing, file))
   end
 
   return inventory
