@@ -1,42 +1,133 @@
 """
+    loadFlightDB(DBtype::String, folder::Union{String, Vector{String}}...; remarks=nothing) -> struct `FlightDB`
+
+Construct an instance of `FlightDB` with relevant flight data.
+
+
+# DBtype
+
+Specifies the database type; up to 3 types can be selected:
+- `1` or `"i"`: Flight inventory with flight tracks saved in csv files and saved
+  to property `inventory`.
+- `2` or `"a"`: Commercially available flight track data by FlightAware saved as
+  csv files and saved to property `archive`.
+- `3` or `"o"`: Flight tracks available online from the FlightAware website in
+  text (`.txt`/`.dat`) files and saved to property `onlineData`.
+
+
+# folder
+
+Directory holding the files of the databases specified by `DBtype`.
+Folders must be given as vararg in the order given by `DBtype`.
+
+e.g.:
+```julia
+flight = flightDB("i3", "data/inventory", "data/online_data")
+```
+
+# remarks
+Any data can be attached to `FlightDB` with the keyword argument `remarks`.
+"""
+function loadFlightDB(DBtype::String, folder::Union{String, Vector{String}}...; remarks=nothing)
+  # Save time of database creation
+  tc = Dates.now()
+  # Find database types
+  if occursin('i', DBtype)  i1 = findfirst(isequal('i'), DBtype)
+  else  i1 = findfirst(isequal('1'), DBtype);  end
+  if occursin('a', DBtype)  i2 = findfirst(isequal('a'), DBtype)
+  else  i2 = findfirst(isequal('2'), DBtype);  end
+  if occursin('o', DBtype)  i3 = findfirst(isequal('o'), DBtype)
+  else  i3 = findfirst(isequal('3'), DBtype);  end
+
+  # Load databases for each type
+  if !isnothing(i1)
+    ifiles = String[]
+    ifiles = findFiles(ifiles, folder[i1], ".csv")
+    inventory = try loadInventory(ifiles)
+    catch
+      @warn "Flight inventory couldn't be loaded."
+      FlightData[]
+    end
+  else inventory = FlightData[];  end
+  if !isnothing(i2)
+    ifiles = String[]
+    ifiles = findFiles(ifiles, folder[i2], ".csv")
+    archive = try loadArchive(ifiles)
+    catch
+      @warn "FlightAware archive couldn't be loaded."
+      FlightData[]
+    end
+  else archive = FlightData[];  end
+  if !isnothing(i3)
+    ifiles = String[]
+    ifiles = findFiles(ifiles, folder[i3], ".txt", ".dat")
+    onlineData = try loadOnlineData(ifiles)
+    catch
+      @warn "FlightAware online data couldn't be loaded."
+      FlightData[]
+    end
+  else onlineData = FlightData[];  end
+
+  println("\ndone loading data to properties\n- inventory\n- archive\n- onlineData\n", "")
+
+  return FlightDB(inventory, archive, onlineData, tc, remarks)
+end # function loadFlightDB
+
+
+"""
     loadInventory(files::Vector{String}) -> inventory
 
 From a list of `files`, return an `inventory` as `Vector{FlightData}` that can
 be saved to the `inventory` field in `FlightDB`.
 """
-function loadInventory(files::Vector{String})
+function loadInventory(files::Vector{String}; filterAlt=15000, filterCloudfree=true)
+
   # Initialise inventory file array
   inventory = FlightData[]
-  @pm.showprogress 1 "load inventory..." for file in files
+
+  # Loop over files
+  for file in files
+
     # Load data
-    flights = CSV.read(file, datarow=3, copycols=true)
-    # Delete additional line at end of file
-    df.deleterows!(flights, length(flights.FLIGHT_ID)-1:length(flights.FLIGHT_ID))
+    flights = CSV.read(file, datarow=3, footerskip=2,
+      ignoreemptylines=true, silencewarnings=true)
+
     # Calculate time from individual columns and add as DateTime to DataFrame
-    flights.time = ZonedDateTime.(flights.SEGMENT_YEAR, flights.SEGMENT_MONTH,
-      flights.SEGMENT_DAY, flights.SEGMENT_HOUR, flights.SEGMENT_MIN,
-      flights.SEGMENT_SEC, tz.tz"UTC")
+    flights.time = [ZonedDateTime(flights.SEGMENT_YEAR[i], flights.SEGMENT_MONTH[i],
+      flights.SEGMENT_DAY[i], flights.SEGMENT_HOUR[i], flights.SEGMENT_MIN[i],
+      flights.SEGMENT_SEC[i], tz.tz"UTC") for i = 1:length(flights.FLIGHT_ID)]
 
     # Initialise loop over file
-    global iStart = 1
+    iStart = length(flights.time)
+
     # Loop over all data points
-    for i = 1:length(flights.time)-1
-      if flights.FLIGHT_ID[i] ≠ flights.FLIGHT_ID[i+1]
-        # When flight ID changes save data as FlightData and set start index to next dataset
-        push!(inventory, FlightData(flights.time[iStart:i], flights.LATITUDE[iStart:i],
-          flights.LONGITUDE[iStart:i], flights.ALTITUDE[iStart:i],
-          [missing for j=iStart:i], [missing for j=iStart:i], flights.SPEED[iStart:i],
-          parse(Int, flights.FLIGHT_ID[i]), missing, missing, missing, file))
-        global iStart = i+1
+    @pm.showprogress 0.5 "load inventory from $(basename(splitext(file)[1]))..." for i = 1:length(flights.time)
+      if flights.FLIGHT_ID[i] ≠ flights.FLIGHT_ID[iStart] || i == length(flights.time)
+        if isempty(t)  iStart = i; continue  end
+        if i > 1
+          lp = any(lon .> 0) ? maximum(lon[lon.≥0]) - minimum(lon[lon.≥0]) : 0
+          ln = any(lon .< 0) ? maximum(lon[lon.<0]) - minimum(lon[lon.<0]) : 0
+          useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ? true : false
+          useLON ? (x = lon; y = lat) : (x = lat; y = lon)
+          x, y, alt, speed, t = remdup(x, y, alt, speed, t)
+          push!(inventory, FlightData(t, lat, lon, alt, [missing for i = 1:length(t)],
+            [missing for i = 1:length(t)], speed, flights.FLIGHT_ID[iStart], missing,
+            missing, missing, file))
+        end
+        global lat = AbstractFloat[]; global lon = AbstractFloat[];
+        global alt = AbstractFloat[]; global t = ZonedDateTime[]; global speed = AbstractFloat[]
+        flights.FLIGHT_ID[iStart]
+        iStart = i
+        # segtime = DateTime[]; segdist = AbstractFloat[]
       end
-    end
-    # Save last flight of the dataset
-    i = length(flights.time)
-    push!(inventory, FlightData(flights.time[iStart:i], flights.LATITUDE[iStart:i],
-      flights.LONGITUDE[iStart:i], flights.ALTITUDE[iStart:i],
-      [missing for j=iStart:i], [missing for j=iStart:i], flights.SPEED[iStart:i],
-      parse(Int, flights.FLIGHT_ID[i]), missing, missing, missing, file))
-  end
+      # Filter altitude threshold
+      if flights.ALTITUDE[i] ≥ filterAlt
+        push!(lat, flights.LATITUDE[i]); push!(lon, flights.LONGITUDE[i])
+        push!(alt, flights.ALTITUDE[i]); push!(speed, flights.SPEED[i])
+        push!(t, flights.time[i])
+      end
+    end #loop over flights
+  end #loop over files
 
   return inventory
 end #function loadInventory

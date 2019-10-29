@@ -9,7 +9,9 @@ import DataFrames; const df = DataFrames
 import TimeZones; const tz = TimeZones
 import Dates
 import MATLAB; const mat = MATLAB
+import Statistics; const stats = Statistics
 import ProgressMeter; const pm = ProgressMeter
+import Logging; const logg = Logging
 # Import structs from packages
 import DataFrames.DataFrame
 import Dates.DateTime, Dates.Date, Dates.Time
@@ -363,81 +365,5 @@ export loadFlightDB,
 
 include("auxiliary.jl")
 include("loadFlightData.jl")
-
-
-"""
-    loadFlightDB(DBtype::String, folder::Union{String, Vector{String}}...; remarks=nothing) -> struct `FlightDB`
-
-Construct an instance of `FlightDB` with relevant flight data.
-
-
-# DBtype
-
-Specifies the database type; up to 3 types can be selected:
-- `1` or `"i"`: Flight inventory with flight tracks saved in csv files and saved
-  to property `inventory`.
-- `2` or `"a"`: Commercially available flight track data by FlightAware saved as
-  csv files and saved to property `archive`.
-- `3` or `"o"`: Flight tracks available online from the FlightAware website in
-  text (`.txt`/`.dat`) files and saved to property `onlineData`.
-
-
-# folder
-
-Directory holding the files of the databases specified by `DBtype`.
-Folders must be given as vararg in the order given by `DBtype`.
-
-e.g.:
-```julia
-flight = flightDB("i3", "data/inventory", "data/online_data")
-```
-
-# remarks
-Any data can be attached to `FlightDB` with the keyword argument `remarks`.
-"""
-function loadFlightDB(DBtype::String, folder::Union{String, Vector{String}}...; remarks=nothing)
-  # Save time of database creation
-  tc = Dates.now()
-  # Find database types
-  if occursin('i', DBtype)  i1 = findfirst(isequal('i'), DBtype)
-  else  i1 = findfirst(isequal('1'), DBtype);  end
-  if occursin('a', DBtype)  i2 = findfirst(isequal('a'), DBtype)
-  else  i2 = findfirst(isequal('2'), DBtype);  end
-  if occursin('o', DBtype)  i3 = findfirst(isequal('o'), DBtype)
-  else  i3 = findfirst(isequal('3'), DBtype);  end
-
-  # Load databases for each type
-  if !isnothing(i1)
-    ifiles = String[]
-    ifiles = findFiles(ifiles, folder[i1], ".csv")
-    inventory = try loadInventory(ifiles)
-    catch
-      @warn "Flight inventory couldn't be loaded."
-      FlightData[]
-    end
-  else inventory = FlightData[];  end
-  if !isnothing(i2)
-    ifiles = String[]
-    ifiles = findFiles(ifiles, folder[i2], ".csv")
-    archive = try loadArchive(ifiles)
-    catch
-      @warn "FlightAware archive couldn't be loaded."
-      FlightData[]
-    end
-  else archive = FlightData[];  end
-  if !isnothing(i3)
-    ifiles = String[]
-    ifiles = findFiles(ifiles, folder[i3], ".txt", ".dat")
-    onlineData = try loadOnlineData(ifiles)
-    catch
-      @warn "FlightAware online data couldn't be loaded."
-      FlightData[]
-    end
-  else onlineData = FlightData[];  end
-
-  println("\ndone loading data to properties\n- inventory\n- archive\n- onlineData\n", "")
-
-  return FlightDB(inventory, archive, onlineData, tc, remarks)
-end # function loadFlightDB
 
 end # module TrackMatcher

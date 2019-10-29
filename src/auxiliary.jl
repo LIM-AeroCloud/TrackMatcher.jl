@@ -71,3 +71,28 @@ function findFiles(inventory::Vector{String}, folder::String, filetypes::String.
 
   return inventory
 end # function findcsv
+
+
+function remdup(x::Vector{<:AbstractFloat}, y::Vector{<:AbstractFloat},
+  alt::Vector{<:AbstractFloat}, speed::Vector{<:AbstractFloat}, t::Vector{<:ZonedDateTime})
+  i = 1
+  iEnd = length(x)
+  while i < iEnd
+    j = i + 1
+    while j ≤ iEnd && x[i] == x[j]
+      δ = eps(x[i]); Δ = 0
+      if y[i] == y[j]
+        deleteat!(x, i); deleteat!(y, i); deleteat!(alt, i); deleteat!(speed, i)
+        deleteat!(t, i)
+        iEnd -= 1
+      else
+        Δ += δ
+        x[j] += Δ
+        j += 1
+      end
+    end
+    i += 1
+  end
+
+  return x, y, alt, speed, t
+end
