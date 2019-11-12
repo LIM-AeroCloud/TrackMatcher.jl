@@ -82,8 +82,9 @@ be saved to the `inventory` field in `FlightDB`.
 """
 function loadInventory(files::Vector{String}; filterAlt=15000, filterCloudfree=true)
 
-  # Initialise inventory file array
+  # Initialise inventory file array and start MATLAB for PCHIP fitting
   inventory = FlightData[]
+  ms = mat.MSession() # rather hand over as function argument?
 
   # Loop over files
   for file in files
@@ -98,27 +99,28 @@ function loadInventory(files::Vector{String}; filterAlt=15000, filterCloudfree=t
       flights.SEGMENT_SEC[i], tz.tz"UTC") for i = 1:length(flights.FLIGHT_ID)]
 
     # Initialise loop over file
-    iStart = length(flights.time)
+    FID = flights.FLIGHT_ID[1]
+    lat = Float64[]; lon = Float64[];
+    alt = Float64[]; t = ZonedDateTime[]; speed = Float64[]
 
     # Loop over all data points
-    @pm.showprogress 0.5 "load inventory from $(basename(splitext(file)[1]))..." for i = 1:length(flights.time)
-      if flights.FLIGHT_ID[i] ≠ flights.FLIGHT_ID[iStart] || i == length(flights.time)
-        if isempty(t)  iStart = i; continue  end
-        if i > 1
-          lp = any(lon .> 0) ? maximum(lon[lon.≥0]) - minimum(lon[lon.≥0]) : 0
-          ln = any(lon .< 0) ? maximum(lon[lon.<0]) - minimum(lon[lon.<0]) : 0
-          useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ? true : false
-          useLON ? (x = lon; y = lat) : (x = lat; y = lon)
-          x, y, alt, speed, t = remdup(x, y, alt, speed, t)
-          push!(inventory, FlightData(t, lat, lon, alt, [missing for i = 1:length(t)],
-            [missing for i = 1:length(t)], speed, flights.FLIGHT_ID[iStart], missing,
-            missing, missing, file))
-        end
-        global lat = AbstractFloat[]; global lon = AbstractFloat[];
-        global alt = AbstractFloat[]; global t = ZonedDateTime[]; global speed = AbstractFloat[]
-        flights.FLIGHT_ID[iStart]
-        iStart = i
-        # segtime = DateTime[]; segdist = AbstractFloat[]
+    @pm.showprogress 1 "load inventory from $(basename(splitext(file)[1]))..." for i = 1:length(flights.time)
+      if flights.FLIGHT_ID[i] ≠ FID || i == length(flights.time)
+        if length(t) ≤ 1  FID = flights.FLIGHT_ID[i]; continue  end
+        lp = any(lon .> 0) ? maximum(lon[lon.≥0]) - minimum(lon[lon.≥0]) : 0
+        ln = any(lon .< 0) ? maximum(lon[lon.<0]) - minimum(lon[lon.<0]) : 0
+        useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ? true : false
+        useLON ? (x = lon; y = lat) : (x = lat; y = lon)
+        x, y, alt, speed, t = remdup(x, y, alt, speed, t)
+        flex = findFlex(x)
+        pchip = PCHIP(x, y, flex, FID, useLON, ms)
+        push!(inventory, FlightData(t, lat, lon, alt, [missing for i = 1:length(t)],
+          [missing for i = 1:length(t)], speed, FID, missing,
+          missing, missing, pchip, file))
+        lat = Float64[]; lon = Float64[];
+        alt = Float64[]; t = ZonedDateTime[]; speed = Float64[]
+        FID = flights.FLIGHT_ID[i]
+        # segtime = DateTime[]; segdist = Float64[]
       end
       # Filter altitude threshold
       if flights.ALTITUDE[i] ≥ filterAlt
@@ -147,7 +149,7 @@ function loadArchive(files::Vector{String})
     flights = CSV.read(file, datarow=2, header=[:id, :ident, :orig, :dest,
       :aircraft, :time, :lat, :lon, :speed, :alt, :climb, :heading, :direction,
       :facility, :description, :est])
-    flights.speed = convert.(Union{Missing,AbstractFloat}, flights.speed)
+    flights.speed = convert.(Union{Missing,Float64}, flights.speed)
     # Calculate time from individual columns and add as DateTime to DataFrame
     flights.time = ZonedDateTime.(DateTime.(flights.time, "m/d/y H:M:S"), tz.tz"UTC")
 
@@ -222,7 +224,7 @@ function loadOnlineData(files::Vector{String})
     # Initialise vectors for altitude, heading and climb to convert from strings to Int32
     heading = Vector{Union{Missing,Int}}(undef, length(flight.time))
     climb = Vector{Union{Missing,Int}}(undef, length(flight.time))
-    altitude = Vector{Union{Missing,AbstractFloat}}(undef, length(flight.time))
+    altitude = Vector{Union{Missing,Float64}}(undef, length(flight.time))
     # Loop over times
     for i=1:length(flight.time)
       # Derive date from day of week and filename
@@ -250,8 +252,7 @@ function loadOnlineData(files::Vector{String})
       flighttime[i] = t
       # Filter altitude, heading and climbing rate for numbers and convert to Int32
       altitude[i] = try
-        alt=parse(Int, flight.alt[i][findall([isdigit.(i) for i ∈ flight.alt[i]])])
-        convert(AbstractFloat,alt)
+        alt=parse(Float64, flight.alt[i][findall([isdigit.(i) for i ∈ flight.alt[i]])])
       catch; 0.
       end
       climb[i] = try
@@ -273,7 +274,7 @@ function loadOnlineData(files::Vector{String})
     flight.alt = altitude
     # Save data as FlightData
     archive[n] = FlightData(flight.time, flight.lat, flight.lon, flight.alt,
-      flight.heading, flight.climb, convert.(Union{Missing,AbstractFloat},flight.speed),
+      flight.heading, flight.climb, convert.(Union{Missing,Float64},flight.speed),
       n, flightID, missing, (orig=orig, dest=dest), file)
   end #loop over files
 

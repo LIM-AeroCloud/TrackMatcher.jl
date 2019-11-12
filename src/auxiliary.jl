@@ -26,11 +26,11 @@ end
 
 
 """
-    convertUTC(t::AbstractFloat) -> ZonedDateTime
+    convertUTC(t::Float64) -> ZonedDateTime
 
 Convert the CALIOP Profile UTC time (`t`) to a `ZonedDateTime` with `TimeZone` `UTC`.
 """
-function convertUTC(t::AbstractFloat)
+function convertUTC(t::Float64)
   # Extract date from Float before decimal point and convert to Date
   date = floor(Int, t)
   d = Date("20"*string(date), "yyyymmdd")
@@ -73,8 +73,8 @@ function findFiles(inventory::Vector{String}, folder::String, filetypes::String.
 end # function findcsv
 
 
-function remdup(x::Vector{<:AbstractFloat}, y::Vector{<:AbstractFloat},
-  alt::Vector{<:AbstractFloat}, speed::Vector{<:AbstractFloat}, t::Vector{<:ZonedDateTime})
+function remdup(x::Vector{<:Float64}, y::Vector{<:Float64},
+  alt::Vector{<:Float64}, speed::Vector{<:Float64}, t::Vector{<:ZonedDateTime})
   i = 1
   iEnd = length(x)
   while i < iEnd
@@ -95,4 +95,35 @@ function remdup(x::Vector{<:AbstractFloat}, y::Vector{<:AbstractFloat},
   end
 
   return x, y, alt, speed, t
+end
+
+
+function findFlex(x::Vector{<:Real})
+  flex = Int[1]
+  for i = 2:length(x)-1
+    if x[i-1] > x[i] < x[i+1] || x[i-1] < x[i] > x[i+1]
+      if count(isequal(-180), x[i-1:i+1]) == 1 &&
+        !(sign(x[i-1]) == sign(x[i+1]) && x[i] == -180)
+        continue
+      else
+        push!(flex, i)
+      end
+    end
+  end
+  push!(flex, length(x))
+  ranges = UnitRange[]
+  for i = 2:length(flex)
+    push!(ranges, flex[i-1]:flex[i])
+  end
+
+  return ranges
+end
+
+
+function Minterpolate(ms::mat.MSession, p::mat.MxArray)
+  function (i::Union{Real,Vector{<:AbstractFloat},StepRangeLen})
+    mat.put_variable(ms, :i, mat.mxarray(i)); mat.put_variable(ms, :p, p)
+    mat.eval_string(ms, "pp = ppval(p,i);")
+    mat.jvalue(mat.get_mvariable(ms, :pp))
+  end
 end

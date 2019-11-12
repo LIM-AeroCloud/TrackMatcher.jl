@@ -18,8 +18,37 @@ import Dates.DateTime, Dates.Date, Dates.Time
 import TimeZones.ZonedDateTime
 
 
+# Define Logger with log level
+logger = logg.ConsoleLogger(stdout, logg.Debug)
+logg.global_logger(logger)
+
 
 ### Define own structs
+
+struct PCHIP
+  interpolate::Vector{<:Function}
+  interval::Vector{<:NamedTuple{(:xmin,:xmax,:ymin,:ymax),<:NTuple{4,<:AbstractFloat}}}
+  useLON::Bool
+  session::mat.MSession
+
+  function PCHIP(x::Vector{<:AbstractFloat}, y::Vector{<:AbstractFloat},
+    flex::Vector{<:UnitRange}, id::Int64, useLON::Bool, ms::mat.MSession)
+    itp = Function[]; itv = NamedTuple{(:xmin,:xmax,:ymin,:ymax),<:NTuple{4,<:AbstractFloat}}[]
+    for (i, f) in enumerate(flex)
+      p = "p$(id)_$i"
+      mat.put_variable(ms, :x, x[f])
+      mat.put_variable(ms, :y, y[f])
+      mat.eval_string(ms, "$p = pchip(x, y);");
+      pp = mat.get_mvariable(ms, Symbol("$p"))
+      push!(itp, Minterpolate(ms, pp))
+      push!(itv, (xmin=x[f[1]], xmax=x[f[end]], ymin=minimum(y[f]), ymax=maximum(y[f])))
+    end
+
+    new(itp, itv, useLON, ms)
+  end
+end
+
+
 
 """
 # struct MetaData
@@ -155,6 +184,7 @@ struct FlightData
   heading::Vector{<:Union{Missing,Int}}
   climb::Vector{<:Union{Missing,Int}}
   speed::Vector{<:Union{Missing,AbstractFloat}}
+  pchip::PCHIP
   metadata::MetaData
 
   function FlightData(time::Vector{ZonedDateTime}, lat::Vector{<:Union{Missing,AbstractFloat}},
@@ -163,7 +193,7 @@ struct FlightData
     speed::Vector{<:Union{Missing,AbstractFloat}}, dbID::Union{Int,AbstractString},
     flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
-    file::AbstractString)
+    pchip::PCHIP, file::AbstractString)
 
     lat = checklength(lat, time)
     lon = checklength(lon, time)
@@ -173,7 +203,7 @@ struct FlightData
     speed = checklength(speed, time)
     metadata = MetaData(dbID,flightID,aircraft,route,lat,lon,time,file)
 
-    new(time,lat,lon,alt,heading,climb,speed,metadata)
+    new(time,lat,lon,alt,heading,climb,speed,pchip,metadata)
   end #constructor FlightData
 end #struct FlightData
 
