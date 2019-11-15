@@ -20,12 +20,48 @@ c
 =#
 
 
-# files = joinpath.(pwd(), "data/flightinventory/", readdir("data/flightinventory/")[.!startswith.(readdir("data/flightinventory/"), ".")])
-files = [joinpath(pwd(), "data/flightinventory/1_1_2012_SEGMENT.csv")]
+files = joinpath.(pwd(), "data/flightinventory/", readdir("data/flightinventory/")[.!startswith.(readdir("data/flightinventory/"), ".")])
+# files = [joinpath(pwd(), "data/flightinventory/1_1_2012_SEGMENT.csv")]
 tflights = @timed inventory = loadInventory(files)
+flights = tflights[1]
 
+sat = CLay(joinpath(pwd(), "data/CALIOP/"))
+
+import PyPlot; const plt = PyPlot
+plt.scatter(tflights[1][2].lon, tflights[1][2].lat, marker="s", color=:black)
+plt.grid(ls=":")
+plt.gcf()
+
+
+ctypes = [Int64, Int64, Float64, Float64, Float64, Int64, Int64, Int64, Int64,
+  Int64, Int64, Int64, String, String, String, Float64, String, Float64, Float64,
+  Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64,
+  Float64, Float64]
 flights = CSV.read(files[1], datarow=3, footerskip=2,
-  ignoreemptylines=true, silencewarnings=true)
+  ignoreemptylines=true, silencewarnings=true, threaded=true, dateformat="HH:MM:SS.sssm")
+lat = flights.LATITUDE[flights.FLIGHT_ID.==2]
+lon = flights.LONGITUDE[flights.FLIGHT_ID.==2]
+speed = flights.SPEED[flights.FLIGHT_ID.==2]
+alt = flights.ALTITUDE[flights.FLIGHT_ID.==2]
+t = flights.time[flights.FLIGHT_ID.==2]
+
+lat = lat[alt.≥15000]
+lon = lon[alt.≥15000]
+lp = any(lon .> 0) ? maximum(lon[lon.≥0]) - minimum(lon[lon.≥0]) : 0
+ln = any(lon .< 0) ? maximum(lon[lon.<0]) - minimum(lon[lon.<0]) : 0
+useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ? true : false
+useLON ? (x = lon; y = lat) : (x = lat; y = lon)
+x
+flex = findFlex(x)
+x[20:30]
+y[20:30]
+
+t = flights.SEGMENT_TIME
+Time(t, "HH:MM:SS.sssm")
+for t in flights.SEGMENT_TIME
+  println(round(Time(t)))
+end
+println.(names(flights))
 flights.time = [ZonedDateTime(flights.SEGMENT_YEAR[i], flights.SEGMENT_MONTH[i],
   flights.SEGMENT_DAY[i], flights.SEGMENT_HOUR[i], flights.SEGMENT_MIN[i],
   flights.SEGMENT_SEC[i], tz.tz"UTC") for i = 1:length(flights.FLIGHT_ID)]
@@ -41,6 +77,7 @@ flights.time[r][flights.ALTITUDE[r].≥15000]
 flights.time[1:161][flights.ALTITUDE[1:161].≥15000]
 
 dbID = [inventory[i].metadata.dbID for i = 1:length(inventory)]
+
 import PyPlot; const plt = PyPlot
 
 i = 1447
@@ -53,14 +90,14 @@ f = 43
 plt.clf()
 # plt.scatter(inventory[i].lat, inventory[i].lon, marker="s", color="black")
 # plt.scatter(inventory[i].lat[f], inventory[i].lon[f], marker="D", color="red")
-plt.scatter(inventory[i].lon, inventory[i].lat, marker="s", color="black")
+plt.scatter(lat, lon, marker="D", color="red")
 plt.scatter(inventory[i].lon[f], inventory[i].lat[f], marker="D", color="red")
 plt.minorticks_on()
 plt.grid(ls=":")
 # plt.xlabel("latitude / °")
 # plt.ylabel("longitude / °")
-plt.xlabel("longitude / °")
-plt.ylabel("latitude / °")
+plt.ylabel("longitude / °")
+plt.xlabel("latitude / °")
 plt.gcf()
 
 

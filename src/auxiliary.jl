@@ -111,14 +111,45 @@ function findFlex(x::Vector{<:Real})
     end
   end
   push!(flex, length(x))
+  ranges = NamedTuple{(:range, :min, :max), Tuple{UnitRange, Float64, Float64}}[]
+  for i = 2:length(flex)
+    push!(ranges, (range=flex[i-1]:flex[i], min=x[flex[i-1]], max=x[flex[i]]))
+  end
+
+  return Tuple(ranges)
+end
+
+#=
+function findFlex(x::Vector{<:Real}, y::Vector{<:Float64}, useLON::Bool)
+  lon = useLON ? x : y
+  flex = UnitRange[]
+  fStart = 1
+  for i = 2:length(x)-1
+    if sign(lon[i]) ≠ sign(lon[i-1])
+      r = fStart:i-1
+      if length(r) < 2
+        deleteat!(x, r); deleteat!(y, r)
+      elseif length(r) == 2
+      else
+      end
+    if x[i-1] > x[i] < x[i+1] || x[i-1] < x[i] > x[i+1]
+      if count(isequal(-180), x[i-1:i+1]) == 1 &&
+        !(sign(x[i-1]) == sign(x[i+1]) && x[i] == -180)
+        continue
+      else
+        push!(flex, i)
+      end
+    end
+  end
+  push!(flex, length(x))
   ranges = UnitRange[]
   for i = 2:length(flex)
     push!(ranges, flex[i-1]:flex[i])
   end
 
-  return ranges
+  return Tuple(ranges)
 end
-
+=#
 
 function Minterpolate(ms::mat.MSession, p::mat.MxArray)
   function (i::Union{Real,Vector{<:AbstractFloat},StepRangeLen})

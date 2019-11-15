@@ -90,8 +90,8 @@ function loadInventory(files::Vector{String}; filterAlt=15000, filterCloudfree=t
   for file in files
 
     # Load data
-    flights = CSV.read(file, datarow=3, footerskip=2,
-      ignoreemptylines=true, silencewarnings=true)
+    flights = CSV.read(file, datarow=3, footerskip=2, ignoreemptylines=true,
+      silencewarnings=true, threaded=true, dateformat="HH:MM:SS.sssm")
 
     # Calculate time from individual columns and add as DateTime to DataFrame
     flights.time = [ZonedDateTime(flights.SEGMENT_YEAR[i], flights.SEGMENT_MONTH[i],
@@ -113,10 +113,10 @@ function loadInventory(files::Vector{String}; filterAlt=15000, filterCloudfree=t
         useLON ? (x = lon; y = lat) : (x = lat; y = lon)
         x, y, alt, speed, t = remdup(x, y, alt, speed, t)
         flex = findFlex(x)
-        pchip = PCHIP(x, y, flex, FID, useLON, ms)
+        # pchip = PCHIP(x, y, flex, FID, useLON, ms)
         push!(inventory, FlightData(t, lat, lon, alt, [missing for i = 1:length(t)],
           [missing for i = 1:length(t)], speed, FID, missing,
-          missing, missing, pchip, file))
+          missing, missing, flex, useLON, file))
         lat = Float64[]; lon = Float64[];
         alt = Float64[]; t = ZonedDateTime[]; speed = Float64[]
         FID = flights.FLIGHT_ID[i]

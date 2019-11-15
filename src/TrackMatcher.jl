@@ -108,25 +108,39 @@ Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
 struct MetaData
   dbID::Union{Int,AbstractString}
   flightID::Union{Missing,AbstractString}
-  aircraft::Union{Missing,AbstractString}
   route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}}
+  aircraft::Union{Missing,AbstractString}
+  date::NamedTuple{(:start,:stop),Tuple{ZonedDateTime,ZonedDateTime}}
   area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),
         Tuple{AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat}}
-  date::NamedTuple{(:start,:stop),Tuple{ZonedDateTime,ZonedDateTime}}
+  flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}}
+  useLON::Bool
   file::AbstractString
 
-  function MetaData(dbID::Union{Int,AbstractString},
-    flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
+  function MetaData(dbID::Union{Int,AbstractString}, flightID::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
+    aircraft::Union{Missing,AbstractString}, date::Vector{ZonedDateTime},
     lat::Vector{<:Union{Missing,AbstractFloat}}, lon::Vector{<:Union{Missing,AbstractFloat}},
-    date::Vector{ZonedDateTime}, file::AbstractString)
-    plonmax = isempty(lon[lon.≥0]) ? NaN : maximum(lon[lon.≥0])
-    plonmin = isempty(lon[lon.≥0]) ? NaN : minimum(lon[lon.≥0])
-    nlonmax = isempty(lon[lon.<0]) ? NaN : maximum(lon[lon.<0])
-    nlonmin = isempty(lon[lon.<0]) ? NaN : minimum(lon[lon.<0])
-    area = (latmin=minimum(lat), latmax=maximum(lat),
-      plonmin=plonmin, plonmax=plonmax, nlonmin=nlonmin, nlonmax=nlonmax)
-    new(dbID, flightID, aircraft, route, area, (start=date[1], stop=date[end]), file)
+    useLON::Bool,
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
+    file::AbstractString)
+
+    area = NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),
+          Tuple{AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat}}[]
+    for r in flex
+      plonmax = isempty(lon[r.range][lon[r.range].≥0]) ? NaN :
+        maximum(lon[r.range][lon[r.range].≥0])
+      plonmin = isempty(lon[r.range][lon[r.range].≥0]) ? NaN :
+        minimum(lon[r.range][lon[r.range].≥0])
+      nlonmax = isempty(lon[r.range][lon[r.range].<0]) ? NaN :
+        maximum(lon[r.range][lon[r.range].<0])
+      nlonmin = isempty(lon[r.range][lon[r.range].<0]) ? NaN :
+        minimum(lon[r.range][lon[r.range].<0])
+      area = (latmin=minimum(lat[r.range]), latmax=maximum(lat[r.range]),
+        plonmin=plonmin, plonmax=plonmax, nlonmin=nlonmin, nlonmax=nlonmax)
+    end
+    new(dbID, flightID, route, aircraft, (start=date[1], stop=date[end]), area,
+      flex, useLON, file)
   end #constructor MetaData
 end #struct MetaData
 
@@ -184,7 +198,6 @@ struct FlightData
   heading::Vector{<:Union{Missing,Int}}
   climb::Vector{<:Union{Missing,Int}}
   speed::Vector{<:Union{Missing,AbstractFloat}}
-  pchip::PCHIP
   metadata::MetaData
 
   function FlightData(time::Vector{ZonedDateTime}, lat::Vector{<:Union{Missing,AbstractFloat}},
@@ -193,7 +206,8 @@ struct FlightData
     speed::Vector{<:Union{Missing,AbstractFloat}}, dbID::Union{Int,AbstractString},
     flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
-    pchip::PCHIP, file::AbstractString)
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
+    useLON::Bool, file::AbstractString)
 
     lat = checklength(lat, time)
     lon = checklength(lon, time)
@@ -201,9 +215,9 @@ struct FlightData
     heading = checklength(heading, time)
     climb = checklength(climb, time)
     speed = checklength(speed, time)
-    metadata = MetaData(dbID,flightID,aircraft,route,lat,lon,time,file)
+    metadata = MetaData(dbID,flightID,route,aircraft,time,lat,lon,useLON,flex,file)
 
-    new(time,lat,lon,alt,heading,climb,speed,pchip,metadata)
+    new(time,lat,lon,alt,heading,climb,speed,metadata)
   end #constructor FlightData
 end #struct FlightData
 
