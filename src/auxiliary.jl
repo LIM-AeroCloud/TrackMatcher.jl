@@ -113,7 +113,9 @@ function findFlex(x::Vector{<:Real})
   push!(flex, length(x))
   ranges = NamedTuple{(:range, :min, :max), Tuple{UnitRange, Float64, Float64}}[]
   for i = 2:length(flex)
-    push!(ranges, (range=flex[i-1]:flex[i], min=x[flex[i-1]], max=x[flex[i]]))
+    xmin, xmax = x[flex[i-1]] < x[flex[i]] ? (x[flex[i-1]], x[flex[i]]) :
+      (x[flex[i]], x[flex[i-1]])
+    push!(ranges, (range=flex[i-1]:flex[i], min=xmin, max=xmax))
   end
 
   return Tuple(ranges)
@@ -152,7 +154,7 @@ end
 =#
 
 function Minterpolate(ms::mat.MSession, p::mat.MxArray)
-  function (i::Union{Real,Vector{<:AbstractFloat},StepRangeLen})
+  function (i::Union{Real,Vector{<:Float64},StepRangeLen})
     mat.put_variable(ms, :i, mat.mxarray(i)); mat.put_variable(ms, :p, p)
     mat.eval_string(ms, "pp = ppval(p,i);")
     mat.jvalue(mat.get_mvariable(ms, :pp))
