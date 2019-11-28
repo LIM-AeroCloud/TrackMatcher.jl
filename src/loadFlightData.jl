@@ -146,39 +146,44 @@ function loadArchive(files::Vector{String})
   archive = FlightData[]
   @pm.showprogress 1 "load archive..." for file in files
     # Load data
-    flights = CSV.read(file, datarow=2, header=[:id, :ident, :orig, :dest,
-      :aircraft, :time, :lat, :lon, :speed, :alt, :climb, :heading, :direction,
-      :facility, :description, :est])
-    flights.speed = convert.(Union{Missing,Float64}, flights.speed)
+    flights = CSV.read(file, datarow=2, normalizenames=true, dateformat="m/d/y H:M:S",
+      types = Dict(:Altitude_feet_ => Float64, :Groundspeed_knots_ => Float64))
     # Calculate time from individual columns and add as DateTime to DataFrame
-    flights.time = ZonedDateTime.(DateTime.(flights.time, "m/d/y H:M:S"), tz.tz"UTC")
+    flights.Time_UTC_ = ZonedDateTime.(flights.Time_UTC_, tz.tz"UTC")
 
     # Initialise loop over file
-    global iStart = 1
+    iStart = 1
     # Loop over all data points
-    for i = 1:length(flights.time)-1
-      if flights.id[i] ≠ flights.id[i+1]
-        # When flight ID changes save data as FlightData and set start index to next dataset
-        push!(archive, FlightData(flights.time[iStart:i], flights.lat[iStart:i],
-          flights.lon[iStart:i], flights.alt[iStart:i],
-          flights.heading[iStart:i], flights.climb[iStart:i],
-          flights.speed[iStart:i], flights.id[i],
-          flights.ident[i], flights.aircraft[i],
-          (orig=flights.orig[i], dest=flights.dest[i]), file))
-        global iStart = i+1
+    for i = 1:length(flights.Time_UTC_)-1
+      if flights.Flight_ID[i] ≠ flights.Flight_ID[i+1]
+        archive, iStart = archiveFlightData(flights, archive, iStart:i)
       end
     end
     # Save last flight of the dataset
-    i = length(flights.time)
-    push!(archive, FlightData(flights.time[iStart:i], flights.lat[iStart:i],
-      flights.lon[iStart:i], flights.alt[iStart:i],
-      flights.heading[iStart:i], flights.climb[iStart:i], flights.speed[iStart:i],
-      flights.id[i], flights.ident[i], flights.aircraft[i],
-      (orig=flights.orig[i], dest=flights.dest[i]), file))
+    archive, iStart = archiveFlightData(flights, archive, iStart:length(flights.Time_UTC_))
   end
 
   return archive
 end #function loadArchive
+
+function archiveFlightData(flights::DataFrame, archive::Vector{<:FlightData}, datarange::UnitRange)
+  # Check whether to use lat or lon for estimation and find flex points in x data
+  lat = flights.Latitude[datarange]; lon = flights.Longitude[datarange]
+  lp = any(lon .> 0) ? maximum(lon[lon.≥0]) - minimum(lon[lon.≥0]) : 0
+  ln = any(lon .< 0) ? maximum(lon[lon.<0]) - minimum(lon[lon.<0]) : 0
+  useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ?
+    true : false
+  flex = useLON ? findFlex(lon) : findFlex(lat)
+  # When flight ID changes save data as FlightData and set start index to next dataset
+  push!(archive, FlightData(flights.Time_UTC_[datarange], flights.Latitude[datarange],
+    flights.Longitude[datarange], flights.Altitude_feet_[datarange],
+    flights.Course[datarange], flights.Rate[datarange],
+    flights.Groundspeed_knots_[datarange], flights.Flight_ID[i],
+    flights.Ident[i], flights.Aircraft_Type[i],
+    (orig=flights.Origin[i], dest=flights.Destination[i]), flex, useLON, file))
+
+  return archive, datarange[end]+1
+end #function archiveFlightData
 
 
 """
