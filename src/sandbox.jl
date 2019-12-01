@@ -1,3 +1,24 @@
+################################################################################
+
+### load FlightAware online data
+
+dir = "data/flightaware/online/"
+files = String[]; files = findFiles(files, dir, ".dat")
+file = files[end]
+flight = CSV.read(file, delim='\t', datarow=3, normalizenames=true)
+
+names(flight)
+flight.Course
+flight.Rate
+flight.feet
+
+flight[1][2]
+flight[2,1]
+
+################################################################################
+
+### load FlightAware archive
+
 dir = "data/flightaware/archive"
 file = joinpath(dir, readdir(dir)...)
 
@@ -18,8 +39,11 @@ flights.Time_UTC_
 # flights.Rate
 flights = loadFlightDB("a", "data/flightaware/archive/")
 
+################################################################################
 
-flights = loadFlightDB("i", "data/flightinventory/")
+
+flights = loadFlightDB("ia", "data/flightinventory/", "data/flightaware/archive/")
+
 sat = SatDB("data/CALIOP/")
 
 f1 = flight = flights.inventory[1]

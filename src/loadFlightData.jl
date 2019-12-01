@@ -197,20 +197,21 @@ function loadOnlineData(files::Vector{String})
   archive = Vector{FlightData}(undef,length(files))
   @pm.showprogress 1 "load online data..." for (n, file) in enumerate(files)
     # Read flight data
-    flight = CSV.read(file, delim='\t', datarow=3,
-      header=["time", "lat", "lon", "heading", "speed", "mph", "alt", "climb", "facility"])
-    ### Get timezone of input data
-    # Set default timezone to local
-    timezone = tz.localzone()
-    # Infer timezone from table header
-    m = match(r"\((.*?)\)", readline(file))
-    zone = m.captures[1]
+    flight = CSV.read(file, delim='\t', datarow=3, normalizenames=true,
+      types=Dict(:feet => Float64, :kts => Float64))
+
+    ### Get timezone from input data or use local time for undefined timezones
     # Define timezones as UTC offset to avoid conflicts during
     # changes to/from daylight saving
-    if zone == "CET"
+
+    # Time is the first column and has to be addressed as flight[!,1] in the code
+    # due to different column names, in which the timezone is included
+    if occursin("_CET_", string(names(flight)[1]))
       timezone = tz.tz"+0100"
-    elseif zone == "CEST"
+    elseif occursin("_CEST_", string(names(flight)[1]))
       timezone = tz.tz"+0200"
+    else
+      timezone = tz.localzone()
     end
     # Retrieve date and metadata from filename
     filename = splitext(basename(file))[1]
@@ -220,46 +221,43 @@ function loadOnlineData(files::Vector{String})
     # Set to 2 days prior to allow corrections for timezone diffences in the next step
     date -= Dates.Day(2)
     # Delete rows with invalid times
-    flight = flight[[length(t) == 15 for t in flight.time],:]
+    flight = flight[([length(t) == 15 for t in flight[!,1]]).&(isfinite.(flight.Latitude)).&
+      (isfinite.(flight.Longitude)),:]
 
     ### Convert times to datetime and extract heading and climbing rate as Int32
     # Initialise time and date vectors
-    flightdate = Vector{Union{Missing,Date}}(undef, length(flight.time))
-    flighttime = Vector{Union{Missing,Time}}(undef, length(flight.time))
+    flightdate = Vector{Union{Missing,Date}}(undef, length(flight[!,1]))
+    flighttime = Vector{Union{Missing,Time}}(undef, length(flight[!,1]))
     # Initialise vectors for altitude, heading and climb to convert from strings to Int32
-    heading = Vector{Union{Missing,Int}}(undef, length(flight.time))
-    climb = Vector{Union{Missing,Int}}(undef, length(flight.time))
-    altitude = Vector{Union{Missing,Float64}}(undef, length(flight.time))
+    heading = Vector{Union{Missing,Int}}(undef, length(flight[!,1]))
+    climb = Vector{Union{Missing,Int}}(undef, length(flight[!,1]))
+    # altitude = Vector{Union{Missing,Float64}}(undef, length(flight.time))
     # Loop over times
-    for i=1:length(flight.time)
+    for i=1:length(flight[!,1])
       # Derive date from day of week and filename
-      while Dates.dayabbr(date) ≠ flight.time[i][1:3]
+      while Dates.dayabbr(date) ≠ flight[i,1][1:3]
         date += Dates.Day(1)
       end
       # Save date for current time step
       flightdate[i] = date
       # Derive time from time string
-      if VERSION > v"1.3"
+      if VERSION ≥ v"1.3"
         # Use AM/PM format for Julia > version 1.3
-        t = Time(flight.time[i][5:end], "I:M:S p")
+        t = Time(flight[i,1][5:end], "I:M:S p")
       else
         # Calculate time manually otherwise
-        t = Time(flight.time[i][5:12], "H:M:S")
-        if flight.time[i][end-1:end] == "PM" && !(Dates.hour(t)==12 && Dates.minute(t)==0 &&
+        t = Time(flight[i,1][5:12], "H:M:S")
+        if flight[i,1][end-1:end] == "PM" && !(Dates.hour(t)==12 && Dates.minute(t)==0 &&
           Dates.second(t)==0)
           t += Dates.Hour(12)
-        elseif flight.time[i][end-1:end] == "AM" && Dates.hour(t)==12 &&
+        elseif flight[i,1][end-1:end] == "AM" && Dates.hour(t)==12 &&
           Dates.minute(t)==0 && Dates.second(t)==0
           t -= Dates.Hour(12)
         end
       end
       # Save time of current time step
       flighttime[i] = t
-      # Filter altitude, heading and climbing rate for numbers and convert to Int32
-      altitude[i] = try
-        alt=parse(Float64, flight.alt[i][findall([isdigit.(i) for i ∈ flight.alt[i]])])
-      catch; 0.
-      end
+      # Filter heading and climbing rate for numbers and convert to Int
       climb[i] = try
         parse(Int, flight.climb[i][findall([isdigit.(i) | (i == '-') for i ∈ flight.climb[i]])])
       catch; 0
@@ -272,15 +270,24 @@ function loadOnlineData(files::Vector{String})
       end
     end
     # Save revised DateTime
-    flight.time = ZonedDateTime.(DateTime.(flightdate, flighttime), timezone)
+    flight[!,1] = ZonedDateTime.(DateTime.(flightdate, flighttime), timezone)
     # Save revised heading and climbing rate
-    flight.climb = climb
-    flight.heading = heading
-    flight.alt = altitude
+    flight.Rate = climb
+    flight.Course = heading
+    flight.Latitude = float.(flight.Latitude)
+    flight.Longitude = float.(flight.Longitude)
+    # flight.alt = altitude
+    lp = any(flight.Longitude .> 0) ?
+      maximum(flight.Longitude[flight.Longitude.≥0]) - minimum(flight.Longitude[flight.Longitude.≥0]) : 0
+    ln = any(flight.Longitude .< 0) ?
+      maximum(flight.Longitude[flight.Longitude.<0]) - minimum(flight.Longitude[flight.Longitude.<0]) : 0
+    useLON = maximum(flight.Latitude) - minimum(flight.Latitude) ≤ (lp + ln) *
+      cosd(stats.mean(flight.Latitude)) ? true : false
+    flex = useLON ? findFlex(flight.Longitude) : findFlex(flight.Latitude)
     # Save data as FlightData
-    archive[n] = FlightData(flight.time, flight.lat, flight.lon, flight.alt,
-      flight.heading, flight.climb, convert.(Union{Missing,Float64},flight.speed),
-      n, flightID, missing, (orig=orig, dest=dest), file)
+    archive[n] = FlightData(flight[!,1], flight.Latitude, flight.Longitude,
+      flight.feet, flight.Course, flight.Rate, flight.kts, n, flightID, missing,
+      (orig=orig, dest=dest), flex, useLON, file)
   end #loop over files
 
   return archive
