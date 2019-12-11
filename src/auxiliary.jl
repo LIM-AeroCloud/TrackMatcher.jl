@@ -26,11 +26,11 @@ end
 
 
 """
-    convertUTC(t::AbstractFloat) -> ZonedDateTime
+    convertUTC(t::Float64) -> ZonedDateTime
 
 Convert the CALIOP Profile UTC time (`t`) to a `ZonedDateTime` with `TimeZone` `UTC`.
 """
-function convertUTC(t::AbstractFloat)
+function convertUTC(t::Float64)
   # Extract date from Float before decimal point and convert to Date
   date = floor(Int, t)
   d = Date("20"*string(date), "yyyymmdd")
@@ -70,4 +70,93 @@ function findFiles(inventory::Vector{String}, folder::String, filetypes::String.
   end
 
   return inventory
-end # function findcsv
+end # function findFiles
+
+
+function remdup(x::Vector{<:Float64}, y::Vector{<:Float64},
+  alt::Vector{<:Float64}, speed::Vector{<:Float64}, t::Vector{<:ZonedDateTime})
+  i = 1
+  iEnd = length(x)
+  while i < iEnd
+    j = i + 1
+    while j ≤ iEnd && x[i] == x[j]
+      δ = eps(x[i]); Δ = 0
+      if y[i] == y[j]
+        deleteat!(x, i); deleteat!(y, i); deleteat!(alt, i); deleteat!(speed, i)
+        deleteat!(t, i)
+        iEnd -= 1
+      else
+        Δ += δ
+        x[j] += Δ
+        j += 1
+      end
+    end
+    i += 1
+  end
+
+  return x, y, alt, speed, t
+end
+
+
+function findFlex(x::Vector{<:Real})
+  flex = Int[1]
+  for i = 2:length(x)-1
+    if x[i-1] > x[i] < x[i+1] || x[i-1] < x[i] > x[i+1]
+      if count(isequal(-180), x[i-1:i+1]) == 1 &&
+        !(sign(x[i-1]) == sign(x[i+1]) && x[i] == -180)
+        continue
+      else
+        push!(flex, i)
+      end
+    end
+  end
+  push!(flex, length(x))
+  ranges = NamedTuple{(:range, :min, :max), Tuple{UnitRange, Float64, Float64}}[]
+  for i = 2:length(flex)
+    xmin, xmax = x[flex[i-1]] < x[flex[i]] ? (x[flex[i-1]], x[flex[i]]) :
+      (x[flex[i]], x[flex[i-1]])
+    push!(ranges, (range=flex[i-1]:flex[i], min=xmin, max=xmax))
+  end
+
+  return Tuple(ranges)
+end
+
+#=
+function findFlex(x::Vector{<:Real}, y::Vector{<:Float64}, useLON::Bool)
+  lon = useLON ? x : y
+  flex = UnitRange[]
+  fStart = 1
+  for i = 2:length(x)-1
+    if sign(lon[i]) ≠ sign(lon[i-1])
+      r = fStart:i-1
+      if length(r) < 2
+        deleteat!(x, r); deleteat!(y, r)
+      elseif length(r) == 2
+      else
+      end
+    if x[i-1] > x[i] < x[i+1] || x[i-1] < x[i] > x[i+1]
+      if count(isequal(-180), x[i-1:i+1]) == 1 &&
+        !(sign(x[i-1]) == sign(x[i+1]) && x[i] == -180)
+        continue
+      else
+        push!(flex, i)
+      end
+    end
+  end
+  push!(flex, length(x))
+  ranges = UnitRange[]
+  for i = 2:length(flex)
+    push!(ranges, flex[i-1]:flex[i])
+  end
+
+  return Tuple(ranges)
+end
+=#
+
+function Minterpolate(ms::mat.MSession, p::mat.MxArray)
+  function (i::Union{Real,Vector{<:Float64},StepRangeLen})
+    mat.put_variable(ms, :i, mat.mxarray(i)); mat.put_variable(ms, :p, p)
+    mat.eval_string(ms, "pp = ppval(p,i);")
+    mat.jvalue(mat.get_mvariable(ms, :pp))
+  end
+end

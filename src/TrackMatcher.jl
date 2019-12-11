@@ -9,15 +9,46 @@ import DataFrames; const df = DataFrames
 import TimeZones; const tz = TimeZones
 import Dates
 import MATLAB; const mat = MATLAB
+import Statistics; const stats = Statistics
 import ProgressMeter; const pm = ProgressMeter
+import Logging; const logg = Logging
 # Import structs from packages
 import DataFrames.DataFrame
 import Dates.DateTime, Dates.Date, Dates.Time
 import TimeZones.ZonedDateTime
 
 
+# Define Logger with log level
+logger = logg.ConsoleLogger(stdout, logg.Debug)
+logg.global_logger(logger)
+
 
 ### Define own structs
+
+struct PCHIP
+  interpolate::Vector{<:Function}
+  interval::Vector{<:NamedTuple{(:xmin,:xmax,:ymin,:ymax),<:NTuple{4,<:Float64}}}
+  useLON::Bool
+  session::mat.MSession
+
+  function PCHIP(x::Vector{<:Float64}, y::Vector{<:Float64},
+    flex::Vector{<:UnitRange}, id::Int64, useLON::Bool, ms::mat.MSession)
+    itp = Function[]; itv = NamedTuple{(:xmin,:xmax,:ymin,:ymax),<:NTuple{4,<:Float64}}[]
+    for (i, f) in enumerate(flex)
+      p = "p$(id)_$i"
+      mat.put_variable(ms, :x, x[f])
+      mat.put_variable(ms, :y, y[f])
+      mat.eval_string(ms, "$p = pchip(x, y);");
+      pp = mat.get_mvariable(ms, Symbol("$p"))
+      push!(itp, Minterpolate(ms, pp))
+      push!(itv, (xmin=x[f[1]], xmax=x[f[end]], ymin=minimum(y[f]), ymax=maximum(y[f])))
+    end
+
+    new(itp, itv, useLON, ms)
+  end
+end
+
+
 
 """
 # struct MetaData
@@ -28,7 +59,7 @@ Immutable struct to hold metadata for `FlightData` of the `FlightDB` with fields
 - `flightID::Union{Missing,AbstractString}`
 - `aircraft::Union{Missing,AbstractString}`
 - `route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}}`
-- `area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),Tuple{AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat}}`
+- `area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),Tuple{Float64,Float64,Float64,Float64,Float64,Float64}}`
 - `date::NamedTuple{(:start,:stop),Tuple{ZonedDateTime,ZonedDateTime}}`
 - `file::AbstractString`
 
@@ -68,7 +99,7 @@ String holding the absolute folder path and file name.
     MetaData(dbID::Union{Int,AbstractString},
       flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
       route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
-      lat::Vector{<:Union{Missing,AbstractFloat}}, lon::Vector{<:Union{Missing,AbstractFloat}},
+      lat::Vector{<:Union{Missing,Float64}}, lon::Vector{<:Union{Missing,Float64}},
       date::Vector{ZonedDateTime}, file::AbstractString) -> struct MetaData
 
 Construct `MetaData` from `dbID`, `flightID`, `aircraft` type, `route`, and `file`.
@@ -77,25 +108,30 @@ Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
 struct MetaData
   dbID::Union{Int,AbstractString}
   flightID::Union{Missing,AbstractString}
-  aircraft::Union{Missing,AbstractString}
   route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}}
-  area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),
-        Tuple{AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat,AbstractFloat}}
+  aircraft::Union{Missing,AbstractString}
   date::NamedTuple{(:start,:stop),Tuple{ZonedDateTime,ZonedDateTime}}
+  area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),NTuple{6,Float64}}
+  flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}}
+  useLON::Bool
   file::AbstractString
 
-  function MetaData(dbID::Union{Int,AbstractString},
-    flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
+  function MetaData(dbID::Union{Int,AbstractString}, flightID::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
-    lat::Vector{<:Union{Missing,AbstractFloat}}, lon::Vector{<:Union{Missing,AbstractFloat}},
-    date::Vector{ZonedDateTime}, file::AbstractString)
+    aircraft::Union{Missing,AbstractString}, date::Vector{ZonedDateTime},
+    lat::Vector{<:Union{Missing,Float64}}, lon::Vector{<:Union{Missing,Float64}},
+    useLON::Bool,
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
+    file::AbstractString)
+
     plonmax = isempty(lon[lon.≥0]) ? NaN : maximum(lon[lon.≥0])
     plonmin = isempty(lon[lon.≥0]) ? NaN : minimum(lon[lon.≥0])
     nlonmax = isempty(lon[lon.<0]) ? NaN : maximum(lon[lon.<0])
     nlonmin = isempty(lon[lon.<0]) ? NaN : minimum(lon[lon.<0])
     area = (latmin=minimum(lat), latmax=maximum(lat),
       plonmin=plonmin, plonmax=plonmax, nlonmin=nlonmin, nlonmax=nlonmax)
-    new(dbID, flightID, aircraft, route, area, (start=date[1], stop=date[end]), file)
+    new(dbID, flightID, route, aircraft, (start=date[1], stop=date[end]), area,
+      flex, useLON, file)
   end #constructor MetaData
 end #struct MetaData
 
@@ -105,22 +141,22 @@ end #struct MetaData
 
 Aircraft data with fields
 - `time::Vector{ZonedDateTime}`
-- `lat::Vector{<:Union{Missing,AbstractFloat}}`
-- `lon::Vector{<:Union{Missing,AbstractFloat}}`
-- `alt::Vector{<:Union{Missing,AbstractFloat}}`
+- `lat::Vector{<:Union{Missing,Float64}}`
+- `lon::Vector{<:Union{Missing,Float64}}`
+- `alt::Vector{<:Union{Missing,Float64}}`
 - `heading::Vector{<:Union{Missing,Int}}`
 - `climb::Vector{<:Union{Missing,Int}}`
-- `speed::Vector{<:Union{Missing,AbstractFloat}}`
+- `speed::Vector{<:Union{Missing,Float64}}`
 - `metadata::MetaData`
 
 ## time
 Vector of `ZonedDateTime`
 
 ## lat/lon
-Vectors of `AbstractFloat` with ranges -90°...90° and -180°...180°.
+Vectors of `Float64` with ranges -90°...90° and -180°...180°.
 
 ## alt
-Vector of `AbstractFloat` with altitude in feet.
+Vector of `Float64` with altitude in feet.
 
 ## heading
 Vector of `Int` with course heading in degrees.
@@ -129,15 +165,15 @@ Vector of `Int` with course heading in degrees.
 Vector of `Int` with climbing (positive) / sinking (negative) rate in feet (0 = level).
 
 ## speed
-Vector of `AbstractFloat` in knots.
+Vector of `Float64` in knots.
 
 
 # Instantiation
 
-    FlightData(time::Vector{ZonedDateTime}, lat::Vector{<:Union{Missing,AbstractFloat}},
-      lon::Vector{<:Union{Missing,AbstractFloat}}, alt::Vector{<:Union{Missing,AbstractFloat}},
+    FlightData(time::Vector{ZonedDateTime}, lat::Vector{<:Union{Missing,Float64}},
+      lon::Vector{<:Union{Missing,Float64}}, alt::Vector{<:Union{Missing,Float64}},
       heading::Vector{<:Union{Missing,Int}}, climb::Vector{<:Union{Missing,Int}},
-      speed::Vector{<:Union{Missing,AbstractFloat}}, dbID::Union{Int,AbstractString},
+      speed::Vector{<:Union{Missing,Float64}}, dbID::Union{Int,AbstractString},
       flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
       route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
       file::AbstractString) -> struct FlightData
@@ -147,21 +183,22 @@ Construct `FlightData` from fields and additonal information `dbID`, `flightID`,
 """
 struct FlightData
   time::Vector{ZonedDateTime}
-  lat::Vector{<:Union{Missing,AbstractFloat}}
-  lon::Vector{<:Union{Missing,AbstractFloat}}
-  alt::Vector{<:Union{Missing,AbstractFloat}}
+  lat::Vector{<:Union{Missing,Float64}}
+  lon::Vector{<:Union{Missing,Float64}}
+  alt::Vector{<:Union{Missing,Float64}}
   heading::Vector{<:Union{Missing,Int}}
   climb::Vector{<:Union{Missing,Int}}
-  speed::Vector{<:Union{Missing,AbstractFloat}}
+  speed::Vector{<:Union{Missing,Float64}}
   metadata::MetaData
 
-  function FlightData(time::Vector{ZonedDateTime}, lat::Vector{<:Union{Missing,AbstractFloat}},
-    lon::Vector{<:Union{Missing,AbstractFloat}}, alt::Vector{<:Union{Missing,AbstractFloat}},
+  function FlightData(time::Vector{ZonedDateTime}, lat::Vector{<:Union{Missing,Float64}},
+    lon::Vector{<:Union{Missing,Float64}}, alt::Vector{<:Union{Missing,Float64}},
     heading::Vector{<:Union{Missing,Int}}, climb::Vector{<:Union{Missing,Int}},
-    speed::Vector{<:Union{Missing,AbstractFloat}}, dbID::Union{Int,AbstractString},
+    speed::Vector{<:Union{Missing,Float64}}, dbID::Union{Int,AbstractString},
     flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
-    file::AbstractString)
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
+    useLON::Bool, file::AbstractString)
 
     lat = checklength(lat, time)
     lon = checklength(lon, time)
@@ -169,7 +206,7 @@ struct FlightData
     heading = checklength(heading, time)
     climb = checklength(climb, time)
     speed = checklength(speed, time)
-    metadata = MetaData(dbID,flightID,aircraft,route,lat,lon,time,file)
+    metadata = MetaData(dbID,flightID,route,aircraft,time,lat,lon,useLON,flex,file)
 
     new(time,lat,lon,alt,heading,climb,speed,metadata)
   end #constructor FlightData
@@ -220,8 +257,8 @@ end #struct FlightDB
 
 CALIOP cloud layer data with fields:
 - `time::Vector{ZonedDateTime}`
-- `lat::Vector{AbstractFloat}`
-- `lon::Vector{AbstractFloat}`
+- `lat::Vector{Float64}`
+- `lon::Vector{Float64}`
 
 # Instantiation
 
@@ -231,8 +268,8 @@ Construct `CLay` from a list of file names (including directories).
 """
 struct CLay
   time::Vector{ZonedDateTime}
-  lat::Vector{AbstractFloat}
-  lon::Vector{AbstractFloat}
+  lat::Vector{Float64}
+  lon::Vector{Float64}
 
   function CLay(folders::String...)
     # Scan folders for HDF4 files
@@ -266,8 +303,8 @@ end #struct CLay
 
 CALIOP cloud profile data with fields:
 - `time::Vector{ZonedDateTime}`
-- `lat::Vector{AbstractFloat}`
-- `lon::Vector{AbstractFloat}`
+- `lat::Vector{Float64}`
+- `lon::Vector{Float64}`
 
 # Instantiation
 
@@ -277,8 +314,8 @@ Construct `CPro` from a list of file names (including directories).
 """
 struct CPro
   time::Vector{ZonedDateTime}
-  lat::Vector{AbstractFloat}
-  lon::Vector{AbstractFloat}
+  lat::Vector{Float64}
+  lon::Vector{Float64}
 
   function CPro(folders::String...)
     # Scan folders for HDF4 files
@@ -363,81 +400,5 @@ export loadFlightDB,
 
 include("auxiliary.jl")
 include("loadFlightData.jl")
-
-
-"""
-    loadFlightDB(DBtype::String, folder::Union{String, Vector{String}}...; remarks=nothing) -> struct `FlightDB`
-
-Construct an instance of `FlightDB` with relevant flight data.
-
-
-# DBtype
-
-Specifies the database type; up to 3 types can be selected:
-- `1` or `"i"`: Flight inventory with flight tracks saved in csv files and saved
-  to property `inventory`.
-- `2` or `"a"`: Commercially available flight track data by FlightAware saved as
-  csv files and saved to property `archive`.
-- `3` or `"o"`: Flight tracks available online from the FlightAware website in
-  text (`.txt`/`.dat`) files and saved to property `onlineData`.
-
-
-# folder
-
-Directory holding the files of the databases specified by `DBtype`.
-Folders must be given as vararg in the order given by `DBtype`.
-
-e.g.:
-```julia
-flight = flightDB("i3", "data/inventory", "data/online_data")
-```
-
-# remarks
-Any data can be attached to `FlightDB` with the keyword argument `remarks`.
-"""
-function loadFlightDB(DBtype::String, folder::Union{String, Vector{String}}...; remarks=nothing)
-  # Save time of database creation
-  tc = Dates.now()
-  # Find database types
-  if occursin('i', DBtype)  i1 = findfirst(isequal('i'), DBtype)
-  else  i1 = findfirst(isequal('1'), DBtype);  end
-  if occursin('a', DBtype)  i2 = findfirst(isequal('a'), DBtype)
-  else  i2 = findfirst(isequal('2'), DBtype);  end
-  if occursin('o', DBtype)  i3 = findfirst(isequal('o'), DBtype)
-  else  i3 = findfirst(isequal('3'), DBtype);  end
-
-  # Load databases for each type
-  if !isnothing(i1)
-    ifiles = String[]
-    ifiles = findFiles(ifiles, folder[i1], ".csv")
-    inventory = try loadInventory(ifiles)
-    catch
-      @warn "Flight inventory couldn't be loaded."
-      FlightData[]
-    end
-  else inventory = FlightData[];  end
-  if !isnothing(i2)
-    ifiles = String[]
-    ifiles = findFiles(ifiles, folder[i2], ".csv")
-    archive = try loadArchive(ifiles)
-    catch
-      @warn "FlightAware archive couldn't be loaded."
-      FlightData[]
-    end
-  else archive = FlightData[];  end
-  if !isnothing(i3)
-    ifiles = String[]
-    ifiles = findFiles(ifiles, folder[i3], ".txt", ".dat")
-    onlineData = try loadOnlineData(ifiles)
-    catch
-      @warn "FlightAware online data couldn't be loaded."
-      FlightData[]
-    end
-  else onlineData = FlightData[];  end
-
-  println("\ndone loading data to properties\n- inventory\n- archive\n- onlineData\n", "")
-
-  return FlightDB(inventory, archive, onlineData, tc, remarks)
-end # function loadFlightDB
 
 end # module TrackMatcher
