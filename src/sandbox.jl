@@ -17,12 +17,16 @@ onlineData = loadOnlineData(files)
 altmin = 15_000
 dir = "data/flightaware/archive/"
 files = String[]; files = findFiles(files, dir, ".csv")
+file = files[1]
+
+flights = CSV.read(file, datarow=2, normalizenames=true, ignoreemptylines=true,
+  silencewarnings=true, threaded=false, copycols=true, dateformat="m/d/y H:M:S",
+  types = Dict(:Altitude_feet_ => Float64, :Groundspeed_knots_ => Float64))
+names(flights)
+
 
 
 archive = loadArchive(files, altmin=altmin)
-
-
-
 flights = loadFlightDB("a", "data/flightaware/archive/")
 
 ################################################################################

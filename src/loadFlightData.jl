@@ -147,47 +147,58 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000)
   archive = FlightData[]
   @pm.showprogress 1 "load archive..." for file in files
     # Load data
-    flights = CSV.read(file, datarow=2, normalizenames=true, dateformat="m/d/y H:M:S",
+    flights = CSV.read(file, datarow=2, normalizenames=true, ignoreemptylines=true,
+      silencewarnings=true, threaded=false, copycols=true, dateformat="m/d/y H:M:S",
       types = Dict(:Altitude_feet_ => Float64, :Groundspeed_knots_ => Float64))
     # Calculate time from individual columns and add as DateTime to DataFrame
     flights.Time_UTC_ = ZonedDateTime.(flights.Time_UTC_, tz.tz"UTC")
 
     # Initialise loop over file
-    iStart = 1
+    FID = flights.Flight_ID[1]; n = 1
+    lat = Float64[]; lon = Float64[]
+    alt = Float64[]; t = ZonedDateTime[]; speed = Union{Missing,Float64}[]
+    climb = Union{Missing,Int}[]; head = Union{Missing,Int}[]
+
+    # Initialise loop over file
     # Loop over all data points
-    for i = 1:length(flights.Time_UTC_)-1
-      if flights.Flight_ID[i] ≠ flights.Flight_ID[i+1]
-        archive, iStart = archiveFlightData(flights, archive, iStart:i, altmin)
+    for i = 1:length(flights.Time_UTC_)
+      if flights.Flight_ID[i] ≠ FID || i == length(flights.Time_UTC_)
+        if length(t) ≤ 1
+          n = i
+          FID = flights.Flight_ID[n]
+          continue
+        end
+        lp = any(lon .> 0) ? maximum(lon[lon.≥0]) - minimum(lon[lon.≥0]) : 0
+        ln = any(lon .< 0) ? maximum(lon[lon.<0]) - minimum(lon[lon.<0]) : 0
+        useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ? true : false
+        flex = useLON ? findFlex(lon) : findFlex(lat)
+        push!(archive, FlightData(t, lat, lon, alt, head, climb, speed,
+        FID, flights.Ident[n], flights.Aircraft_Type[n],
+        (orig=flights.Origin[n], dest=flights.Destination[n]), flex, useLON, file))
+
+        # Reset temporary data arrays
+        lat = Float64[]; lon = Float64[]
+        alt = Float64[]; t = ZonedDateTime[]; speed = Union{Missing,Float64}[]
+        climb = Union{Missing,Int}[]; head = Union{Missing,Int}[]
+        # Set Flight ID and position to next flight
+        n = i
+        FID = flights.Flight_ID[n]
+      end
+      # Filter data
+      if !ismissing(flights.Latitude[i]) && !ismissing(flights.Longitude[i]) &&
+        !ismissing(flights.Altitude_feet_[i]) && flights.Altitude_feet_[i] ≥ altmin
+        push!(t, flights.Time_UTC_[i])
+        push!(lat, flights.Latitude[i]); push!(lon, flights.Longitude[i])
+        push!(alt, flights.Altitude_feet_[i]); push!(speed, flights.Groundspeed_knots_[i])
+        push!(climb, flights.Rate[i]); push!(head, flights.Course[i])
       end
     end
-    # Save last flight of the dataset
-    archive, iStart = archiveFlightData(flights, archive,
-      iStart:length(flights.Time_UTC_), altmin)
+
+    return archive
   end
 
   return archive
 end #function loadArchive
-
-function archiveFlightData(flights::DataFrame, archive::Vector{<:FlightData},
-    datarange::UnitRange, altmin::Int)
-  # Check whether to use lat or lon for estimation and find flex points in x data
-  altrange = Altitude_feet_.≥altmin
-  lat = flights.Latitude[datarange][altrange]
-  lon = flights.Longitude[datarange][altrange]
-  lp = any(lon .> 0) ? maximum(lon[lon.≥0]) - minimum(lon[lon.≥0]) : 0
-  ln = any(lon .< 0) ? maximum(lon[lon.<0]) - minimum(lon[lon.<0]) : 0
-  useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ?
-    true : false
-  flex = useLON ? findFlex(lon) : findFlex(lat)
-  # When flight ID changes save data as FlightData and set start index to next dataset
-  push!(archive, FlightData(flights.Time_UTC_[datarange][altrange], lat, lon,
-    flights.Altitude_feet_[datarange][altrange], flights.Course[datarange][altrange],
-    flights.Rate[datarange][altrange], flights.Groundspeed_knots_[datarange][altrange],
-    flights.Flight_ID[i], flights.Ident[i], flights.Aircraft_Type[i],
-    (orig=flights.Origin[i], dest=flights.Destination[i]), flex, useLON, file))
-
-  return archive, datarange[end]+1
-end #function archiveFlightData
 
 
 """
