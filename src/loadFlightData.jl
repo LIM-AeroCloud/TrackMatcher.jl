@@ -297,5 +297,3 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000)
 
   return archive
 end #function loadOnlineData
-
-archive
