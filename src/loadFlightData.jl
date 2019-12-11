@@ -28,7 +28,8 @@ flight = flightDB("i3", "data/inventory", "data/online_data")
 # remarks
 Any data can be attached to `FlightDB` with the keyword argument `remarks`.
 """
-function loadFlightDB(DBtype::String, folder::Union{String, Vector{String}}...; remarks=nothing)
+function loadFlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
+  altmin::Int=15_000, remarks=nothing)
   # Save time of database creation
   tc = Dates.now()
   # Find database types
@@ -43,7 +44,7 @@ function loadFlightDB(DBtype::String, folder::Union{String, Vector{String}}...; 
   if !isnothing(i1)
     ifiles = String[]
     ifiles = findFiles(ifiles, folder[i1], ".csv")
-    inventory = try loadInventory(ifiles)
+    inventory = try loadInventory(ifiles, altmin=altmin)
     catch
       @warn "Flight inventory couldn't be loaded."
       FlightData[]
@@ -52,7 +53,7 @@ function loadFlightDB(DBtype::String, folder::Union{String, Vector{String}}...; 
   if !isnothing(i2)
     ifiles = String[]
     ifiles = findFiles(ifiles, folder[i2], ".csv")
-    archive = try loadArchive(ifiles)
+    archive = try loadArchive(ifiles, altmin=altmin)
     catch
       @warn "FlightAware archive couldn't be loaded."
       FlightData[]
@@ -61,7 +62,7 @@ function loadFlightDB(DBtype::String, folder::Union{String, Vector{String}}...; 
   if !isnothing(i3)
     ifiles = String[]
     ifiles = findFiles(ifiles, folder[i3], ".txt", ".dat")
-    onlineData = try loadOnlineData(ifiles)
+    onlineData = try loadOnlineData(ifiles, altmin=altmin)
     catch
       @warn "FlightAware online data couldn't be loaded."
       FlightData[]
@@ -80,7 +81,7 @@ end # function loadFlightDB
 From a list of `files`, return an `inventory` as `Vector{FlightData}` that can
 be saved to the `inventory` field in `FlightDB`.
 """
-function loadInventory(files::Vector{String}; filterAlt=15000, filterCloudfree=true)
+function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree=true)
 
   # Initialise inventory file array and start MATLAB for PCHIP fitting
   inventory = FlightData[]
@@ -123,7 +124,7 @@ function loadInventory(files::Vector{String}; filterAlt=15000, filterCloudfree=t
         # segtime = DateTime[]; segdist = Float64[]
       end
       # Filter altitude threshold
-      if flights.ALTITUDE[i] ≥ filterAlt
+      if flights.ALTITUDE[i] ≥ altmin
         push!(lat, flights.LATITUDE[i]); push!(lon, flights.LONGITUDE[i])
         push!(alt, flights.ALTITUDE[i]); push!(speed, flights.SPEED[i])
         push!(t, flights.time[i])
@@ -141,7 +142,7 @@ end #function loadInventory
 From a list of `files`, return an `archive` as `Vector{FlightData}` that can
 be saved to the `archive` field in `FlightDB`.
 """
-function loadArchive(files::Vector{String})
+function loadArchive(files::Vector{String}; altmin::Int=15_000)
   # Initialise inventory file array
   archive = FlightData[]
   @pm.showprogress 1 "load archive..." for file in files
@@ -156,30 +157,33 @@ function loadArchive(files::Vector{String})
     # Loop over all data points
     for i = 1:length(flights.Time_UTC_)-1
       if flights.Flight_ID[i] ≠ flights.Flight_ID[i+1]
-        archive, iStart = archiveFlightData(flights, archive, iStart:i)
+        archive, iStart = archiveFlightData(flights, archive, iStart:i, altmin)
       end
     end
     # Save last flight of the dataset
-    archive, iStart = archiveFlightData(flights, archive, iStart:length(flights.Time_UTC_))
+    archive, iStart = archiveFlightData(flights, archive,
+      iStart:length(flights.Time_UTC_), altmin)
   end
 
   return archive
 end #function loadArchive
 
-function archiveFlightData(flights::DataFrame, archive::Vector{<:FlightData}, datarange::UnitRange)
+function archiveFlightData(flights::DataFrame, archive::Vector{<:FlightData},
+    datarange::UnitRange, altmin::Int)
   # Check whether to use lat or lon for estimation and find flex points in x data
-  lat = flights.Latitude[datarange]; lon = flights.Longitude[datarange]
+  altrange = Altitude_feet_.≥altmin
+  lat = flights.Latitude[datarange][altrange]
+  lon = flights.Longitude[datarange][altrange]
   lp = any(lon .> 0) ? maximum(lon[lon.≥0]) - minimum(lon[lon.≥0]) : 0
   ln = any(lon .< 0) ? maximum(lon[lon.<0]) - minimum(lon[lon.<0]) : 0
   useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ?
     true : false
   flex = useLON ? findFlex(lon) : findFlex(lat)
   # When flight ID changes save data as FlightData and set start index to next dataset
-  push!(archive, FlightData(flights.Time_UTC_[datarange], flights.Latitude[datarange],
-    flights.Longitude[datarange], flights.Altitude_feet_[datarange],
-    flights.Course[datarange], flights.Rate[datarange],
-    flights.Groundspeed_knots_[datarange], flights.Flight_ID[i],
-    flights.Ident[i], flights.Aircraft_Type[i],
+  push!(archive, FlightData(flights.Time_UTC_[datarange][altrange], lat, lon,
+    flights.Altitude_feet_[datarange][altrange], flights.Course[datarange][altrange],
+    flights.Rate[datarange][altrange], flights.Groundspeed_knots_[datarange][altrange],
+    flights.Flight_ID[i], flights.Ident[i], flights.Aircraft_Type[i],
     (orig=flights.Origin[i], dest=flights.Destination[i]), flex, useLON, file))
 
   return archive, datarange[end]+1
@@ -192,13 +196,15 @@ end #function archiveFlightData
 From a list of `files`, return an `archive` as `Vector{FlightData}` that can
 be saved to the `onlineData` field in `FlightDB`.
 """
-function loadOnlineData(files::Vector{String})
+function loadOnlineData(files::Vector{String}; altmin::Int=15_000)
   # Initialise inventory file array
-  archive = Vector{FlightData}(undef,length(files))
+  archive = FlightData[]
   @pm.showprogress 1 "load online data..." for (n, file) in enumerate(files)
     # Read flight data
-    flight = CSV.read(file, delim='\t', datarow=3, normalizenames=true,
-      types=Dict(:feet => Float64, :kts => Float64))
+    flight = CSV.read(file, ignoreemptylines=true, normalizenames=true, copycols=true,
+      silencewarnings=true, threaded=false, types=Dict(:Latitude => Float64,
+      :Longitude => Float64, :feet => String, :kts => Float64, :Course => String,
+      :Rate => String))
 
     ### Get timezone from input data or use local time for undefined timezones
     # Define timezones as UTC offset to avoid conflicts during
@@ -220,30 +226,34 @@ function loadOnlineData(files::Vector{String})
     date = Dates.Date(datestr, "d-u-y", locale="english")
     # Set to 2 days prior to allow corrections for timezone diffences in the next step
     date -= Dates.Day(2)
-    # Delete rows with invalid times
-    flight = flight[([length(t) == 15 for t in flight[!,1]]).&(isfinite.(flight.Latitude)).&
-      (isfinite.(flight.Longitude)),:]
-
     ### Convert times to datetime and extract heading and climbing rate as Int32
-    # Initialise time and date vectors
-    flightdate = Vector{Union{Missing,Date}}(undef, length(flight[!,1]))
-    flighttime = Vector{Union{Missing,Time}}(undef, length(flight[!,1]))
+    # Initialise time vector
+    flighttime = ZonedDateTime[]
     # Initialise vectors for altitude, heading and climb to convert from strings to Int32
-    heading = Vector{Union{Missing,Int}}(undef, length(flight[!,1]))
-    climb = Vector{Union{Missing,Int}}(undef, length(flight[!,1]))
-    # altitude = Vector{Union{Missing,Float64}}(undef, length(flight.time))
+    altitude = Union{Missing,Float64}[]
+    heading = Union{Missing,Int}[]
+    climbingrate = Union{Missing,Int}[]
     # Loop over times
-    for i=1:length(flight[!,1])
+    for i=length(flight[!,1]):-1:1
+      alt = try parse(Float64, join([n for n in flight.feet[i] if isnumeric(n)]))
+      catch; missing;  end
+      climb = try parse(Int, join([n for n in flight.Rate[i] if isnumeric(n) || n == '-']))
+      catch; missing;  end
+      head = try parse(Int, join([n for n in flight.Course[i] if isnumeric(n)]))
+      catch; missing;  end
+      if length(flight[i,1]) ≠ 15 || ismissing(flight.Latitude[i]) ||
+          ismissing(flight.Longitude[i]) || ismissing(alt) || alt < altmin
+        df.deleterows!(flight, i)
+        continue
+      end
       # Derive date from day of week and filename
       while Dates.dayabbr(date) ≠ flight[i,1][1:3]
         date += Dates.Day(1)
       end
-      # Save date for current time step
-      flightdate[i] = date
       # Derive time from time string
-      if VERSION ≥ v"1.3"
+      t = if VERSION ≥ v"1.3"
         # Use AM/PM format for Julia > version 1.3
-        t = Time(flight[i,1][5:end], "I:M:S p")
+        Time(flight[i,1][5:end], "I:M:S p")
       else
         # Calculate time manually otherwise
         t = Time(flight[i,1][5:12], "H:M:S")
@@ -255,28 +265,22 @@ function loadOnlineData(files::Vector{String})
           t -= Dates.Hour(12)
         end
       end
-      # Save time of current time step
-      flighttime[i] = t
-      # Filter heading and climbing rate for numbers and convert to Int
-      climb[i] = try
-        parse(Int, flight.climb[i][findall([isdigit.(i) | (i == '-') for i ∈ flight.climb[i]])])
-      catch; 0
-      end
-      try
-        idx = [j for j in eachindex(flight.heading) if isdigit(flight.heading[j])]
-        heading[i] = parse.(Int, flight.heading[idx])
-      catch
-        heading[i] = missing
-      end
-    end
-    # Save revised DateTime
-    flight[!,1] = ZonedDateTime.(DateTime.(flightdate, flighttime), timezone)
-    # Save revised heading and climbing rate
-    flight.Rate = climb
+      # Save data that needed tweaking of current time step
+      push!(flighttime, ZonedDateTime(DateTime(date, t), timezone))
+      push!(altitude, alt); push!(climbingrate, climb); push!(heading, head)
+    end #loop of flight
+
+    # Skip data with all data points below the altitude threshold
+    isempty(altitude) && continue
+    # Save revised data to DataFrame
+    flight.time = flighttime
+    flight.feet = altitude
+    flight.Rate = climbingrate
     flight.Course = heading
-    flight.Latitude = float.(flight.Latitude)
-    flight.Longitude = float.(flight.Longitude)
-    # flight.alt = altitude
+    # Convert lat/lon from type Union{Missing,Float64} to Float64 to be processed by findFlex
+    flight.Latitude = float.(flight.Latitude); flight.Longitude = float.(flight.Longitude)
+
+    # Determine, whether to use lat or lon as x data and find flex points
     lp = any(flight.Longitude .> 0) ?
       maximum(flight.Longitude[flight.Longitude.≥0]) - minimum(flight.Longitude[flight.Longitude.≥0]) : 0
     ln = any(flight.Longitude .< 0) ?
@@ -284,11 +288,14 @@ function loadOnlineData(files::Vector{String})
     useLON = maximum(flight.Latitude) - minimum(flight.Latitude) ≤ (lp + ln) *
       cosd(stats.mean(flight.Latitude)) ? true : false
     flex = useLON ? findFlex(flight.Longitude) : findFlex(flight.Latitude)
+
     # Save data as FlightData
-    archive[n] = FlightData(flight[!,1], flight.Latitude, flight.Longitude,
+    push!(archive, FlightData(flight.time, flight.Latitude, flight.Longitude,
       flight.feet, flight.Course, flight.Rate, flight.kts, n, flightID, missing,
-      (orig=orig, dest=dest), flex, useLON, file)
+      (orig=orig, dest=dest), flex, useLON, file))
   end #loop over files
 
   return archive
 end #function loadOnlineData
+
+archive

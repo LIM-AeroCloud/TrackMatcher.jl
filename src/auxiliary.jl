@@ -70,7 +70,7 @@ function findFiles(inventory::Vector{String}, folder::String, filetypes::String.
   end
 
   return inventory
-end # function findcsv
+end # function findFiles
 
 
 function remdup(x::Vector{<:Float64}, y::Vector{<:Float64},

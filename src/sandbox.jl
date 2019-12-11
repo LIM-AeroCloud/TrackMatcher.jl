@@ -2,47 +2,40 @@
 
 ### load FlightAware online data
 
-dir = "data/flightaware/online/"
-files = String[]; files = findFiles(files, dir, ".dat")
-file = files[end]
-flight = CSV.read(file, delim='\t', datarow=3, normalizenames=true)
+altmin = 15_000
+dir = "data/test/"
+files = String[]; files = findFiles(files, dir, ".dat", ".txt")
+file = files[4]
+file = files[7]
+onlineData = loadOnlineData(files)
 
-names(flight)
-flight.Course
-flight.Rate
-flight.feet
-
-flight[1][2]
-flight[2,1]
 
 ################################################################################
 
 ### load FlightAware archive
 
-dir = "data/flightaware/archive"
-file = joinpath(dir, readdir(dir)...)
-
-flights = CSV.read(file, datarow=2, normalizenames=true, dateformat="m/d/y H:M:S",
-  types = Dict(:Altitude_feet_ => Float64, :Groundspeed_knots_ => Float64))
+altmin = 15_000
+dir = "data/flightaware/archive/"
+files = String[]; files = findFiles(files, dir, ".csv")
 
 
-flights.Time_UTC_
-# df.names(flights)
-# flights[6]
-# flights.Time_UTC_
-# flights[:Time_UTC_]
-# @timed flights.time = ZonedDateTime.(flights.Time_UTC_, tz.tz"UTC")
-# @timed flights.time = [ZonedDateTime(flights.Time_UTC_[i], tz.tz"UTC") for i = 1:length(flights.Time_UTC_)]
-# flights.Altitude_feet_
-# flights.Groundspeed_knots_
-# flights.Course
-# flights.Rate
+archive = loadArchive(files, altmin=altmin)
+
+
+
 flights = loadFlightDB("a", "data/flightaware/archive/")
 
 ################################################################################
 
 
-flights = loadFlightDB("ia", "data/flightinventory/", "data/flightaware/archive/")
+flights = loadFlightDB("ao", "data/flightaware/archive/", "data/flightaware/online/")
+
+flights = CSV.read(file, datarow=2, normalizenames=true, dateformat="m/d/y H:M:S",
+  types = Dict(:feet => Float64, :Groundspeed_knots_ => Float64))
+names(flights)
+
+flights = loadFlightDB("iao", "data/flightinventory/", "data/flightaware/archive/",
+  "data/flightaware/online/")
 
 sat = SatDB("data/CALIOP/")
 
