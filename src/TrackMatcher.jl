@@ -400,5 +400,6 @@ export loadFlightDB,
 
 include("auxiliary.jl")
 include("loadFlightData.jl")
+include("match.jl")
 
 end # module TrackMatcher
