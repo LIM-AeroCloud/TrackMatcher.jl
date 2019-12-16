@@ -26,9 +26,9 @@ end
 
 
 """
-    convertUTC(t::Float64) -> ZonedDateTime
+    convertUTC(t::Float64) -> DateTime
 
-Convert the CALIOP Profile UTC time (`t`) to a `ZonedDateTime` with `TimeZone` `UTC`.
+Convert the CALIOP Profile UTC time (`t`) to a `DateTime` with `TimeZone` `UTC`.
 """
 function convertUTC(t::Float64)
   # Extract date from Float before decimal point and convert to Date
@@ -41,8 +41,8 @@ function convertUTC(t::Float64)
   m = floor(Int, utc - 3600h)÷60
   s = floor(Int, utc - 3600h - 60m)
 
-  # Return a ZonedDateTime from date and time (h/m/s) with timezone UTC
-  return ZonedDateTime(DateTime(d, Time(h,m,s)), tz.tz"UTC")
+  # Return a DateTime from date and time (h/m/s) with timezone UTC
+  return DateTime(d, Time(h,m,s))
 end
 
 

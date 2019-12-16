@@ -1,7 +1,7 @@
 module TrackMatcher
 
 # Track changes during development
-# using Revise
+using Revise
 
 # Import Julia packages
 import CSV
@@ -60,7 +60,7 @@ Immutable struct to hold metadata for `FlightData` of the `FlightDB` with fields
 - `aircraft::Union{Missing,AbstractString}`
 - `route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}}`
 - `area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),Tuple{Float64,Float64,Float64,Float64,Float64,Float64}}`
-- `date::NamedTuple{(:start,:stop),Tuple{ZonedDateTime,ZonedDateTime}}`
+- `date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}`
 - `file::AbstractString`
 
 ## dbID
@@ -100,7 +100,7 @@ String holding the absolute folder path and file name.
       flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
       route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
       lat::Vector{<:Union{Missing,Float64}}, lon::Vector{<:Union{Missing,Float64}},
-      date::Vector{ZonedDateTime}, file::AbstractString) -> struct MetaData
+      date::Vector{DateTime}, file::AbstractString) -> struct MetaData
 
 Construct `MetaData` from `dbID`, `flightID`, `aircraft` type, `route`, and `file`.
 Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
@@ -110,7 +110,7 @@ struct MetaData
   flightID::Union{Missing,AbstractString}
   route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}}
   aircraft::Union{Missing,AbstractString}
-  date::NamedTuple{(:start,:stop),Tuple{ZonedDateTime,ZonedDateTime}}
+  date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
   area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),NTuple{6,Float64}}
   flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}}
   useLON::Bool
@@ -118,7 +118,7 @@ struct MetaData
 
   function MetaData(dbID::Union{Int,AbstractString}, flightID::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
-    aircraft::Union{Missing,AbstractString}, date::Vector{ZonedDateTime},
+    aircraft::Union{Missing,AbstractString}, date::Vector{DateTime},
     lat::Vector{<:Union{Missing,Float64}}, lon::Vector{<:Union{Missing,Float64}},
     useLON::Bool,
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
@@ -140,7 +140,7 @@ end #struct MetaData
 # struct FlightData
 
 Aircraft data with fields
-- `time::Vector{ZonedDateTime}`
+- `time::Vector{DateTime}`
 - `lat::Vector{<:Union{Missing,Float64}}`
 - `lon::Vector{<:Union{Missing,Float64}}`
 - `alt::Vector{<:Union{Missing,Float64}}`
@@ -150,7 +150,7 @@ Aircraft data with fields
 - `metadata::MetaData`
 
 ## time
-Vector of `ZonedDateTime`
+Vector of `DateTime`
 
 ## lat/lon
 Vectors of `Float64` with ranges -90°...90° and -180°...180°.
@@ -182,7 +182,7 @@ Construct `FlightData` from fields and additonal information `dbID`, `flightID`,
 `aircraft` type, `route`, and `file` name for `MetaData`.
 """
 struct FlightData
-  time::Vector{ZonedDateTime}
+  time::Vector{DateTime}
   lat::Vector{<:Union{Missing,Float64}}
   lon::Vector{<:Union{Missing,Float64}}
   alt::Vector{<:Union{Missing,Float64}}
@@ -200,15 +200,16 @@ struct FlightData
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
     useLON::Bool, file::AbstractString)
 
-    lat = checklength(lat, time)
-    lon = checklength(lon, time)
-    alt = checklength(alt, time)
-    heading = checklength(heading, time)
-    climb = checklength(climb, time)
-    speed = checklength(speed, time)
-    metadata = MetaData(dbID,flightID,route,aircraft,time,lat,lon,useLON,flex,file)
+    t = [t.utc_datetime for t in time]
+    lat = checklength(lat, t)
+    lon = checklength(lon, t)
+    alt = checklength(alt, t)
+    heading = checklength(heading, t)
+    climb = checklength(climb, t)
+    speed = checklength(speed, t)
+    metadata = MetaData(dbID,flightID,route,aircraft,t,lat,lon,useLON,flex,file)
 
-    new(time,lat,lon,alt,heading,climb,speed,metadata)
+    new(t,lat,lon,alt,heading,climb,speed,metadata)
   end #constructor FlightData
 end #struct FlightData
 
@@ -256,7 +257,7 @@ end #struct FlightDB
 # struct CLay
 
 CALIOP cloud layer data with fields:
-- `time::Vector{ZonedDateTime}`
+- `time::Vector{DateTime}`
 - `lat::Vector{Float64}`
 - `lon::Vector{Float64}`
 
@@ -267,7 +268,7 @@ CALIOP cloud layer data with fields:
 Construct `CLay` from a list of file names (including directories).
 """
 struct CLay
-  time::Vector{ZonedDateTime}
+  time::Vector{DateTime}
   lat::Vector{Float64}
   lon::Vector{Float64}
 
@@ -278,7 +279,7 @@ struct CLay
       files = findFiles(files, folder, ".hdf")
     end
     # Initialise arrays
-    utc = ZonedDateTime[]; lon = []; lat = []
+    utc = DateTime[]; lon = []; lat = []
     # Loop over files
     @pm.showprogress 1 "load CLay data..." for file in files
       # Find files with cloud layer data
@@ -302,7 +303,7 @@ end #struct CLay
 # struct CPro
 
 CALIOP cloud profile data with fields:
-- `time::Vector{ZonedDateTime}`
+- `time::Vector{DateTime}`
 - `lat::Vector{Float64}`
 - `lon::Vector{Float64}`
 
@@ -313,7 +314,7 @@ CALIOP cloud profile data with fields:
 Construct `CPro` from a list of file names (including directories).
 """
 struct CPro
-  time::Vector{ZonedDateTime}
+  time::Vector{DateTime}
   lat::Vector{Float64}
   lon::Vector{Float64}
 
@@ -324,7 +325,7 @@ struct CPro
       files = findFiles(files, folder, ".hdf")
     end
     # Initialise arrays
-    utc = ZonedDateTime[]; lon = []; lat = []
+    utc = DateTime[]; lon = []; lat = []
     # Loop over files
     @pm.showprogress 1 "load CPro data..." for file in files
       # Find files with cloud profile data
@@ -356,7 +357,7 @@ Immutable struct with fields
 
 ## CLay and CPro
 
-CALIOP satellite data currently holding time as `ZonedDateTime`
+CALIOP satellite data currently holding time as `DateTime`
 and position (`lat`/`lon`) of cloud layer and profile data.
 
 ## created
