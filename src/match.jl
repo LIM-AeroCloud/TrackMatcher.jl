@@ -1,9 +1,19 @@
-function intersection(flights::FlightDB, sat::SatDB; deltat::Int=30, satdata::Symbol=CPro)
-  hits = FlightData[]
-  for flight in [flights.inventory; flights.archive; flights.onlineData]
+function intersection(flights::FlightDB, sat::SatDB; deltat::Int=30,
+  satdata::Symbol=:CPro, precision::Real=0.001)
+  hits = []
+  # New MATLAB session
+  ms = mat.MSession()
+  # for flight in flights.inventory[1:10]
+  @pm.showprogress 1 "interpolate data..." for flight in [flights.inventory; flights.archive; flights.onlineData]
     satranges = get_satranges(flight, getfield(sat, satdata), deltat)
+    sattracks = interpolate_satdata(getfield(sat, satdata), satranges, precision, ms)
+    flighttracks = interpolate_flightdata(flight, precision, ms)
+    push!(hits, (flight = flighttracks, sat = sattracks))
   end #loop over flights
+  mat.close(ms)
+  return hits
 end #function intersection
+
 
 function get_satranges(flight::FlightData, sat::Union{CLay,CPro}, deltat::Int)::Vector{UnitRange}
   satranges = UnitRange[]
@@ -13,6 +23,7 @@ function get_satranges(flight::FlightData, sat::Union{CLay,CPro}, deltat::Int)::
   satoverlap = (flight.metadata.area.latmin .≤ sat.lat[t1:t2] .≤ flight.metadata.area.latmax) .&
     ((flight.metadata.area.plonmin .≤ sat.lon[t1:t2] .≤ flight.metadata.area.plonmax) .|
     (flight.metadata.area.nlonmin .≤ sat.lon[t1:t2] .≤ flight.metadata.area.nlonmax))
+  length(satoverlap) > 1 || return satranges
   r = false; ind = 0
   for i = 1:length(satoverlap)
     if satoverlap[i] && !r
@@ -27,3 +38,72 @@ function get_satranges(flight::FlightData, sat::Union{CLay,CPro}, deltat::Int)::
   end
   return satranges
 end#function get_satranges
+
+
+function interpolate_satdata(sat::Union{CLay,CPro}, satranges::Vector{UnitRange},
+  precision::Real, ms::mat.MSession=ms)
+
+  # Interpolate satellite tracks and flight times for all segments of interest
+  slat = Vector{Float64}[]; slon = Vector{Float64}[]; stime = Vector{DateTime}[]
+  # Loop over satellite data
+  for r in satranges
+    # Find possible flex points in satellite tracks
+    satsegments = findFlex(sat.lat[r])
+
+    # Loop over satellite segments
+    for seg in satsegments
+      # interpolate sat segments with predefined precision
+      s = interpolatedtrack(sat.lat[r], precision)
+      length(s) > 1 || continue
+      # Pass variables to MATLAB
+      mat.put_variable(ms, :x, sat.lat[r])
+      mat.put_variable(ms, :y, sat.lon[r])
+      # Convert times to UNIX times for interpolation
+      mat.put_variable(ms, :t, Dates.datetime2unix.(sat.time[r]))
+      push!(slat, s)
+      mat.eval_string(ms, "p = pchip(x, y);")
+      p = mat.get_mvariable(ms, :p)
+      push!(slon, Minterpolate(ms, p)(s))
+      mat.eval_string(ms, "p = pchip(x, t);")
+      p = mat.get_mvariable(ms, :p)
+      # Re-convert UNIX time values to DateTimes
+      push!(stime, Dates.unix2datetime.(Minterpolate(ms, p)(s)))
+    end #loop over sat segments
+
+  end
+
+  return (x = slat, y = slon, t = stime)
+end #function interpolate_satdata
+
+
+"""
+
+
+"""
+function interpolate_flightdata(flight::FlightData, precision::Real,
+  ms::mat.MSession=ms)
+
+  # Define x and y data based on useLON
+  x, y = flight.metadata.useLON ? (flight.lon, flight.lat) : (flight.lat, flight.lon)
+  # Interpolate flight tracks and tims for all segments
+  fx = Vector{Float64}[]; fy = Vector{Float64}[]; ft = Vector{DateTime}[]
+  for f in flight.metadata.flex
+    mat.put_variable(ms, :x, x[f.range])
+    mat.put_variable(ms, :y, y[f.range])
+    mat.put_variable(ms, :t, Dates.datetime2unix.(flight.time[f.range]))
+    mat.eval_string(ms, "p = pchip(x, y);")
+    p = mat.get_mvariable(ms, :p)
+    xr = interpolatedtrack(x[f.range], precision)
+    length(xr) > 1 || continue
+    push!(fx, xr)
+    push!(fy, Minterpolate(ms, p)(xr))
+    mat.eval_string(ms, "p = pchip(x, t);")
+    p = mat.get_mvariable(ms, :p)
+    push!(ft, Dates.unix2datetime.(Minterpolate(ms, p)(xr)))
+  end
+
+  return flight.metadata.useLON ? (lat = fy, lon = fx, t = ft) : (lat = fx, lon = fy, t = ft)
+end #function interpolate_flightdata
+
+interpolatedtrack(xdata::Vector{Float64}, precision::Real) = xdata[1] < xdata[end] ?
+  collect(Float64, xdata[1]:precision:xdata[end]) : collect(Float64, xdata[1]:-precision:xdata[end])

@@ -1,7 +1,7 @@
 module TrackMatcher
 
 # Track changes during development
-using Revise
+# using Revise
 
 # Import Julia packages
 import CSV
@@ -24,30 +24,20 @@ logg.global_logger(logger)
 
 
 ### Define own structs
+"""
 
-struct PCHIP
-  interpolate::Vector{<:Function}
-  interval::Vector{<:NamedTuple{(:xmin,:xmax,:ymin,:ymax),<:NTuple{4,<:Float64}}}
-  useLON::Bool
-  session::mat.MSession
 
-  function PCHIP(x::Vector{<:Float64}, y::Vector{<:Float64},
-    flex::Vector{<:UnitRange}, id::Int64, useLON::Bool, ms::mat.MSession)
-    itp = Function[]; itv = NamedTuple{(:xmin,:xmax,:ymin,:ymax),<:NTuple{4,<:Float64}}[]
-    for (i, f) in enumerate(flex)
-      p = "p$(id)_$i"
-      mat.put_variable(ms, :x, x[f])
-      mat.put_variable(ms, :y, y[f])
-      mat.eval_string(ms, "$p = pchip(x, y);");
-      pp = mat.get_mvariable(ms, Symbol("$p"))
-      push!(itp, Minterpolate(ms, pp))
-      push!(itv, (xmin=x[f[1]], xmax=x[f[end]], ymin=minimum(y[f]), ymax=maximum(y[f])))
-    end
-
-    new(itp, itv, useLON, ms)
-  end
+"""
+struct Intersection
+  time::DateTime
+  lat::Float64
+  lon::Float64
+  alt::Float64
+  climb::Union{Missing,Int}
+  speed::Union{Missing,Float64}
+  cirrus::Bool
+  flight::MetaData
 end
-
 
 
 """
