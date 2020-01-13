@@ -3,14 +3,20 @@ function intersection(flights::FlightDB, sat::SatDB; deltat::Int=30,
   hits = []
   # New MATLAB session
   ms = mat.MSession()
-  # for flight in flights.inventory[1:10]
-  @pm.showprogress 1 "interpolate data..." for flight in [flights.inventory; flights.archive; flights.onlineData]
-    satranges = get_satranges(flight, getfield(sat, satdata), deltat)
-    sattracks = interpolate_satdata(getfield(sat, satdata), satranges, precision, ms)
-    flighttracks = interpolate_flightdata(flight, precision, ms)
-    push!(hits, (flight = flighttracks, sat = sattracks))
-  end #loop over flights
-  mat.close(ms)
+  # Loop over data and interpolate track data and time, throw error on failure
+  try
+    @pm.showprogress 1 "interpolate data..." for flight in flights.inventory[1:10]
+    # try @pm.showprogress 1 "interpolate data..." for flight in [flights.inventory; flights.archive; flights.onlineData]
+      satranges = get_satranges(flight, getfield(sat, satdata), deltat)
+      sattracks = interpolate_satdata(ms, getfield(sat, satdata), satranges)
+      flighttracks = interpolate_flightdata(ms, flight, precision)
+      push!(hits, (flight = flighttracks, sat = sattracks))
+    end #loop over flights
+  catch
+    throw("Track data and/or time could not be interpolated")
+  finally #make sure MATLAB session is closed
+    mat.close(ms)
+  end
   return hits
 end #function intersection
 
@@ -40,11 +46,11 @@ function get_satranges(flight::FlightData, sat::Union{CLay,CPro}, deltat::Int)::
 end#function get_satranges
 
 
-function interpolate_satdata(sat::Union{CLay,CPro}, satranges::Vector{UnitRange},
-  precision::Real, ms::mat.MSession=ms)
+function interpolate_satdata(ms::mat.MSession,
+  sat::Union{CLay,CPro}, satranges::Vector{UnitRange})
 
   # Interpolate satellite tracks and flight times for all segments of interest
-  slat = Vector{Float64}[]; slon = Vector{Float64}[]; stime = Vector{DateTime}[]
+  interpolated_satdata = []
   # Loop over satellite data
   for r in satranges
     # Find possible flex points in satellite tracks
@@ -52,27 +58,24 @@ function interpolate_satdata(sat::Union{CLay,CPro}, satranges::Vector{UnitRange}
 
     # Loop over satellite segments
     for seg in satsegments
-      # interpolate sat segments with predefined precision
-      s = interpolatedtrack(sat.lat[r], precision)
-      length(s) > 1 || continue
+      length(seg) > 1 || continue #ignore points or empty data in segments
       # Pass variables to MATLAB
       mat.put_variable(ms, :x, sat.lat[r])
       mat.put_variable(ms, :y, sat.lon[r])
       # Convert times to UNIX times for interpolation
       mat.put_variable(ms, :t, Dates.datetime2unix.(sat.time[r]))
-      push!(slat, s)
-      mat.eval_string(ms, "p = pchip(x, y);")
-      p = mat.get_mvariable(ms, :p)
-      push!(slon, Minterpolate(ms, p)(s))
-      mat.eval_string(ms, "p = pchip(x, t);")
-      p = mat.get_mvariable(ms, :p)
+      mat.eval_string(ms, "ps = pchip(x, y);")
+      ps = mat.get_mvariable(ms, :ps)
+      mat.eval_string(ms, "pt = pchip(x, t);")
+      pt = mat.get_mvariable(ms, :pt)
       # Re-convert UNIX time values to DateTimes
-      push!(stime, Dates.unix2datetime.(Minterpolate(ms, p)(s)))
+      push!(interpolated_satdata, (track=Minterpolate(ms, ps), time=Minterpolate(ms, pt),
+        min=seg.min, max=seg.max))
     end #loop over sat segments
 
   end
 
-  return (x = slat, y = slon, t = stime)
+  return interpolated_satdata
 end #function interpolate_satdata
 
 
@@ -80,8 +83,7 @@ end #function interpolate_satdata
 
 
 """
-function interpolate_flightdata(flight::FlightData, precision::Real,
-  ms::mat.MSession=ms)
+function interpolate_flightdata(ms::mat.MSession, flight::FlightData, precision::Real)
 
   # Define x and y data based on useLON
   x, y = flight.metadata.useLON ? (flight.lon, flight.lat) : (flight.lat, flight.lon)
