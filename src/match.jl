@@ -1,24 +1,58 @@
 function intersection(flights::FlightDB, sat::SatDB; deltat::Int=30,
   satdata::Symbol=:CPro, precision::Real=0.001)
-  hits = []
+  intersects = Intersection[]
   # New MATLAB session
   ms = mat.MSession()
   # Loop over data and interpolate track data and time, throw error on failure
-  try
-    @pm.showprogress 1 "interpolate data..." for flight in flights.inventory[1:10]
+  # try
+    @pm.showprogress 1 "find intersections..." for flight in flights.inventory[1:10]
     # try @pm.showprogress 1 "interpolate data..." for flight in [flights.inventory; flights.archive; flights.onlineData]
       satranges = get_satranges(flight, getfield(sat, satdata), deltat)
       sattracks = interpolate_satdata(ms, getfield(sat, satdata), satranges)
       flighttracks = interpolate_flightdata(ms, flight, precision)
-      push!(hits, (flight = flighttracks, sat = sattracks))
+      intersects = find_intersections(intersects, flight, flighttracks, sattracks,
+        deltat, precision)
     end #loop over flights
-  catch
-    throw("Track data and/or time could not be interpolated")
-  finally #make sure MATLAB session is closed
+  # catch
+  #   throw("Track data and/or time could not be interpolated")
+  # finally #make sure MATLAB session is closed
     mat.close(ms)
-  end
-  return hits
+  # end
+  return intersects
 end #function intersection
+
+
+"""
+    find_intersections(flighttracks::Vector, sattracks::Vector, satranges::Vector{UnitRange})
+
+documentation
+"""
+function find_intersections(intersects::Vector{Intersection}, flight::FlightData,
+  flighttracks::Vector, sattracks::Vector, deltat::Real, precision::Real)
+
+  for st in sattracks, ft in flighttracks
+    if ft.min < st.max && ft.max > st.min
+      # Use overlap of sat and flight data only
+      fi = ft.lat[st.min .< ft.lat .< st.max]
+      # Interpolate sat data with same step width as flight data
+      si = st.track(fi)
+
+      # Find flight longitudes in overlapping sat/flight range
+      fmin, fmax = fi[1] < fi[end] ? (fi[1], fi[end]) : (fi[end], fi[1])
+      flon = ft.lon[fmin .<= ft.lat .<= fmax]
+      # Calculate distances between each coordinate pair
+      d = abs.(abs.(si) .- abs.(flon))
+      # Find minimum in distance and check whether it is within precision
+      m = argmin(d)
+      tm = Dates.unix2datetime(st.time(fi[m]))
+      td = ft.t[m] - tm
+      if d[m] < precision && Dates.Minute(-deltat) < td < Dates.Minute(deltat)
+        push!(intersects, Intersection(flight,ft.t[m], tm, td, fi[m], flon[m]))
+      end
+    end
+  end
+  return intersects
+end #function find_intersections
 
 
 function get_satranges(flight::FlightData, sat::Union{CLay,CPro}, deltat::Int)::Vector{UnitRange}
@@ -88,23 +122,25 @@ function interpolate_flightdata(ms::mat.MSession, flight::FlightData, precision:
   # Define x and y data based on useLON
   x, y = flight.metadata.useLON ? (flight.lon, flight.lat) : (flight.lat, flight.lon)
   # Interpolate flight tracks and tims for all segments
-  fx = Vector{Float64}[]; fy = Vector{Float64}[]; ft = Vector{DateTime}[]
+  flightdata = []
   for f in flight.metadata.flex
     mat.put_variable(ms, :x, x[f.range])
     mat.put_variable(ms, :y, y[f.range])
     mat.put_variable(ms, :t, Dates.datetime2unix.(flight.time[f.range]))
-    mat.eval_string(ms, "p = pchip(x, y);")
-    p = mat.get_mvariable(ms, :p)
+    mat.eval_string(ms, "pf = pchip(x, y);")
+    pf = mat.get_mvariable(ms, :pf)
     xr = interpolatedtrack(x[f.range], precision)
     length(xr) > 1 || continue
-    push!(fx, xr)
-    push!(fy, Minterpolate(ms, p)(xr))
-    mat.eval_string(ms, "p = pchip(x, t);")
-    p = mat.get_mvariable(ms, :p)
-    push!(ft, Dates.unix2datetime.(Minterpolate(ms, p)(xr)))
+    mat.eval_string(ms, "pt = pchip(x, t);")
+    pt = mat.get_mvariable(ms, :pt)
+    flight.metadata.useLON ? (push!(flightdata, (lat = Minterpolate(ms, pf)(xr),
+      lon =  xr, t = Dates.unix2datetime.(Minterpolate(ms, pt)(xr)),
+      min = minimum(flight.lat[f.range]), max = maximum(flight.lat[f.range])))) :
+      (push!(flightdata, (lat = xr, lon =  Minterpolate(ms, pf)(xr),
+      t = Dates.unix2datetime.(Minterpolate(ms, pt)(xr)), min = f.min, max = f.max)))
   end
 
-  return flight.metadata.useLON ? (lat = fy, lon = fx, t = ft) : (lat = fx, lon = fy, t = ft)
+  return flightdata
 end #function interpolate_flightdata
 
 interpolatedtrack(xdata::Vector{Float64}, precision::Real) = xdata[1] < xdata[end] ?

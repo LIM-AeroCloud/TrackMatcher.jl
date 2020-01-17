@@ -25,22 +25,6 @@ logg.global_logger(logger)
 
 ### Define own structs
 """
-
-
-"""
-struct Intersection
-  time::DateTime
-  lat::Float64
-  lon::Float64
-  alt::Float64
-  climb::Union{Missing,Int}
-  speed::Union{Missing,Float64}
-  cirrus::Bool
-  flight::MetaData
-end
-
-
-"""
 # struct MetaData
 
 Immutable struct to hold metadata for `FlightData` of the `FlightDB` with fields
@@ -262,7 +246,7 @@ struct CLay
   lat::Vector{Float64}
   lon::Vector{Float64}
 
-  function CLay(folders::String...)
+  function CLay(ms::mat.MSession, folders::String...)
     # Scan folders for HDF4 files
     files = String[];
     for folder in folders
@@ -275,11 +259,11 @@ struct CLay
       # Find files with cloud layer data
       if occursin("CLay", basename(file))
         # Extract time and convert to UTC
-        t = mat.mxcall(:hdfread,1,file,"Profile_UTC_Time")[:,2]
+        t = mat.mxcall(ms, :hdfread,1,file,"Profile_UTC_Time")[:,2]
         utc = [utc; convertUTC.(t)]
         # Extract lat/lon
-        lon = [lon; mat.mxcall(:hdfread,1,file, "Longitude")[:,2]]
-        lat = [lat; mat.mxcall(:hdfread,1,file, "Latitude")[:,2]]
+        lon = [lon; mat.mxcall(ms, :hdfread,1,file, "Longitude")[:,2]]
+        lat = [lat; mat.mxcall(ms, :hdfread,1,file, "Latitude")[:,2]]
       end
     end
 
@@ -308,7 +292,7 @@ struct CPro
   lat::Vector{Float64}
   lon::Vector{Float64}
 
-  function CPro(folders::String...)
+  function CPro(ms::mat.MSession, folders::String...)
     # Scan folders for HDF4 files
     files = String[];
     for folder in folders
@@ -321,11 +305,11 @@ struct CPro
       # Find files with cloud profile data
       if occursin("CPro", basename(file))
         # Extract time and convert to UTC
-        t = mat.mxcall(:hdfread,1,file,"Profile_UTC_Time")[:,2]
+        t = mat.mxcall(ms, :hdfread,1,file,"Profile_UTC_Time")[:,2]
         utc = [utc; convertUTC.(t)]
         # Extract lat/lon
-        lon = [lon; mat.mxcall(:hdfread,1,file, "Longitude")[:,2]]
-        lat = [lat; mat.mxcall(:hdfread,1,file, "Latitude")[:,2]]
+        lon = [lon; mat.mxcall(ms, :hdfread,1,file, "Longitude")[:,2]]
+        lat = [lat; mat.mxcall(ms, :hdfread,1,file, "Latitude")[:,2]]
       end
     end
 
@@ -372,13 +356,44 @@ struct SatDB
   remarks
 
   function SatDB(folders::String...; remarks=nothing)
-    cl = CLay(folders...)
-    cp = CPro(folders...)
+    ms = mat.MSession()
+    cl = CLay(ms, folders...)
+    cp = CPro(ms, folders...)
     tc = Dates.now()
 
     new(cl, cp, tc, remarks)
+    mat.close(ms)
   end #constructor SatDB
 end #struct SatDB
+
+
+"""
+
+
+"""
+struct Intersection
+  tflight::DateTime
+  tsat::DateTime
+  tdiff::Dates.CompoundPeriod
+  lat::Float64
+  lon::Float64
+  alt::Union{Missing,Float64}
+  climb::Union{Missing,Int}
+  speed::Union{Missing,Float64}
+  cirrus::Bool
+  flight::MetaData
+
+  function Intersection(flight::FlightData, tflight::DateTime, tsat::DateTime,
+    td::Dates.Millisecond, lat::Float64, lon::Float64)
+    tdiff = Dates.canonicalize(Dates.CompoundPeriod(td))
+    tf = argmin(abs.(flight.time .- tflight))
+    # ts = argmin(abs.(sat.time[satrange] .- tsat))
+
+    new(tflight,tsat,tdiff,lat,lon,flight.alt[tf],flight.climb[tf],flight.speed[tf],
+      false,flight.metadata)
+  end
+end
+
 
 export loadFlightDB,
        FlightDB,

@@ -102,12 +102,7 @@ function findFlex(x::Vector{<:Real})
   flex = Int[1]
   for i = 2:length(x)-1
     if x[i-1] > x[i] < x[i+1] || x[i-1] < x[i] > x[i+1]
-      if count(isequal(-180), x[i-1:i+1]) == 1 &&
-        !(sign(x[i-1]) == sign(x[i+1]) && x[i] == -180)
-        continue
-      else
-        push!(flex, i)
-      end
+      push!(flex, i)
     end
   end
   push!(flex, length(x))
@@ -115,11 +110,12 @@ function findFlex(x::Vector{<:Real})
   for i = 2:length(flex)
     xmin, xmax = x[flex[i-1]] < x[flex[i]] ? (x[flex[i-1]], x[flex[i]]) :
       (x[flex[i]], x[flex[i-1]])
-    push!(ranges, (range=flex[i-1]:flex[i], min=xmin, max=xmax))
+    flex[i] - flex[i-1] > 1 && push!(ranges, (range=flex[i-1]:flex[i], min=xmin, max=xmax))
   end
 
   return Tuple(ranges)
-end
+end #function findFlex
+
 
 #=
 function findFlex(x::Vector{<:Real}, y::Vector{<:Float64}, useLON::Bool)
