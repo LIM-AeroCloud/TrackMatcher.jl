@@ -1,5 +1,5 @@
-function intersection(flights::FlightDB, sat::SatDB; deltat::Int=30,
-  satdata::Symbol=:CPro, precision::Real=0.001)
+function intersection(flights::FlightDB, sat::SatDB, satdata::Symbol=:CLay; deltat::Int=30,
+  precision::Real=0.001)
   intersects = Intersection[]
   # New MATLAB session
   ms = mat.MSession()
@@ -10,8 +10,8 @@ function intersection(flights::FlightDB, sat::SatDB; deltat::Int=30,
       satranges = get_satranges(flight, getfield(sat, satdata), deltat)
       sattracks = interpolate_satdata(ms, getfield(sat, satdata), satranges)
       flighttracks = interpolate_flightdata(ms, flight, precision)
-      intersects = find_intersections(intersects, flight, flighttracks, sattracks,
-        deltat, precision)
+      intersects = find_intersections(intersects, flight, flighttracks,
+        getfield(sat, satdata), satdata, sattracks, deltat, precision)
     end #loop over flights
   # catch
   #   throw("Track data and/or time could not be interpolated")
@@ -28,7 +28,8 @@ end #function intersection
 documentation
 """
 function find_intersections(intersects::Vector{Intersection}, flight::FlightData,
-  flighttracks::Vector, sattracks::Vector, deltat::Real, precision::Real)
+  flighttracks::Vector, sat::Union{CLay,CPro}, sattype::Symbol, sattracks::Vector,
+  deltat::Real, precision::Real)
 
   for st in sattracks, ft in flighttracks
     if ft.min < st.max && ft.max > st.min
@@ -45,9 +46,8 @@ function find_intersections(intersects::Vector{Intersection}, flight::FlightData
       # Find minimum in distance and check whether it is within precision
       m = argmin(d)
       tm = Dates.unix2datetime(st.time(fi[m]))
-      td = ft.t[m] - tm
-      if d[m] < precision && Dates.Minute(-deltat) < td < Dates.Minute(deltat)
-        push!(intersects, Intersection(flight,ft.t[m], tm, td, fi[m], flon[m]))
+      if d[m] < precision && Dates.Minute(-deltat) < ft.t[m] - tm < Dates.Minute(deltat)
+        push!(intersects, Intersection(flight, sat, sattype, ft.t[m], tm, fi[m], flon[m]))
       end
     end
   end
