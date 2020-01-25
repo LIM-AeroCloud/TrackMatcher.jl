@@ -4,20 +4,24 @@ function intersection(flights::FlightDB, sat::SatDB, satdata::Symbol=:CLay; delt
   # New MATLAB session
   ms = mat.MSession()
   # Loop over data and interpolate track data and time, throw error on failure
-  # try
-    @pm.showprogress 1 "find intersections..." for flight in flights.inventory[1:10]
-    # try @pm.showprogress 1 "interpolate data..." for flight in [flights.inventory; flights.archive; flights.onlineData]
+  flight = nothing
+    # @pm.showprogress 1 "find intersections..." for flight in flights.inventory[1:10]
+  try @pm.showprogress 1 "find intersections..." for outer flight in
+    [flights.inventory; flights.archive; flights.onlineData]
       satranges = get_satranges(flight, getfield(sat, satdata), deltat)
       sattracks = interpolate_satdata(ms, getfield(sat, satdata), satranges)
       flighttracks = interpolate_flightdata(ms, flight, precision)
       intersects = find_intersections(intersects, flight, flighttracks,
         getfield(sat, satdata), satdata, sattracks, deltat, precision)
     end #loop over flights
-  # catch
-  #   throw("Track data and/or time could not be interpolated")
-  # finally #make sure MATLAB session is closed
+  catch
+    printstyled(
+      "\nTrack data and/or time could not be interpolated in flight $(flight.metadata.dbID)",
+      color=:red)
+    return intersects
+  finally #make sure MATLAB session is closed
     mat.close(ms)
-  # end
+  end
   return intersects
 end #function intersection
 
@@ -31,23 +35,35 @@ function find_intersections(intersects::Vector{Intersection}, flight::FlightData
   flighttracks::Vector, sat::Union{CLay,CPro}, sattype::Symbol, sattracks::Vector,
   deltat::Real, precision::Real)
 
+  # @show flight.metadata.dbID
   for st in sattracks, ft in flighttracks
     if ft.min < st.max && ft.max > st.min
-      # Use overlap of sat and flight data only
-      fi = ft.lat[st.min .< ft.lat .< st.max]
+      # Use overlap of sat and flight data only and retrieve lat/lon values
+      ilat = ft.lat[st.min .< ft.lat .< st.max]
+      if isempty(ilat)  continue  end # skip data with no overlap region
+      flon = ft.lon[st.min .< ft.lat .< st.max]
       # Interpolate sat data with same step width as flight data
-      si = st.track(fi)
+      slon = st.track(ilat)
 
-      # Find flight longitudes in overlapping sat/flight range
-      fmin, fmax = fi[1] < fi[end] ? (fi[1], fi[end]) : (fi[end], fi[1])
-      flon = ft.lon[fmin .<= ft.lat .<= fmax]
+      # Calculate coordinate pairs of sat/flight data
+      fcoord = Geodesy.LatLon[]
+      for (lat, lon) in zip(ilat, flon)
+        push!(fcoord, Geodesy.LatLon(lat, lon))
+      end
+      scoord = Geodesy.LatLon[]
+      for (lat, lon) in zip(ilat, st.track(ilat))
+        push!(scoord, Geodesy.LatLon(lat, lon))
+      end
+
       # Calculate distances between each coordinate pair
-      d = abs.(abs.(si) .- abs.(flon))
+      d = Geodesy.distance.(fcoord, scoord)
       # Find minimum in distance and check whether it is within precision
       m = argmin(d)
-      tm = Dates.unix2datetime(st.time(fi[m]))
-      if d[m] < precision && Dates.Minute(-deltat) < ft.t[m] - tm < Dates.Minute(deltat)
-        push!(intersects, Intersection(flight, sat, sattype, ft.t[m], tm, fi[m], flon[m]))
+      # Calculate minimum accuracy at equator
+      dprec = Geodesy.distance(Geodesy.LatLon(0,0), Geodesy.LatLon(0,0+prec))
+      tm = Dates.unix2datetime(st.time(ilat[m]))
+      if d[m] < dprec && Dates.Minute(-deltat) < ft.t[m] - tm < Dates.Minute(deltat)
+        push!(intersects, Intersection(flight, sat, sattype, ft.t[m], tm, ilat[m], flon[m]))
       end
     end
   end

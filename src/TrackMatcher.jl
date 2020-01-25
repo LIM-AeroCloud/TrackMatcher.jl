@@ -1,3 +1,31 @@
+"""
+# Module TrackMatcher
+
+To find intersection between different trajectories. The module is aimed to find
+intersections between aircraft and satellite tracks, but can be used for flight
+or cloud tracks as well.
+
+## Public structs
+
+- `FlightDB` stores flight track data and other relevant aircraft related data
+  from 3 different inventories:
+  - `inventory`: VOLPE AEDT inventory
+  - `archive`: commercially available database by FlightAware
+  - `onlineData`: free online data by FlightAware
+- `FlightData` stores `FlightDB` data of a single flight
+- `MetaData` holds metadata to every flight
+- `SatDB` stores CALIPSO cloud layer and profile data from the CALIOP satellite
+- `CLay` CALIPSO cloud layer data
+- `CPro` CALIPSO cloud profile data
+
+
+## Public functions
+
+- `loadFlightData` constructs the `FlightDB` from folder paths and keys signaling
+  the database type
+- `intersection` finds intersections in the trajectories of aircrafts and satellites
+  stored in `FlightDB` and `SatDB`
+"""
 module TrackMatcher
 
 # Track changes during development
@@ -6,8 +34,9 @@ module TrackMatcher
 # Import Julia packages
 import CSV
 import DataFrames; const df = DataFrames
-import TimeZones; const tz = TimeZones
 import Dates
+import TimeZones; const tz = TimeZones
+import Geodesy; const geo = Geodesy
 import MATLAB; const mat = MATLAB
 import Statistics; const stats = Statistics
 import ProgressMeter; const pm = ProgressMeter
@@ -528,13 +557,14 @@ struct Intersection
 end
 
 
-export loadFlightDB,
-       FlightDB,
+export FlightDB,
        FlightData,
        MetaData,
        CLay,
        CPro,
-       SatDB
+       SatDB,
+       loadFlightDB,
+       intersection
 
 
 include("auxiliary.jl")

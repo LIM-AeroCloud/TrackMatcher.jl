@@ -208,6 +208,7 @@ be saved to the `onlineData` field in `FlightDB`.
 function loadOnlineData(files::Vector{String}; altmin::Int=15_000)
   # Initialise inventory file array
   archive = FlightData[]
+  # Loop over files with online data
   @pm.showprogress 1 "load online data..." for (n, file) in enumerate(files)
     # Read flight data
     flight = CSV.read(file, ignoreemptylines=true, normalizenames=true, copycols=true,
