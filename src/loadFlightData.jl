@@ -85,7 +85,6 @@ function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree=tru
 
   # Initialise inventory file array and start MATLAB for PCHIP fitting
   inventory = FlightData[]
-  ms = mat.MSession() # rather hand over as function argument?
 
   # Loop over files
   for file in files
@@ -114,7 +113,6 @@ function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree=tru
         useLON ? (x = lon; y = lat) : (x = lat; y = lon)
         x, y, alt, speed, t = remdup(x, y, alt, speed, t)
         flex = findFlex(x)
-        # pchip = PCHIP(x, y, flex, FID, useLON, ms)
         push!(inventory, FlightData(t, lat, lon, alt, [missing for i = 1:length(t)],
           [missing for i = 1:length(t)], speed, FID, missing,
           missing, missing, flex, useLON, file))
@@ -210,6 +208,7 @@ be saved to the `onlineData` field in `FlightDB`.
 function loadOnlineData(files::Vector{String}; altmin::Int=15_000)
   # Initialise inventory file array
   archive = FlightData[]
+  # Loop over files with online data
   @pm.showprogress 1 "load online data..." for (n, file) in enumerate(files)
     # Read flight data
     flight = CSV.read(file, ignoreemptylines=true, normalizenames=true, copycols=true,
