@@ -4,10 +4,10 @@ function intersection(flights::FlightDB, sat::SatDB, satdata::Symbol=:CLay; delt
   # New MATLAB session
   ms = mat.MSession()
   # Loop over data and interpolate track data and time, throw error on failure
-  flight = nothing
-    # @pm.showprogress 1 "find intersections..." for flight in flights.inventory[1:10]
-  try @pm.showprogress 1 "find intersections..." for outer flight in
-    [flights.inventory; flights.archive; flights.onlineData]
+  flight = nothing #Initialise variable flight
+  try @pm.showprogress 1 "find intersections..." for outer flight in flights.inventory[1:10]
+  # try @pm.showprogress 1 "find intersections..." for outer flight in
+  #   [flights.inventory; flights.archive; flights.onlineData]
       satranges = get_satranges(flight, getfield(sat, satdata), deltat)
       sattracks = interpolate_satdata(ms, getfield(sat, satdata), satranges)
       flighttracks = interpolate_flightdata(ms, flight, precision)
@@ -16,8 +16,10 @@ function intersection(flights::FlightDB, sat::SatDB, satdata::Symbol=:CLay; delt
     end #loop over flights
   catch
     printstyled(
-      "\nTrack data and/or time could not be interpolated in flight $(flight.metadata.dbID)",
+      "\n\33[1mError:\33[0m Track data and/or time could not be interpolated in flight ",
+      "$(flight.metadata.dbID) of $(flight.metadata.source) dataset\n",
       color=:red)
+      println("Remaining data ignored.")
     return intersects
   finally #make sure MATLAB session is closed
     mat.close(ms)
@@ -35,7 +37,6 @@ function find_intersections(intersects::Vector{Intersection}, flight::FlightData
   flighttracks::Vector, sat::Union{CLay,CPro}, sattype::Symbol, sattracks::Vector,
   deltat::Real, precision::Real)
 
-  # @show flight.metadata.dbID
   for st in sattracks, ft in flighttracks
     if ft.min < st.max && ft.max > st.min
       # Use overlap of sat and flight data only and retrieve lat/lon values
@@ -63,7 +64,7 @@ function find_intersections(intersects::Vector{Intersection}, flight::FlightData
       dprec = Geodesy.distance(Geodesy.LatLon(0,0), Geodesy.LatLon(0,0+prec))
       tm = Dates.unix2datetime(st.time(ilat[m]))
       if d[m] < dprec && Dates.Minute(-deltat) < ft.t[m] - tm < Dates.Minute(deltat)
-        push!(intersects, Intersection(flight, sat, sattype, ft.t[m], tm, ilat[m], flon[m]))
+        push!(intersects, Intersection(flight, sat, sattype, ft.t[m], tm, ilat[m], flon[m], d[m]))
       end
     end
   end

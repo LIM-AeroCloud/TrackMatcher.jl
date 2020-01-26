@@ -127,6 +127,7 @@ struct MetaData
   area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),NTuple{6,Float64}}
   flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}}
   useLON::Bool
+  source::String
   file::AbstractString
 
   """ Unmodified constructor for `Metadata` """
@@ -135,9 +136,9 @@ struct MetaData
     aircraft::Union{Missing,AbstractString}, date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
     area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),NTuple{6,Float64}},
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
-    useLON::Bool, file::AbstractString)
+    useLON::Bool, source::String, file::AbstractString)
 
-    new(dbID, flightID, route, aircraft, date, area, flex, useLON, file)
+    new(dbID, flightID, route, aircraft, date, area, flex, useLON, source, file)
   end #constructor 1 MetaData
 
 
@@ -151,7 +152,7 @@ struct MetaData
     lat::Vector{<:Union{Missing,Float64}}, lon::Vector{<:Union{Missing,Float64}},
     useLON::Bool,
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
-    file::AbstractString)
+    source::String, file::AbstractString)
 
     plonmax = isempty(lon[lon.≥0]) ? NaN : maximum(lon[lon.≥0])
     plonmin = isempty(lon[lon.≥0]) ? NaN : minimum(lon[lon.≥0])
@@ -160,7 +161,7 @@ struct MetaData
     area = (latmin=minimum(lat), latmax=maximum(lat),
       plonmin=plonmin, plonmax=plonmax, nlonmin=nlonmin, nlonmax=nlonmax)
     new(dbID, flightID, route, aircraft, (start=date[1], stop=date[end]), area,
-      flex, useLON, file)
+      flex, useLON, source, file)
   end #constructor 2 MetaData
 end #struct MetaData
 
@@ -245,7 +246,7 @@ struct FlightData
     flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
-    useLON::Bool, file::AbstractString)
+    useLON::Bool, source::String, file::AbstractString)
 
     t = [t.utc_datetime for t in time]
     lat = checklength(lat, t)
@@ -254,7 +255,7 @@ struct FlightData
     heading = checklength(heading, t)
     climb = checklength(climb, t)
     speed = checklength(speed, t)
-    metadata = MetaData(dbID,flightID,route,aircraft,t,lat,lon,useLON,flex,file)
+    metadata = MetaData(dbID,flightID,route,aircraft,t,lat,lon,useLON,flex,source,file)
 
     new(t,lat,lon,alt,heading,climb,speed,metadata)
   end #constructor 2 FlightData
@@ -534,25 +535,26 @@ struct Intersection
   lat::Float64
   lon::Float64
   tdiff::Dates.CompoundPeriod
+  accuracy::Real
   cirrus::Bool
   sat::Union{CLay,CPro}
   flight::FlightData
 
   function Intersection(flight::FlightData, sat::Union{CLay,CPro}, sattype::Symbol,
-    tflight::DateTime, tsat::DateTime, lat::Float64, lon::Float64)
+    tflight::DateTime, tsat::DateTime, lat::Float64, lon::Float64, d::Real)
 
     tdiff = Dates.canonicalize(Dates.CompoundPeriod(tflight - tsat))
-    tf = argmin(flight.time .- tflight)
+    tf = argmin(abs.(flight.time .- tflight))
 
     flightdata = FlightData(flight.time[tf], flight.lat[tf], flight.lon[tf],
       flight.alt[tf], flight.heading[tf], flight.climb[tf], flight.speed[tf],
       flight.metadata)
 
-    ts = argmin(sat.time .- tsat)
-    satdata = sattype == :CLay ? CLay(sat.time[ts], sat.lat[ts], sat.lon[ts]) :
-      CPro(sat.time[ts], sat.lat[ts], sat.lon[ts])
+    ts = argmin(abs.(sat.time .- tsat))
+    satdata = sattype == :CLay ? CLay(sat.time[ts-15:ts+15], sat.lat[ts-15:ts+15], sat.lon[ts-15:ts+15]) :
+      CPro(sat.time[ts-15:ts+15], sat.lat[ts-15:ts+15], sat.lon[ts-15:ts+15])
 
-    new(lat, lon, tdiff, false, satdata, flightdata)
+    new(lat, lon, tdiff, d, false, satdata, flightdata)
   end
 end
 

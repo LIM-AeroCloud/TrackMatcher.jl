@@ -115,7 +115,7 @@ function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree=tru
         flex = findFlex(x)
         push!(inventory, FlightData(t, lat, lon, alt, [missing for i = 1:length(t)],
           [missing for i = 1:length(t)], speed, FID, missing,
-          missing, missing, flex, useLON, file))
+          missing, missing, flex, useLON, "VOLPE AEDT", file))
         lat = Float64[]; lon = Float64[];
         alt = Float64[]; t = ZonedDateTime[]; speed = Float64[]
         FID = flights.FLIGHT_ID[i]
@@ -172,7 +172,8 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000)
         flex = useLON ? findFlex(lon) : findFlex(lat)
         push!(archive, FlightData(t, lat, lon, alt, head, climb, speed,
         FID, flights.Ident[n], flights.Aircraft_Type[n],
-        (orig=flights.Origin[n], dest=flights.Destination[n]), flex, useLON, file))
+        (orig=flights.Origin[n], dest=flights.Destination[n]), flex, useLON,
+        "FlightAware", file))
 
         # Reset temporary data arrays
         lat = Float64[]; lon = Float64[]
@@ -302,7 +303,7 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000)
     # Save data as FlightData
     push!(archive, FlightData(flight.time, flight.Latitude, flight.Longitude,
       flight.feet, flight.Course, flight.Rate, flight.kts, n, flightID, missing,
-      (orig=orig, dest=dest), flex, useLON, file))
+      (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
   end #loop over files
 
   return archive
