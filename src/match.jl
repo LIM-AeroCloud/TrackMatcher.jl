@@ -74,8 +74,8 @@ end #function find_intersections
 
 function get_satranges(flight::FlightData, sat::Union{CLay,CPro}, deltat::Int)::Vector{UnitRange}
   satranges = UnitRange[]
-  t1 = findfirst(sat.time .≥ flight.time[1] - Dates.Minute(deltat))
-  t2 = findlast(sat.time .≤ flight.time[end] + Dates.Minute(deltat))
+  t1 = findfirst(sat.time .≥ flight.data.time[1] - Dates.Minute(deltat))
+  t2 = findlast(sat.time .≤ flight.data.time[end] + Dates.Minute(deltat))
   (isnothing(t1) || isnothing(t2)) && return satranges
   satoverlap = (flight.metadata.area.latmin .≤ sat.lat[t1:t2] .≤ flight.metadata.area.latmax) .&
     ((flight.metadata.area.plonmin .≤ sat.lon[t1:t2] .≤ flight.metadata.area.plonmax) .|
@@ -137,13 +137,14 @@ end #function interpolate_satdata
 function interpolate_flightdata(ms::mat.MSession, flight::FlightData, precision::Real)
 
   # Define x and y data based on useLON
-  x, y = flight.metadata.useLON ? (flight.lon, flight.lat) : (flight.lat, flight.lon)
+  x, y = flight.metadata.useLON ?
+    (flight.data.lon, flight.data.lat) : (flight.data.lat, flight.data.lon)
   # Interpolate flight tracks and tims for all segments
   flightdata = []
   for f in flight.metadata.flex
     mat.put_variable(ms, :x, x[f.range])
     mat.put_variable(ms, :y, y[f.range])
-    mat.put_variable(ms, :t, Dates.datetime2unix.(flight.time[f.range]))
+    mat.put_variable(ms, :t, Dates.datetime2unix.(flight.data.time[f.range]))
     mat.eval_string(ms, "pf = pchip(x, y);")
     pf = mat.get_mvariable(ms, :pf)
     xr = interpolatedtrack(x[f.range], precision)
@@ -152,7 +153,7 @@ function interpolate_flightdata(ms::mat.MSession, flight::FlightData, precision:
     pt = mat.get_mvariable(ms, :pt)
     flight.metadata.useLON ? (push!(flightdata, (lat = Minterpolate(ms, pf)(xr),
       lon =  xr, t = Dates.unix2datetime.(Minterpolate(ms, pt)(xr)),
-      min = minimum(flight.lat[f.range]), max = maximum(flight.lat[f.range])))) :
+      min = minimum(flight.data.lat[f.range]), max = maximum(flight.data.lat[f.range])))) :
       (push!(flightdata, (lat = xr, lon =  Minterpolate(ms, pf)(xr),
       t = Dates.unix2datetime.(Minterpolate(ms, pt)(xr)), min = f.min, max = f.max)))
   end

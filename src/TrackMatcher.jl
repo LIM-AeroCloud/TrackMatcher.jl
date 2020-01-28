@@ -582,20 +582,18 @@ struct Intersection
   flight::FlightData
 
   function Intersection(flight::FlightData, sat::Union{CLay,CPro}, sattype::Symbol,
-    tflight::DateTime, tsat::DateTime, lat::Float64, lon::Float64, d::Real)
+    tflight::DateTime, tsat::DateTime, lat::Float64, lon::Float64, accuracy::Real)
 
     tdiff = Dates.canonicalize(Dates.CompoundPeriod(tflight - tsat))
-    tf = argmin(abs.(flight.time .- tflight))
+    tf = argmin(abs.(flight.data.time .- tflight))
 
-    flightdata = FlightData(flight.time[tf], flight.lat[tf], flight.lon[tf],
-      flight.alt[tf], flight.heading[tf], flight.climb[tf], flight.speed[tf],
-      flight.metadata)
+    flightdata = FlightData(DataFrame(flight.data[tf,:]), flight.metadata)
 
     ts = argmin(abs.(sat.time .- tsat))
     satdata = sattype == :CLay ? CLay(sat.time[ts-15:ts+15], sat.lat[ts-15:ts+15], sat.lon[ts-15:ts+15]) :
       CPro(sat.time[ts-15:ts+15], sat.lat[ts-15:ts+15], sat.lon[ts-15:ts+15])
 
-    new(lat, lon, tdiff, d, false, satdata, flightdata)
+    new(lat, lon, tdiff, accuracy, false, satdata, flightdata)
   end
 end
 
@@ -606,6 +604,7 @@ export FlightDB,
        CLay,
        CPro,
        SatDB,
+       Intersection,
        intersection
 
 
