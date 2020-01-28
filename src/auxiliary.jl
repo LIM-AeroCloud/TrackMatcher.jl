@@ -117,38 +117,6 @@ function findFlex(x::Vector{<:Real})
 end #function findFlex
 
 
-#=
-function findFlex(x::Vector{<:Real}, y::Vector{<:Float64}, useLON::Bool)
-  lon = useLON ? x : y
-  flex = UnitRange[]
-  fStart = 1
-  for i = 2:length(x)-1
-    if sign(lon[i]) ≠ sign(lon[i-1])
-      r = fStart:i-1
-      if length(r) < 2
-        deleteat!(x, r); deleteat!(y, r)
-      elseif length(r) == 2
-      else
-      end
-    if x[i-1] > x[i] < x[i+1] || x[i-1] < x[i] > x[i+1]
-      if count(isequal(-180), x[i-1:i+1]) == 1 &&
-        !(sign(x[i-1]) == sign(x[i+1]) && x[i] == -180)
-        continue
-      else
-        push!(flex, i)
-      end
-    end
-  end
-  push!(flex, length(x))
-  ranges = UnitRange[]
-  for i = 2:length(flex)
-    push!(ranges, flex[i-1]:flex[i])
-  end
-
-  return Tuple(ranges)
-end
-=#
-
 function Minterpolate(ms::mat.MSession, p::mat.MxArray)
   function (i::Union{Real,Vector{<:Float64},StepRangeLen})
     mat.put_variable(ms, :i, mat.mxarray(i)); mat.put_variable(ms, :p, p)
@@ -156,3 +124,77 @@ function Minterpolate(ms::mat.MSession, p::mat.MxArray)
     mat.jvalue(mat.get_mvariable(ms, :pp))
   end
 end
+
+
+function checkcols(data::DataFrame, id::Union{Int,AbstractString}, dataset::AbstractString)
+
+  # Define standard column names and types
+  standardnames = [:time, :lat, :lon, :alt, :heading, :climb, :speed]
+  standardtypes = [Union{DateTime,Vector{DateTime}}, Union{Float64,Vector{Float64}},
+    Union{Float64,Vector{Float64}}, Union{Missing,Float64,Vector{<:Union{Missing,Float64}}},
+    Union{Missing,Int,Vector{<:Union{Missing,Int}}},
+    Union{Missing,Int,Vector{<:Union{Missing,Int}}},
+    Union{Missing,Float64,Vector{<:Union{Missing,Float64}}}]
+
+  # Warn of non-standardised data
+  if df.names(data) ≠ standardnames
+    @warn "Non-standard names and/or order used for data columns. Trying to correct..."
+  end
+
+  ### Check column types, for correctly ordered DataFrames
+  drev = DataFrame() # init DataFrame for revised data
+  unchecked = collect(1:length(data[1,:])) # init vector with column numbers to check
+  for i = 1:length(standardnames)
+    try checktype(data, standardnames[i], standardtypes[i])
+      # Remove column form unchecked list, if tests passed and save data to revised data
+      unchecked = unchecked[unchecked.≠i]
+      drev[!,standardnames[i]] = data[!, standardnames[i]]
+    catch
+      try checktype(data, unchecked[1], standardtypes[i])
+        unchecked = unchecked[unchecked.≠i]
+        drev[!,standardnames[i]] = data[!, unchecked[1]]
+      catch e
+        if i ≤ 3
+          rethrow(e)
+        elseif !isempty(unchecked)
+          @warn string("Mismatch in column type for column $(standardnames[i]) ",
+            "in flight $id of $dataset dataset. Column filled with `missing`.")
+          drev[!,standardnames[i]] = [missing for j = 1:length(drev[!,1])]
+        else
+          @warn string("Missing data for column $(standardnames[i]) ",
+            "in flight $id of $dataset dataset. Column filled with `missing`.")
+          drev[!,standardnames[i]] = [missing for j = 1:length(drev[!,1])]
+        end
+      end
+    end
+  end
+
+  ### Check data bounds in various columns
+  # Throw error for lat/lon (essential)
+  checkrange(drev.lat, (-90, 90))
+  checkrange(drev.lon, (-180, 180))
+
+  # Replace column with missing column for non-essential data
+  for (i, r) in enumerate([(0,Inf), (0, 360), (-Inf, Inf), (0, Inf)])
+    try checkrange(drev[!,i+3], r)
+    catch
+      @warn string("Mismatch in data range for column $(standardnames[i+3]) ",
+        "in flight $id of $dataset dataset. Column filled with `missing`.")
+      drev[!,i+3] = [missing for j = 1:length(drev[!,1])]
+    end
+  end
+
+  # Warn of additonal columns
+  if length(unchecked) > 0
+    @warn "More columns than expected in data. Extra columns ignored."
+  end
+
+  return drev
+end #function checkcols
+
+checktype(df::DataFrame, col::Union{Symbol,Int}, coltype::Union{Union,DataType}) =
+  @assert typeof(df[!,col]) <: coltype "column $col is not of type $coltype"
+
+checkrange(v::Vector, bounds::Tuple{Real,Real}=(-Inf,Inf)) =
+  @assert(all(bounds[1] .≤ v[.!ismissing.(v)] .≤ bounds[2]),
+    "Vector out of range. Expected [$(bounds[1])...$(bounds[2])], got [$(minimum(v))...$(maximum(v))].")

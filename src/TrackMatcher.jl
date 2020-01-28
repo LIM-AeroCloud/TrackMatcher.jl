@@ -127,7 +127,7 @@ struct MetaData
   area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),NTuple{6,Float64}}
   flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}}
   useLON::Bool
-  source::String
+  source::AbstractString
   file::AbstractString
 
   """ Unmodified constructor for `Metadata` """
@@ -136,7 +136,7 @@ struct MetaData
     aircraft::Union{Missing,AbstractString}, date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
     area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),NTuple{6,Float64}},
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
-    useLON::Bool, source::String, file::AbstractString)
+    useLON::Bool, source::AbstractString, file::AbstractString)
 
     new(dbID, flightID, route, aircraft, date, area, flex, useLON, source, file)
   end #constructor 1 MetaData
@@ -152,7 +152,7 @@ struct MetaData
     lat::Vector{<:Union{Missing,Float64}}, lon::Vector{<:Union{Missing,Float64}},
     useLON::Bool,
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
-    source::String, file::AbstractString)
+    source::AbstractString, file::AbstractString)
 
     plonmax = isempty(lon[lon.≥0]) ? NaN : maximum(lon[lon.≥0])
     plonmin = isempty(lon[lon.≥0]) ? NaN : minimum(lon[lon.≥0])
@@ -219,23 +219,15 @@ Or construct by directly handing over every field:
       speed::Vector{<:Union{Missing,Float64}}, metadata::MetaData)
 """
 struct FlightData
-  time::Union{DateTime,Vector{DateTime}}
-  lat::Union{Float64,Vector{Float64}}
-  lon::Union{Float64,Vector{Float64}}
-  alt::Union{Missing,Float64,Vector{<:Union{Missing,Float64}}}
-  heading::Union{Missing,Int,Vector{<:Union{Missing,Int}}}
-  climb::Union{Missing,Int,Vector{<:Union{Missing,Int}}}
-  speed::Union{Missing,Float64,Vector{<:Union{Missing,Float64}}}
+  data::DataFrame
   metadata::MetaData
 
   """ Unmodified constructor for `FlightData` """
-  function FlightData(time::Union{DateTime,Vector{DateTime}},
-  lat::Union{Float64,Vector{Float64}}, lon::Union{Float64,Vector{Float64}},
-  alt::Union{Missing,Float64,Vector{Union{Missing,Float64}}},
-  heading::Union{Missing,Int,Vector{Union{Missing,Int}}},
-  climb::Union{Missing,Int,Vector{Union{Missing,Int}}},
-  speed::Union{Missing,Float64,Vector{Union{Missing,Float64}}}, metadata::MetaData)
-    new(time,lat,lon,alt,heading,climb,speed,metadata)
+  function FlightData(data::DataFrame, metadata::MetaData)
+
+    # Column checks and warnings
+    data = checkcols(data, metadata.dbID, metadata.source)
+    new(data,metadata)
   end #constructor 1 FlightData
 
   """ Modified constructor with variable checks and some automated calculation of fields """
@@ -257,7 +249,7 @@ struct FlightData
     speed = checklength(speed, t)
     metadata = MetaData(dbID,flightID,route,aircraft,t,lat,lon,useLON,flex,source,file)
 
-    new(t,lat,lon,alt,heading,climb,speed,metadata)
+    new(DataFrame(time=t,lat=lat,lon=lon,alt=alt,heading=heading,climb=climb,speed=speed),metadata)
   end #constructor 2 FlightData
 end #struct FlightData
 
