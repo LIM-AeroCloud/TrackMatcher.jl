@@ -198,3 +198,10 @@ checktype(df::DataFrame, col::Union{Symbol,Int}, coltype::Union{Union,DataType})
 checkrange(v::Vector, bounds::Tuple{Real,Real}=(-Inf,Inf)) =
   @assert(all(bounds[1] .≤ v[.!ismissing.(v)] .≤ bounds[2]),
     "Vector out of range. Expected [$(bounds[1])...$(bounds[2])], got [$(minimum(v))...$(maximum(v))].")
+
+
+function checkDBtype(DB::Vector{FlightData}, type::String)
+  DB = [flights.archive; flights.onlineData[end-1:end]]
+  removed = count([d.metadata.source.≠type for d in DB])
+  DB = DB[[d.metadata.source.==type for d in DB]]
+end #function checkDBtype

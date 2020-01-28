@@ -290,6 +290,55 @@ struct FlightDB
   onlineData::Vector{FlightData}
   created::Union{DateTime,tz.ZonedDateTime}
   remarks
+
+  function FlightDB(inventory::Vector{FlightData}, archive::Vector{FlightData},
+    onlineData::Vector{FlightData}, created::Union{DateTime,tz.ZonedDateTime},
+    remarks)
+
+    inventory = checkDBtype(inventory, "VOLPE AEDT")
+    archive = checkDBtype(archive, "FlightAware")
+    onlineData = checkDBtype(onlineData, "flightaware.com")
+
+    new(inventory, archive, onlineData, tc, remarks)
+  end #constructor 1 FlightDB
+
+  function FlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
+    altmin::Int=15_000, remarks=nothing)
+
+    # Check DBtype addresses all folder paths
+    if length(DBtype) ≠ length(folder)
+      throw(ArgumentError("Number of characters in `DBtype` must match length of vararg `folder`"))
+    end
+    # Save time of database creation
+    tc = Dates.now()
+    # Find database types
+    i1 = [findall(isequal('i'), DBtype); findall(isequal('1'), DBtype)]
+    i2 = [findall(isequal('a'), DBtype); findall(isequal('2'), DBtype)]
+    i3 = [findall(isequal('o'), DBtype); findall(isequal('3'), DBtype)]
+
+    # Load databases for each type
+    # VOLPE AEDT inventory
+    ifiles = String[]
+    for i in i1
+      ifiles = findFiles(ifiles, folder[i], ".csv")
+    end
+    inventory = loadInventory(ifiles, altmin=altmin)
+    # FlightAware commercial archive
+    ifiles = String[]
+    for i in i2
+      ifiles = findFiles(ifiles, folder[i], ".csv")
+    end
+    archive = loadArchive(ifiles, altmin=altmin)
+    ifiles = String[]
+    for i in i3
+      ifiles = findFiles(ifiles, folder[i], ".txt", ".dat")
+    end
+    onlineData = loadOnlineData(ifiles, altmin=altmin)
+
+    println("\ndone loading data to properties\n- inventory\n- archive\n- onlineData\n", "")
+
+    new(inventory, archive, onlineData, tc, remarks)
+  end # constructor 2 FlightDB
 end #struct FlightDB
 
 
@@ -557,7 +606,6 @@ export FlightDB,
        CLay,
        CPro,
        SatDB,
-       loadFlightDB,
        intersection
 
 
