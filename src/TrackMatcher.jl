@@ -48,7 +48,7 @@ import TimeZones.ZonedDateTime
 
 
 # Define Logger with log level
-logger = logg.ConsoleLogger(stdout, logg.Debug)
+logger = logg.ConsoleLogger(stdout, logg.Info)
 logg.global_logger(logger)
 
 
@@ -378,7 +378,7 @@ struct CLay
     standardnames = [:time, :lat, :lon]
     standardtypes = [Vector{DateTime}, Vector{Float64}, Vector{Float64}]
     bounds = Tuple{Real,Real}[]
-    data = checkbounds(data, standardnames, standardtypes, bounds, "CLay", nothing)
+    data = checkcols(data, standardnames, standardtypes, bounds, "CLay", nothing)
     new(data)
   end #constructor 1 CLay
 
@@ -600,11 +600,21 @@ struct Intersection
 
     flightdata = FlightData(DataFrame(flight.data[tf,:]), flight.metadata)
 
-    ts = argmin(abs.(sat.time .- tsat))
-    satdata = sattype == :CLay ? CLay(sat.time[ts-15:ts+15], sat.lat[ts-15:ts+15], sat.lon[ts-15:ts+15]) :
-      CPro(sat.time[ts-15:ts+15], sat.lat[ts-15:ts+15], sat.lon[ts-15:ts+15])
+    satprim = getfield(sat, sattype).data
+    tsp = argmin(abs.(satprim.time .- tsat))
+    primdata = extract_timespan(satprim, tsp)
 
-    new(lat, lon, tdiff, accuracy, false, satdata, flightdata)
+    sattype = swap_sattype(sattype)
+    secdata = try satsec = getfield(sat, sattype).data
+      tss = argmin(abs.(satsec.time .- tsat))
+      extract_timespan(satsec, tss)
+    catch
+      DataFrame(time=DateTime[], lat=Float64[], lon=Float64[])
+    end
+    satdb = sattype == :CPro ? SatDB(CLay(primdata), CPro(secdata), sat.created, sat.remarks) :
+      SatDB(CLay(secdata), CPro(primdata), sat.created, sat.remarks)
+
+    new(lat, lon, tdiff, accuracy, false, satdb, flightdata)
   end
 end
 

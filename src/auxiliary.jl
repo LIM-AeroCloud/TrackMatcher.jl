@@ -137,7 +137,14 @@ function checkcols(data::DataFrame, standardnames::Vector{Symbol},
 
   ### Check column types, for correctly ordered DataFrames
   drev = DataFrame() # init DataFrame for revised data
-  unchecked = collect(1:length(data[1,:]))
+  unchecked = try collect(1:length(data[1,:]))
+  catch
+    d=DataFrame()
+    for (n, t) in zip(standardnames, standardtypes)
+      d[!,n] = t[]
+    end
+    return d
+  end
    # init vector with column numbers to check
   for i = 1:length(standardnames)
     try checktype(data, standardnames[i], standardtypes[i])
@@ -201,3 +208,17 @@ function checkDBtype(DB::Vector{FlightData}, type::String)
   removed = count([d.metadata.source.≠type for d in DB])
   DB = DB[[d.metadata.source.==type for d in DB]]
 end #function checkDBtype
+
+
+function extract_timespan(data::DataFrame, t::Int)
+  t1 = max(1, min(t-15, length(data[:,1])))
+  t2 = min(length(data[:,1]), t+15)
+  t2 = t-15 > length(data[:,1]) ? 0 : t2
+  return data[t1:t2,:]
+end #function extract_timespan
+
+
+function swap_sattype(sattype::Symbol)::Symbol
+  swap = Dict(:CPro => :CLay, :CLay => :CPro)
+  swap[sattype]
+end
