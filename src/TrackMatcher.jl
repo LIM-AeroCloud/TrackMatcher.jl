@@ -226,7 +226,15 @@ struct FlightData
   function FlightData(data::DataFrame, metadata::MetaData)
 
     # Column checks and warnings
-    data = checkcols(data, metadata.dbID, metadata.source)
+    standardnames = [:time, :lat, :lon, :alt, :heading, :climb, :speed]
+    standardtypes = [Union{DateTime,Vector{DateTime}}, Union{Float64,Vector{Float64}},
+      Union{Float64,Vector{Float64}}, Union{Missing,Float64,Vector{<:Union{Missing,Float64}}},
+      Union{Missing,Int,Vector{<:Union{Missing,Int}}},
+      Union{Missing,Int,Vector{<:Union{Missing,Int}}},
+      Union{Missing,Float64,Vector{<:Union{Missing,Float64}}}]
+    bounds = [(0,Inf), (0, 360), (-Inf, Inf), (0, Inf)]
+    data = checkcols(data, standardnames, standardtypes, bounds,
+      metadata.source, metadata.dbID)
     new(data,metadata)
   end #constructor 1 FlightData
 
@@ -261,7 +269,7 @@ Database for aircraft data of different database types with fields:
 - `inventory::Vector{FlightData}`
 - `archive::Vector{FlightData}`
 - `onlineData::Vector{FlightData}`
-- `created::Union{DateTime,tz.ZonedDateTime}`
+- `created::Union{DateTime,ZonedDateTime}`
 - `remarks`
 
 ## inventory
@@ -288,12 +296,13 @@ struct FlightDB
   inventory::Vector{FlightData}
   archive::Vector{FlightData}
   onlineData::Vector{FlightData}
-  created::Union{DateTime,tz.ZonedDateTime}
+  created::Union{DateTime,ZonedDateTime}
   remarks
 
-  function FlightDB(inventory::Vector{FlightData}, archive::Vector{FlightData},
-    onlineData::Vector{FlightData}, created::Union{DateTime,tz.ZonedDateTime},
-    remarks)
+  function FlightDB(inventory::Vector{FlightData},
+    archive::Vector{FlightData}, onlineData::Vector{FlightData},
+    created::Union{DateTime,ZonedDateTime}=tz.now(tz.localzone()),
+    remarks=nothing)
 
     inventory = checkDBtype(inventory, "VOLPE AEDT")
     archive = checkDBtype(archive, "FlightAware")
@@ -310,7 +319,7 @@ struct FlightDB
       throw(ArgumentError("Number of characters in `DBtype` must match length of vararg `folder`"))
     end
     # Save time of database creation
-    tc = Dates.now()
+    tc = tz.now(tz.localzone())
     # Find database types
     i1 = [findall(isequal('i'), DBtype); findall(isequal('1'), DBtype)]
     i2 = [findall(isequal('a'), DBtype); findall(isequal('2'), DBtype)]
@@ -362,14 +371,15 @@ Or construct `CLay` by directly handing over every field:
     CLay(time::Vector{DateTime}, lat::Vector{Float64}, lon::Vector{Float64}) -> struct CLay
 """
 struct CLay
-  time::Union{DateTime,Vector{DateTime}}
-  lat::Union{Float64,Vector{Float64}}
-  lon::Union{Float64,Vector{Float64}}
+  data::DataFrame
 
   """ Unmodified constructor for `CLay` """
-  function CLay(time::Union{DateTime,Vector{DateTime}},
-    lat::Union{Float64,Vector{Float64}}, lon::Union{Float64,Vector{Float64}})
-    new(time, lat, lon)
+  function CLay(data::DataFrame)
+    standardnames = [:time, :lat, :lon]
+    standardtypes = [Vector{DateTime}, Vector{Float64}, Vector{Float64}]
+    bounds = Tuple{Real,Real}[]
+    data = checkbounds(data, standardnames, standardtypes, bounds, "CLay", nothing)
+    new(data)
   end #constructor 1 CLay
 
   """
@@ -398,7 +408,7 @@ struct CLay
     end
 
     # Save time, lat/lon arrays in CLay struct
-    new(utc, lat, lon)
+    new(DataFrame(time=utc, lat=lat, lon=lon))
   end #constructor 2 CLay
 end #struct CLay
 
@@ -423,18 +433,19 @@ Or construct `CPro` by directly handing over every field:
     CPro(time::Vector{DateTime}, lat::Vector{Float64}, lon::Vector{Float64}) -> struct CPro
 """
 struct CPro
-  time::Union{DateTime,Vector{DateTime}}
-  lat::Union{Float64,Vector{Float64}}
-  lon::Union{Float64,Vector{Float64}}
+  data::DataFrame
 
   """
       CPro(time::Vector{DateTime}, lat::Vector{Float64}, lon::Vector{Float64}))
 
   Unmodified constructor for `CPro`.
   """
-  function CPro(time::Union{DateTime,Vector{DateTime}},
-    lat::Union{Float64,Vector{Float64}}, lon::Union{Float64,Vector{Float64}})
-    new(time, lat, lon)
+  function CPro(data::DataFrame)
+    standardnames = [:time, :lat, :lon]
+    standardtypes = [Vector{DateTime}, Vector{Float64}, Vector{Float64}]
+    bounds = Tuple{Real,Real}[]
+    data = checkcols(data, standardnames, standardtypes, bounds, "CPro", nothing)
+    new(data)
   end #constructor 1 CPro
 
   """
@@ -463,7 +474,7 @@ struct CPro
     end
 
     # Save time, lat/lon arrays in CLay struct
-    new(utc, lat, lon)
+    new(DataFrame(time=utc, lat=lat, lon=lon))
   end #constructor 2 CPro
 end #struct CPro
 
@@ -511,8 +522,8 @@ struct SatDB
   remarks
 
   """ Unmodified constructor for `SatDB` """
-  function SatDB(CLay::CLay, CPro::CPro, created::Union{DateTime,ZonedDateTime},
-    remarks=nothing)
+  function SatDB(CLay::CLay, CPro::CPro,
+    created::Union{DateTime,ZonedDateTime}=tz.now(tz.localzone()), remarks=nothing)
     new(CLay, CPro, created, remarks)
   end #constructor 1 SatDb
 
@@ -578,10 +589,10 @@ struct Intersection
   tdiff::Dates.CompoundPeriod
   accuracy::Real
   cirrus::Bool
-  sat::Union{CLay,CPro}
+  sat::SatDB
   flight::FlightData
 
-  function Intersection(flight::FlightData, sat::Union{CLay,CPro}, sattype::Symbol,
+  function Intersection(flight::FlightData, sat::SatDB, sattype::Symbol,
     tflight::DateTime, tsat::DateTime, lat::Float64, lon::Float64, accuracy::Real)
 
     tdiff = Dates.canonicalize(Dates.CompoundPeriod(tflight - tsat))
@@ -596,6 +607,10 @@ struct Intersection
     new(lat, lon, tdiff, accuracy, false, satdata, flightdata)
   end
 end
+
+# Needed for julia 1.0.x?:
+# SatDB(CLay::CLay, CPro::CPro, created::Union{DateTime,ZonedDateTime}) = SatDB(CLay, CPro, created, nothing)
+# SatDB(CLay::CLay, CPro::CPro) = SatDB(CLay, CPro, tz.now(tz.localtime()), nothing)
 
 
 export FlightDB,

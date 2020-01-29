@@ -126,15 +126,9 @@ function Minterpolate(ms::mat.MSession, p::mat.MxArray)
 end
 
 
-function checkcols(data::DataFrame, id::Union{Int,AbstractString}, dataset::AbstractString)
-
-  # Define standard column names and types
-  standardnames = [:time, :lat, :lon, :alt, :heading, :climb, :speed]
-  standardtypes = [Union{DateTime,Vector{DateTime}}, Union{Float64,Vector{Float64}},
-    Union{Float64,Vector{Float64}}, Union{Missing,Float64,Vector{<:Union{Missing,Float64}}},
-    Union{Missing,Int,Vector{<:Union{Missing,Int}}},
-    Union{Missing,Int,Vector{<:Union{Missing,Int}}},
-    Union{Missing,Float64,Vector{<:Union{Missing,Float64}}}]
+function checkcols(data::DataFrame, standardnames::Vector{Symbol},
+  standardtypes::Vector{<:Union{Union,DataType}}, bounds::Vector{Tuple{Real,Real}},
+  dataset::T where T<:AbstractString, id::Union{Nothing,Int,AbstractString})
 
   # Warn of non-standardised data
   if df.names(data) ≠ standardnames
@@ -143,28 +137,30 @@ function checkcols(data::DataFrame, id::Union{Int,AbstractString}, dataset::Abst
 
   ### Check column types, for correctly ordered DataFrames
   drev = DataFrame() # init DataFrame for revised data
-  unchecked = collect(1:length(data[1,:])) # init vector with column numbers to check
+  unchecked = collect(1:length(data[1,:]))
+   # init vector with column numbers to check
   for i = 1:length(standardnames)
     try checktype(data, standardnames[i], standardtypes[i])
       # Remove column form unchecked list, if tests passed and save data to revised data
-      unchecked = unchecked[unchecked.≠i]
       drev[!,standardnames[i]] = data[!, standardnames[i]]
+      unchecked = unchecked[unchecked.≠i]
     catch
       try checktype(data, unchecked[1], standardtypes[i])
-        unchecked = unchecked[unchecked.≠i]
         drev[!,standardnames[i]] = data[!, unchecked[1]]
+        unchecked = unchecked[unchecked.≠i]
       catch e
         if i ≤ 3
           rethrow(e)
         elseif !isempty(unchecked)
-          @warn string("Mismatch in column type for column $(standardnames[i]) ",
-            "in flight $id of $dataset dataset. Column filled with `missing`.")
+          @warn string("Mismatch in column type for column $(standardnames[i]). ",
+            "Column filled with `missing` in: "), dataset, id
           drev[!,standardnames[i]] = [missing for j = 1:length(drev[!,1])]
         else
-          @warn string("Missing data for column $(standardnames[i]) ",
-            "in flight $id of $dataset dataset. Column filled with `missing`.")
+          @warn string("Missing data for column $(standardnames[i]). ",
+            "Column filled with `missing`: "), dataset, id
           drev[!,standardnames[i]] = [missing for j = 1:length(drev[!,1])]
         end
+        unchecked = unchecked[unchecked.≠i]
       end
     end
   end
@@ -175,7 +171,7 @@ function checkcols(data::DataFrame, id::Union{Int,AbstractString}, dataset::Abst
   checkrange(drev.lon, (-180, 180))
 
   # Replace column with missing column for non-essential data
-  for (i, r) in enumerate([(0,Inf), (0, 360), (-Inf, Inf), (0, Inf)])
+  for (i, r) in enumerate(bounds)
     try checkrange(drev[!,i+3], r)
     catch
       @warn string("Mismatch in data range for column $(standardnames[i+3]) ",
