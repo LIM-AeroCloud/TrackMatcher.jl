@@ -1,87 +1,17 @@
-"""
-    loadFlightDB(DBtype::String, folder::Union{String, Vector{String}}...; remarks=nothing) -> struct `FlightDB`
-
-Construct an instance of `FlightDB` with relevant flight data.
-
-
-# DBtype
-
-Specifies the database type; up to 3 types can be selected:
-- `1` or `"i"`: Flight inventory with flight tracks saved in csv files and saved
-  to property `inventory`.
-- `2` or `"a"`: Commercially available flight track data by FlightAware saved as
-  csv files and saved to property `archive`.
-- `3` or `"o"`: Flight tracks available online from the FlightAware website in
-  text (`.txt`/`.dat`) files and saved to property `onlineData`.
-
-
-# folder
-
-Directory holding the files of the databases specified by `DBtype`.
-Folders must be given as vararg in the order given by `DBtype`.
-
-e.g.:
-```julia
-flight = flightDB("i3", "data/inventory", "data/online_data")
-```
-
-# remarks
-Any data can be attached to `FlightDB` with the keyword argument `remarks`.
-"""
-function loadFlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
-  altmin::Int=15_000, remarks=nothing)
-  # Save time of database creation
-  tc = Dates.now()
-  # Find database types
-  if occursin('i', DBtype)  i1 = findfirst(isequal('i'), DBtype)
-  else  i1 = findfirst(isequal('1'), DBtype);  end
-  if occursin('a', DBtype)  i2 = findfirst(isequal('a'), DBtype)
-  else  i2 = findfirst(isequal('2'), DBtype);  end
-  if occursin('o', DBtype)  i3 = findfirst(isequal('o'), DBtype)
-  else  i3 = findfirst(isequal('3'), DBtype);  end
-
-  # Load databases for each type
-  if !isnothing(i1)
-    ifiles = String[]
-    ifiles = findFiles(ifiles, folder[i1], ".csv")
-    inventory = try loadInventory(ifiles, altmin=altmin)
-    catch
-      @warn "Flight inventory couldn't be loaded."
-      FlightData[]
-    end
-  else inventory = FlightData[];  end
-  if !isnothing(i2)
-    ifiles = String[]
-    ifiles = findFiles(ifiles, folder[i2], ".csv")
-    archive = try loadArchive(ifiles, altmin=altmin)
-    catch
-      @warn "FlightAware archive couldn't be loaded."
-      FlightData[]
-    end
-  else archive = FlightData[];  end
-  if !isnothing(i3)
-    ifiles = String[]
-    ifiles = findFiles(ifiles, folder[i3], ".txt", ".dat")
-    onlineData = try loadOnlineData(ifiles, altmin=altmin)
-    catch
-      @warn "FlightAware online data couldn't be loaded."
-      FlightData[]
-    end
-  else onlineData = FlightData[];  end
-
-  println("\ndone loading data to properties\n- inventory\n- archive\n- onlineData\n", "")
-
-  return FlightDB(inventory, archive, onlineData, tc, remarks)
-end # function loadFlightDB
-
+### Routines related to loading FlightData
 
 """
-    loadInventory(files::Vector{String}) -> inventory
+    loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::bool=true) -> Vector{FlightData}
 
-From a list of `files`, return an `inventory` as `Vector{FlightData}` that can
+From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `inventory` field in `FlightDB`.
+
+When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
+altitude threshold of the aircraft data (default: `altmin=15_000`) and by the
+existance of cirrus clouds at flight level (default: `filterCloudfree=true`;
+currently only place holder, still needs to be implemented).
 """
-function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree=true)
+function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::bool=true)
 
   # Initialise inventory file array and start MATLAB for PCHIP fitting
   inventory = FlightData[]
@@ -105,17 +35,26 @@ function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree=tru
 
     # Loop over all data points
     @pm.showprogress 1 "load inventory from $(basename(splitext(file)[1]))..." for i = 1:length(flights.time)
+      # If the next flight ID is found, save current flight
       if flights.FLIGHT_ID[i] ≠ FID || i == length(flights.time)
+        # Ignore data with less than 2 data points
         if length(t) ≤ 1  FID = flights.FLIGHT_ID[i]; continue  end
+        # calculate area covered by flight
         lp = any(lon .> 0) ? maximum(lon[lon.≥0]) - minimum(lon[lon.≥0]) : 0
         ln = any(lon .< 0) ? maximum(lon[lon.<0]) - minimum(lon[lon.<0]) : 0
+        # Determine main direction of flight (N<>S, E<>W) and use it as x values
+        # for flight interpolation (info stored as bool useLON)
         useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ? true : false
         useLON ? (x = lon; y = lat) : (x = lat; y = lon)
+        # Remove duplicate points in data
         x, y, alt, speed, t = remdup(x, y, alt, speed, t)
+        # find flex points to cut data in segments needed for the interpolation
         flex = findFlex(x)
+        # Save the FlightData in the inventory vector
         push!(inventory, FlightData(t, lat, lon, alt, [missing for i = 1:length(t)],
           [missing for i = 1:length(t)], speed, FID, missing,
-          missing, missing, flex, useLON, file))
+          missing, missing, flex, useLON, "VOLPE AEDT", file))
+        # Empty data vectors
         lat = Float64[]; lon = Float64[];
         alt = Float64[]; t = ZonedDateTime[]; speed = Float64[]
         FID = flights.FLIGHT_ID[i]
@@ -135,14 +74,20 @@ end #function loadInventory
 
 
 """
-    loadArchive(files::Vector{String}) -> archive
+    loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree::bool=true) -> Vector{FlightData}
 
-From a list of `files`, return an `archive` as `Vector{FlightData}` that can
+From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `archive` field in `FlightDB`.
+
+When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
+altitude threshold of the aircraft data (default: `altmin=15_000`) and by the
+existance of cirrus clouds at flight level (default: `filterCloudfree=true`;
+currently only place holder, still needs to be implemented).
 """
-function loadArchive(files::Vector{String}; altmin::Int=15_000)
-  # Initialise inventory file array
+function loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree::bool=true)
+  # Initialise archive file array
   archive = FlightData[]
+  # Loop over database files
   @pm.showprogress 1 "load archive..." for file in files
     # Load data
     flights = CSV.read(file, datarow=2, normalizenames=true, ignoreemptylines=true,
@@ -160,19 +105,27 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000)
     # Initialise loop over file
     # Loop over all data points
     for i = 1:length(flights.Time_UTC_)
+      # Save flight, if flight ID changes
       if flights.Flight_ID[i] ≠ FID || i == length(flights.Time_UTC_)
+        # Ignore data with less than 2 data points
         if length(t) ≤ 1
           n = i
           FID = flights.Flight_ID[n]
           continue
         end
+        # calculate area covered by flight
         lp = any(lon .> 0) ? maximum(lon[lon.≥0]) - minimum(lon[lon.≥0]) : 0
         ln = any(lon .< 0) ? maximum(lon[lon.<0]) - minimum(lon[lon.<0]) : 0
+        # Determine main direction of flight (N<>S, E<>W) and use it as x values
+        # for flight interpolation (info stored as bool useLON)
         useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ? true : false
+        # find flex points to cut data in segments needed for the interpolation
         flex = useLON ? findFlex(lon) : findFlex(lat)
+        # Save the FlightData in the archive vector
         push!(archive, FlightData(t, lat, lon, alt, head, climb, speed,
         FID, flights.Ident[n], flights.Aircraft_Type[n],
-        (orig=flights.Origin[n], dest=flights.Destination[n]), flex, useLON, file))
+        (orig=flights.Origin[n], dest=flights.Destination[n]), flex, useLON,
+        "FlightAware", file))
 
         # Reset temporary data arrays
         lat = Float64[]; lon = Float64[]
@@ -200,12 +153,17 @@ end #function loadArchive
 
 
 """
-    loadOnlineData(files::Vector{String}) -> archive
+    loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfree::bool=true) -> Vector{FlightData}
 
-From a list of `files`, return an `archive` as `Vector{FlightData}` that can
+From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `onlineData` field in `FlightDB`.
+
+When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
+altitude threshold of the aircraft data (default: `altmin=15_000`) and by the
+existance of cirrus clouds at flight level (default: `filterCloudfree=true`;
+currently only place holder, still needs to be implemented).
 """
-function loadOnlineData(files::Vector{String}; altmin::Int=15_000)
+function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfree::bool=true)
   # Initialise inventory file array
   archive = FlightData[]
   # Loop over files with online data
@@ -302,7 +260,7 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000)
     # Save data as FlightData
     push!(archive, FlightData(flight.time, flight.Latitude, flight.Longitude,
       flight.feet, flight.Course, flight.Rate, flight.kts, n, flightID, missing,
-      (orig=orig, dest=dest), flex, useLON, file))
+      (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
   end #loop over files
 
   return archive
