@@ -2,7 +2,8 @@
 
 """
     intersection(flights::FlightDB, sat::SatDB, sattype::Symbol=:CLay;
-      deltat::Int=30, satspan::Int=15, precision::Float64=0.001) -> Vector{Intersection}
+      deltat::Int=30, flightspan::Int=0, satspan::Int=15, precision::Float64=0.001)
+      -> Vector{Intersection}
 
 From `flights` and `sat` data derive a `Vector{Intersection}` holding information
 about all the intersection between the trajectories in both databases with a maximum
@@ -16,12 +17,12 @@ is preferred (by default `:CLay`), only if no data is found the other satellite 
 (`CPro` in default option) is used.
 
 In each `Intersection`, the nearest `FlightData` measurement and `SatDB` measurements
-are saved. For satellite data, a variable time span (`satspan`) can be saved including
+are saved. Additionally, a variable time span (`flightspan`/`satspan`) can be saved including
 `±n` timesteps additional to the nearest timestep (`±0` only the nearest point is saved;
-default `satspan=15`).
+default `flightspan=0` and `satspan=15`).
 """
 function intersection(flights::FlightDB, sat::SatDB, sattype::Symbol=:CLay;
-  deltat::Int=30, satspan::Int=15, precision::Float64=0.001)
+  deltat::Int=30, flightspan::Int=0, satspan::Int=15, precision::Float64=0.001)
   # Initialise Vector with Intersection data
   intersects = Intersection[]
   # New MATLAB session
@@ -38,7 +39,7 @@ function intersection(flights::FlightDB, sat::SatDB, sattype::Symbol=:CLay;
       flighttracks = interpolate_flightdata(ms, flight, precision)
       # Calculate intersections and store in Vector
       intersects = find_intersections(intersects, flight, flighttracks,
-        sat, satranges.type, sattracks, deltat, satspan, precision)
+        sat, satranges.type, sattracks, deltat, flightspan, satspan, precision)
     end #loop over flights
   catch
     # Issue warning on failure of interpolating track or time data
@@ -61,19 +62,19 @@ end #function intersection
 """
     find_intersections(intersects::Vector{Intersection}, flight::FlightData,
       flighttracks::Vector, sat::SatDB, sattype::Symbol, sattracks::Vector,
-      deltat::Int, satspan::Int, precision::Float64) -> Vector{Intersection}
+      deltat::Int, flightspan::Int, satspan::Int, precision::Float64) -> Vector{Intersection}
 
 To the vector `intersects` with intersections of sat and flight tracks, add new
 `Intersection`s for the current `flight` and `sat` data using `sat` data of `sattype`
 (`:CLay` or `:CPro`). Use the interpolated `flighttracks` and `sattracks` to find
 the intersections with a `precision` (in degrees), where the maximum time difference
-between the flight and satellite overpass at the intersection is `deltat` in minutes.
-In addition to the nearest satellite messurement at the intersection save ± `satspan`
-data points.
+between the flight and satellite overpass at the intersection is `deltat` minutes.
+In addition to the nearest messurement at the intersection save ± `flightspan`/`satspan`
+data points of flight and sat data, respectively.
 """
 function find_intersections(intersects::Vector{Intersection}, flight::FlightData,
   flighttracks::Vector, sat::SatDB, sattype::Symbol, sattracks::Vector,
-  deltat::Int, satspan::Int, precision::Float64)
+  deltat::Int, flightspan::Int, satspan::Int, precision::Float64)
 
   # Get satellite data of the preferred type
   satdata = getfield(sat, sattype).data
@@ -105,7 +106,7 @@ function find_intersections(intersects::Vector{Intersection}, flight::FlightData
       dprec = Geodesy.distance(Geodesy.LatLon(0,0), Geodesy.LatLon(0,0+prec))
       tm = Dates.unix2datetime(st.time(ilat[m]))
       if d[m] < dprec && Dates.Minute(-deltat) < ft.t[m] - tm < Dates.Minute(deltat)
-        push!(intersects, Intersection(flight, sat, sattype, satspan, ft.t[m], tm, ilat[m], flon[m], d[m]))
+        push!(intersects, Intersection(flight, sat, sattype, ft.t[m], tm, ilat[m], flon[m], flightspan, satspan, d[m]))
       end
     end
   end

@@ -611,11 +611,13 @@ for `cirrus` clouds at flight level at the intersection, `SatDB` with any availa
 and `FlightData` with the closest measured point to the intersection.
 
     Intersection(flight::FlightData, sat::SatDB, sattype::Symbol,
-      tflight::DateTime, tsat::DateTime, lat::Float64, lon::Float64, accuracy::Float64)
+      tflight::DateTime, tsat::DateTime, lat::Float64, lon::Float64,
+      flightspan::Int, satspan::Int, accuracy::Float64)
 
 Or construct directly from the fields in `Intersection`:
 
-
+    Intersection(lat::Float64, lon::Float64, tdiff::Dates.CompoundPeriod,
+      accuracy::Float64, cirrus::Bool, sat::SatDB, flight::FlightData)
 """
 struct Intersection
   # tflight::DateTime
@@ -635,8 +637,9 @@ struct Intersection
   end #constructor 1 Intersection
 
   """ Modified constructor with some automated calculations of the intersection data. """
-  function Intersection(flight::FlightData, sat::SatDB, sattype::Symbol, satspan::Int,
-    tflight::DateTime, tsat::DateTime, lat::Float64, lon::Float64, accuracy::Float64)
+  function Intersection(flight::FlightData, sat::SatDB, sattype::Symbol,
+    tflight::DateTime, tsat::DateTime, lat::Float64, lon::Float64,
+    flightspan::Int, satspan::Int, accuracy::Float64)
 
     # Calculate time difference between flight and satellite overpass at intersection
     tdiff = Dates.canonicalize(Dates.CompoundPeriod(tflight - tsat))
@@ -644,7 +647,8 @@ struct Intersection
     tf = argmin(abs.(flight.data.time .- tflight))
 
     # Construct FlightData at Intersection
-    flightdata = FlightData(DataFrame(flight.data[tf,:]), flight.metadata)
+    flightdata =
+      FlightData(extract_timespan(flight.data, tf, flightspan), flight.metadata)
 
     # Get satellite data used to find the intersection and find DataFrame row of intersection
     satprim = getfield(sat, sattype).data
