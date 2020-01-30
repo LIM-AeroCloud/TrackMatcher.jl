@@ -17,14 +17,15 @@ or cloud tracks as well.
 - `SatDB` stores CALIPSO cloud layer and profile data from the CALIOP satellite
 - `CLay` CALIPSO cloud layer data
 - `CPro` CALIPSO cloud profile data
+- `Intersection`: position of intersection between aircraft and satellite trajectory,
+  together with time difference between crossing and `FlightData` and `SatDB` in the
+  vicinity of the intersection
 
 
 ## Public functions
 
-- `loadFlightData` constructs the `FlightDB` from folder paths and keys signaling
-  the database type
 - `intersection` finds intersections in the trajectories of aircrafts and satellites
-  stored in `FlightDB` and `SatDB`
+  stored in `FlightDB` and `SatDB` and returns a vector of `Intersection` instances
 """
 module TrackMatcher
 
@@ -60,15 +61,16 @@ Immutable struct to hold metadata for `FlightData` of the `FlightDB` with fields
 
 - `dbID::Union{Int,AbstractString}`
 - `flightID::Union{Missing,AbstractString}`
-- `aircraft::Union{Missing,AbstractString}`
 - `route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}}`
-- `area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),Tuple{Float64,Float64,Float64,Float64,Float64,Float64}}`
+- `aircraft::Union{Missing,AbstractString}`
 - `date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}`
+- `area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),Tuple{Float64,Float64,Float64,Float64,Float64,Float64}}`
 - `file::AbstractString`
 
 ## dbID
 Database ID – integer counter for `inventory` and FlightAware `onlineData`,
-String with information about `FlightID`, `route`, and scheduled arrival.
+String with information about `FlightID`, `route`, and scheduled arrival for
+FlightAware archived data.
 
 ## FlightID and aircraft
 Strings with aircraft identification and type.
@@ -99,14 +101,15 @@ String holding the absolute folder path and file name.
 
 # Instantiation
 
+`MetaData` is constructed automatically, when `FlightData` is instatiated using
+a modified constructor and `dbID`, `flightID`, `aircraft` type, `route`, and `file`.
+Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
+
     MetaData(dbID::Union{Int,AbstractString},
       flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
       route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
       lat::Vector{<:Union{Missing,Float64}}, lon::Vector{<:Union{Missing,Float64}},
       date::Vector{DateTime}, file::AbstractString) -> struct MetaData
-
-Construct `MetaData` from `dbID`, `flightID`, `aircraft` type, `route`, and `file`.
-Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
 
 Or construct `MetaData` by directly handing over every field:
 
@@ -170,32 +173,18 @@ end #struct MetaData
 # struct FlightData
 
 Aircraft data with fields
-- `time::Vector{DateTime}`
-- `lat::Vector{<:Union{Missing,Float64}}`
-- `lon::Vector{<:Union{Missing,Float64}}`
-- `alt::Vector{<:Union{Missing,Float64}}`
-- `heading::Vector{<:Union{Missing,Int}}`
-- `climb::Vector{<:Union{Missing,Int}}`
-- `speed::Vector{<:Union{Missing,Float64}}`
+- `data::DataFrame`
 - `metadata::MetaData`
 
-## time
-Vector of `DateTime`
+The `DataFrame` of `data` has columns in the following order with the respective types:
 
-## lat/lon
-Vectors of `Float64` with ranges -90°...90° and -180°...180°.
-
-## alt
-Vector of `Float64` with altitude in feet.
-
-## heading
-Vector of `Int` with course heading in degrees.
-
-## climb
-Vector of `Int` with climbing (positive) / sinking (negative) rate in feet (0 = level).
-
-## speed
-Vector of `Float64` in knots.
+- `time::Vector{DateTime}`                  (time stamp of measurement)
+- `lat::Vector{<:Union{Missing,Float64}}`   (latitude)
+- `lon::Vector{<:Union{Missing,Float64}}`   (longitude)
+- `alt::Vector{<:Union{Missing,Float64}}`   (altitude)
+- `heading::Vector{<:Union{Missing,Int}}`   (heading/direction of the aircraft)
+- `climb::Vector{<:Union{Missing,Int}}`     (climbing (positive)/sinking (negative values) rate)
+- `speed::Vector{<:Union{Missing,Float64}}` (velocity)
 
 
 # Instantiation
@@ -208,8 +197,10 @@ Vector of `Float64` in knots.
       route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
       file::AbstractString) -> struct FlightData
 
-Construct `FlightData` from fields and additonal information `dbID`, `flightID`,
-`aircraft` type, `route`, and `file` name for `MetaData`.
+Construct `FlightData` from columns for the `data` `DataFrame` and additonal information
+`dbID`, `flightID`, `aircraft` type, `route`, and `file` name for `MetaData`.
+For `data`, `time` is the only exception, which is given as `ZonedDateTime` and
+will be converted to `UTC` standard time.
 
 Or construct by directly handing over every field:
 
@@ -217,12 +208,14 @@ Or construct by directly handing over every field:
       lon::Vector{<:Union{Missing,Float64}}, alt::Vector{<:Union{Missing,Float64}},
       heading::Vector{<:Union{Missing,Int}}, climb::Vector{<:Union{Missing,Int}},
       speed::Vector{<:Union{Missing,Float64}}, metadata::MetaData)
+
+Checks exist that the order, names, and types of the `data` `DataFrame` are correct.
 """
 struct FlightData
   data::DataFrame
   metadata::MetaData
 
-  """ Unmodified constructor for `FlightData` """
+  """ Unmodified constructor for `FlightData` with basic checks for correct `data`"""
   function FlightData(data::DataFrame, metadata::MetaData)
 
     # Column checks and warnings
@@ -282,7 +275,7 @@ Commercial flight data by FlightAware.
 Online data from FlightAware website.
 
 ## created
-Time of creation as `DateTime` (or `ZonedDateTime`).
+Time of creation as `DateTime` or `ZonedDateTime` (default).
 
 ## remarks
 Any data that can be attached to `FlightData` with keyword argument `remarks`.
@@ -290,7 +283,21 @@ Any data that can be attached to `FlightData` with keyword argument `remarks`.
 
 # Instantiation
 
-Use function `loadFlightDB` for an easy instatiation of `FlightDB`.
+Instatiate by giving a String with identifiers of the `DBtype` and an equal number
+of `folder` paths as characters in the `DBtype` `String`. Optionally add a minimum
+altitude threshold for the data (default = `15000`) and any remarks
+(comments or additional data).
+
+    FlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
+      altmin::Int=15_000, remarks=nothing)
+
+`DBtype` can be identified with:
+- `1` or `i`: VOLPE AEDT inventory
+- `2` or `a`: FlightAware archived data (commercially available)
+- `3` or `o`: flightaware.com online data
+
+Or instatiate directly with the fields of `FlightDB`, where the correct database
+type is checked, and wrong datasets are removed in every field.
 """
 struct FlightDB
   inventory::Vector{FlightData}
@@ -299,6 +306,10 @@ struct FlightDB
   created::Union{DateTime,ZonedDateTime}
   remarks
 
+  """
+  Unmodified constructor for `FlightDB` with basic checks for correct dataset type
+  in each dataset field and presets for field created (now) and remarks (nothing).
+  """
   function FlightDB(inventory::Vector{FlightData},
     archive::Vector{FlightData}, onlineData::Vector{FlightData},
     created::Union{DateTime,ZonedDateTime}=tz.now(tz.localzone()),
@@ -311,6 +322,10 @@ struct FlightDB
     new(inventory, archive, onlineData, tc, remarks)
   end #constructor 1 FlightDB
 
+  """
+  Modified constructor creating the database from an identifer of the
+  database type and the respective folder path for that database.
+  """
   function FlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
     altmin::Int=15_000, remarks=nothing)
 
@@ -354,7 +369,7 @@ end #struct FlightDB
 """
 # struct CLay
 
-CALIOP cloud layer data with fields:
+CALIOP cloud layer `data` stored in a `DataFrame` with columns:
 - `time::Vector{DateTime}`
 - `lat::Vector{Float64}`
 - `lon::Vector{Float64}`
@@ -366,9 +381,10 @@ CALIOP cloud layer data with fields:
 Construct `CLay` from a list of file names (including directories) and a running
 MATLAB session.
 
-Or construct `CLay` by directly handing over every field:
+Or construct `CLay` by directly handing over the `DataFrame` where the names, order,
+and types of each columns are checked and attempted to correct:
 
-    CLay(time::Vector{DateTime}, lat::Vector{Float64}, lon::Vector{Float64}) -> struct CLay
+    CLay(data::DataFrame) -> struct CLay
 """
 struct CLay
   data::DataFrame
@@ -416,7 +432,7 @@ end #struct CLay
 """
 # struct CPro
 
-CALIOP cloud profile data with fields:
+CALIOP cloud profile `data` stored in a `DataFrame` with columns:
 - `time::Vector{DateTime}`
 - `lat::Vector{Float64}`
 - `lon::Vector{Float64}`
@@ -428,18 +444,15 @@ CALIOP cloud profile data with fields:
 Construct `CPro` from a list of file names (including directories) and a running
 MATLAB session.
 
-Or construct `CPro` by directly handing over every field:
+Or construct `CPro` by directly handing over the `DataFrame` where the names, order,
+and types of each columns are checked and attempted to correct:
 
-    CPro(time::Vector{DateTime}, lat::Vector{Float64}, lon::Vector{Float64}) -> struct CPro
+    CPro(data::DataFrame) -> struct CPro
 """
 struct CPro
   data::DataFrame
 
-  """
-      CPro(time::Vector{DateTime}, lat::Vector{Float64}, lon::Vector{Float64}))
-
-  Unmodified constructor for `CPro`.
-  """
+  """ Unmodified constructor for `CPro` """
   function CPro(data::DataFrame)
     standardnames = [:time, :lat, :lon]
     standardtypes = [Vector{DateTime}, Vector{Float64}, Vector{Float64}]
@@ -491,8 +504,8 @@ Immutable struct with fields
 
 ## CLay and CPro
 
-CALIOP satellite data currently holding time as `DateTime`
-and position (`lat`/`lon`) of cloud layer and profile data.
+CALIOP satellite data currently holding time as `DateTime` in `UTC`
+and position (`lat`/`lon`) of cloud layer and profile data in a `DataFrame`.
 
 ## created
 
@@ -548,21 +561,17 @@ end #struct SatDB
 
 Immutable struct with fields
 
-- `tflight::DateTime`
-- `tsat::DateTime`
-- `tdiff::Dates.CompoundPeriod`
 - `lat::Float64`
 - `lon::Float64`
-- `alt::Union{Missing,Float64}`
-- `climb::Union{Missing,Int}`
-- `speed::Union{Missing,Float64}`
+- `tdiff::Dates.CompoundPeriod`
+- `accuracy::Float64`
 - `cirrus::Bool`
-- `flight::MetaData`
+- `sat::SatDB`
+- `flight::FlightData`
 
+## lat/lon
 
-## tflight and tsat
-
-Overpass times at intersection of aircraft and satellite in `UTC` as `DateTime`.
+Position of intersection in degrees.
 
 
 ## tdiff
@@ -572,14 +581,41 @@ Positive time differences mean satellite overpass before flight overpass,
 negative times mean flight reaches intersection before satellite.
 
 
-## lat/lon
+## accuracy
 
-Position of intersection in degrees.
+Accuracy during of the interpolation in meters.
 
 
-## alt
+## cirrus
 
-altitude
+Flag for cirrus clouds at flight level at the intersection.
+
+
+## sat
+
+Satellite cloud layer and profile data (as available) stored in `SatDB` for ±15
+time steps.
+
+
+## flight
+
+`FlightData` for the uninterpolated timepoint closest to the overpass at the intersection.
+
+
+# Instatiation
+
+Instantiate with position (`lat`/`lon`) of Intersection, the time difference `tdiff`
+of the flight and satellite overpass, the `accuracy` of the interpolation, a flag
+for `cirrus` clouds at flight level at the intersection, `SatDB` with any available
+`CLay` and `CPro` data in the vicinity of the intersection (default ± 15 time steps),
+and `FlightData` with the closest measured point to the intersection.
+
+    Intersection(flight::FlightData, sat::SatDB, sattype::Symbol,
+      tflight::DateTime, tsat::DateTime, lat::Float64, lon::Float64, accuracy::Float64)
+
+Or construct directly from the fields in `Intersection`:
+
+
 """
 struct Intersection
   # tflight::DateTime
@@ -587,36 +623,53 @@ struct Intersection
   lat::Float64
   lon::Float64
   tdiff::Dates.CompoundPeriod
-  accuracy::Real
+  accuracy::Float64
   cirrus::Bool
   sat::SatDB
   flight::FlightData
 
-  function Intersection(flight::FlightData, sat::SatDB, sattype::Symbol,
-    tflight::DateTime, tsat::DateTime, lat::Float64, lon::Float64, accuracy::Real)
+  """ Unmodified constructor for `Intersection` """
+  function Intersection(lat::Float64, lon::Float64, tdiff::Dates.CompoundPeriod,
+    accuracy::Float64, cirrus::Bool, sat::SatDB, flight::FlightData)
+    new(lat, lon, tdiff, accuracy, cirrus, sat, flight)
+  end #constructor 1 Intersection
 
+  """ Modified constructor with some automated calculations of the intersection data. """
+  function Intersection(flight::FlightData, sat::SatDB, sattype::Symbol, satspan::Int,
+    tflight::DateTime, tsat::DateTime, lat::Float64, lon::Float64, accuracy::Float64)
+
+    # Calculate time difference between flight and satellite overpass at intersection
     tdiff = Dates.canonicalize(Dates.CompoundPeriod(tflight - tsat))
+    # Find the index (DataFrame row) of the intersection in the flight data
     tf = argmin(abs.(flight.data.time .- tflight))
 
+    # Construct FlightData at Intersection
     flightdata = FlightData(DataFrame(flight.data[tf,:]), flight.metadata)
 
+    # Get satellite data used to find the intersection and find DataFrame row of intersection
     satprim = getfield(sat, sattype).data
     tsp = argmin(abs.(satprim.time .- tsat))
-    primdata = extract_timespan(satprim, tsp)
+    # Retrieve DataFrame at Intersection ± 15 time steps
+    primdata = extract_timespan(satprim, tsp, satspan)
 
+    # Switch to other satellite data (CLay/CPro) and check whether data is available
+    # at intersection and retrieve ±15 time steps as well
     sattype = swap_sattype(sattype)
     secdata = try satsec = getfield(sat, sattype).data
       tss = argmin(abs.(satsec.time .- tsat))
-      extract_timespan(satsec, tss)
+      extract_timespan(satsec, tss, satspan)
     catch
+      # Return an empty DataFrame, if no data is available
       DataFrame(time=DateTime[], lat=Float64[], lon=Float64[])
     end
+    # Save satellite data in SatDB
     satdb = sattype == :CPro ? SatDB(CLay(primdata), CPro(secdata), sat.created, sat.remarks) :
       SatDB(CLay(secdata), CPro(primdata), sat.created, sat.remarks)
 
+    # Instatiate new Intersection
     new(lat, lon, tdiff, accuracy, false, satdb, flightdata)
   end
-end
+end #constructor 2 Intersection
 
 # Needed for julia 1.0.x?:
 # SatDB(CLay::CLay, CPro::CPro, created::Union{DateTime,ZonedDateTime}) = SatDB(CLay, CPro, created, nothing)
@@ -633,8 +686,8 @@ export FlightDB,
        intersection
 
 
-include("auxiliary.jl")
-include("loadFlightData.jl")
-include("match.jl")
+include("auxiliary.jl")       # helper functions
+include("loadFlightData.jl")  # functions related to loading flight databases/datasets
+include("match.jl")           # functions related to finding track intersections
 
 end # module TrackMatcher

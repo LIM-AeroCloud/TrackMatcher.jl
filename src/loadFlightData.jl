@@ -1,10 +1,17 @@
-"""
-    loadInventory(files::Vector{String}) -> inventory
+### Routines related to loading FlightData
 
-From a list of `files`, return an `inventory` as `Vector{FlightData}` that can
-be saved to the `inventory` field in `FlightDB`.
 """
-function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree=true)
+    loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::bool=true) -> Vector{FlightData}
+
+From a list of `files`, return a `Vector{FlightData}` that can
+be saved to the `inventory` field in `FlightDB`.
+
+When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
+altitude threshold of the aircraft data (default: `altmin=15_000`) and by the
+existance of cirrus clouds at flight level (default: `filterCloudfree=true`;
+currently only place holder, still needs to be implemented).
+"""
+function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::bool=true)
 
   # Initialise inventory file array and start MATLAB for PCHIP fitting
   inventory = FlightData[]
@@ -28,17 +35,26 @@ function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree=tru
 
     # Loop over all data points
     @pm.showprogress 1 "load inventory from $(basename(splitext(file)[1]))..." for i = 1:length(flights.time)
+      # If the next flight ID is found, save current flight
       if flights.FLIGHT_ID[i] ≠ FID || i == length(flights.time)
+        # Ignore data with less than 2 data points
         if length(t) ≤ 1  FID = flights.FLIGHT_ID[i]; continue  end
+        # calculate area covered by flight
         lp = any(lon .> 0) ? maximum(lon[lon.≥0]) - minimum(lon[lon.≥0]) : 0
         ln = any(lon .< 0) ? maximum(lon[lon.<0]) - minimum(lon[lon.<0]) : 0
+        # Determine main direction of flight (N<>S, E<>W) and use it as x values
+        # for flight interpolation (info stored as bool useLON)
         useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ? true : false
         useLON ? (x = lon; y = lat) : (x = lat; y = lon)
+        # Remove duplicate points in data
         x, y, alt, speed, t = remdup(x, y, alt, speed, t)
+        # find flex points to cut data in segments needed for the interpolation
         flex = findFlex(x)
+        # Save the FlightData in the inventory vector
         push!(inventory, FlightData(t, lat, lon, alt, [missing for i = 1:length(t)],
           [missing for i = 1:length(t)], speed, FID, missing,
           missing, missing, flex, useLON, "VOLPE AEDT", file))
+        # Empty data vectors
         lat = Float64[]; lon = Float64[];
         alt = Float64[]; t = ZonedDateTime[]; speed = Float64[]
         FID = flights.FLIGHT_ID[i]
@@ -58,14 +74,20 @@ end #function loadInventory
 
 
 """
-    loadArchive(files::Vector{String}) -> archive
+    loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree::bool=true) -> Vector{FlightData}
 
-From a list of `files`, return an `archive` as `Vector{FlightData}` that can
+From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `archive` field in `FlightDB`.
+
+When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
+altitude threshold of the aircraft data (default: `altmin=15_000`) and by the
+existance of cirrus clouds at flight level (default: `filterCloudfree=true`;
+currently only place holder, still needs to be implemented).
 """
-function loadArchive(files::Vector{String}; altmin::Int=15_000)
-  # Initialise inventory file array
+function loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree::bool=true)
+  # Initialise archive file array
   archive = FlightData[]
+  # Loop over database files
   @pm.showprogress 1 "load archive..." for file in files
     # Load data
     flights = CSV.read(file, datarow=2, normalizenames=true, ignoreemptylines=true,
@@ -83,16 +105,23 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000)
     # Initialise loop over file
     # Loop over all data points
     for i = 1:length(flights.Time_UTC_)
+      # Save flight, if flight ID changes
       if flights.Flight_ID[i] ≠ FID || i == length(flights.Time_UTC_)
+        # Ignore data with less than 2 data points
         if length(t) ≤ 1
           n = i
           FID = flights.Flight_ID[n]
           continue
         end
+        # calculate area covered by flight
         lp = any(lon .> 0) ? maximum(lon[lon.≥0]) - minimum(lon[lon.≥0]) : 0
         ln = any(lon .< 0) ? maximum(lon[lon.<0]) - minimum(lon[lon.<0]) : 0
+        # Determine main direction of flight (N<>S, E<>W) and use it as x values
+        # for flight interpolation (info stored as bool useLON)
         useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ? true : false
+        # find flex points to cut data in segments needed for the interpolation
         flex = useLON ? findFlex(lon) : findFlex(lat)
+        # Save the FlightData in the archive vector
         push!(archive, FlightData(t, lat, lon, alt, head, climb, speed,
         FID, flights.Ident[n], flights.Aircraft_Type[n],
         (orig=flights.Origin[n], dest=flights.Destination[n]), flex, useLON,
@@ -124,12 +153,17 @@ end #function loadArchive
 
 
 """
-    loadOnlineData(files::Vector{String}) -> archive
+    loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfree::bool=true) -> Vector{FlightData}
 
-From a list of `files`, return an `archive` as `Vector{FlightData}` that can
+From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `onlineData` field in `FlightDB`.
+
+When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
+altitude threshold of the aircraft data (default: `altmin=15_000`) and by the
+existance of cirrus clouds at flight level (default: `filterCloudfree=true`;
+currently only place holder, still needs to be implemented).
 """
-function loadOnlineData(files::Vector{String}; altmin::Int=15_000)
+function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfree::bool=true)
   # Initialise inventory file array
   archive = FlightData[]
   # Loop over files with online data
