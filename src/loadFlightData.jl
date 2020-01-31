@@ -1,7 +1,7 @@
 ### Routines related to loading FlightData
 
 """
-    loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::bool=true) -> Vector{FlightData}
+    loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::Bool=true) -> Vector{FlightData}
 
 From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `inventory` field in `FlightDB`.
@@ -11,7 +11,7 @@ altitude threshold of the aircraft data (default: `altmin=15_000`) and by the
 existance of cirrus clouds at flight level (default: `filterCloudfree=true`;
 currently only place holder, still needs to be implemented).
 """
-function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::bool=true)
+function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::Bool=true)
 
   # Initialise inventory file array and start MATLAB for PCHIP fitting
   inventory = FlightData[]
@@ -74,7 +74,7 @@ end #function loadInventory
 
 
 """
-    loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree::bool=true) -> Vector{FlightData}
+    loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree::Bool=true) -> Vector{FlightData}
 
 From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `archive` field in `FlightDB`.
@@ -84,7 +84,7 @@ altitude threshold of the aircraft data (default: `altmin=15_000`) and by the
 existance of cirrus clouds at flight level (default: `filterCloudfree=true`;
 currently only place holder, still needs to be implemented).
 """
-function loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree::bool=true)
+function loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree::Bool=true)
   # Initialise archive file array
   archive = FlightData[]
   # Loop over database files
@@ -153,23 +153,28 @@ end #function loadArchive
 
 
 """
-    loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfree::bool=true) -> Vector{FlightData}
+    loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfree::Bool=true,
+      delim::Union{Nothing,Char,String}=nothing) -> Vector{FlightData}
 
 From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `onlineData` field in `FlightDB`.
+
+The delimiter of the data in the input file can be specified by a string or character.
+Default is `nothing`, which means auto-detection of the delimiter is used.
 
 When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
 altitude threshold of the aircraft data (default: `altmin=15_000`) and by the
 existance of cirrus clouds at flight level (default: `filterCloudfree=true`;
 currently only place holder, still needs to be implemented).
 """
-function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfree::bool=true)
+function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfree::Bool=true,
+  delim::Union{Nothing,Char,String}=nothing)
   # Initialise inventory file array
   archive = FlightData[]
   # Loop over files with online data
   @pm.showprogress 1 "load online data..." for (n, file) in enumerate(files)
     # Read flight data
-    flight = CSV.read(file, ignoreemptylines=true, normalizenames=true, copycols=true,
+    flight = CSV.read(file, delim=delim, ignoreemptylines=true, normalizenames=true, copycols=true,
       silencewarnings=true, threaded=false, types=Dict(:Latitude => Float64,
       :Longitude => Float64, :feet => String, :kts => Float64, :Course => String,
       :Rate => String))

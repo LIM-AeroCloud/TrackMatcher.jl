@@ -29,13 +29,13 @@ function intersection(flights::FlightDB, sat::SatDB, sattype::Symbol=:CLay;
   ms = mat.MSession()
   # Loop over data and interpolate track data and time, throw error on failure
   flight = nothing #Initialise variable flight
-  try @pm.showprogress 1 "find intersections..." for outer flight in flights.inventory[1:10]
-  # try @pm.showprogress 1 "find intersections..." for outer flight in
-  #   [flights.inventory; flights.archive; flights.onlineData]
+  try @pm.showprogress 1 "find intersections..." for outer flight in
+    [flights.inventory; flights.archive; flights.onlineData]
       # Find sat tracks in the vicinity of flight tracks, where intersections are possible
-      satranges = get_satranges(flight, sat, sattype, deltat)
+      overlap = get_satranges(flight, sat, sattype, deltat)
+      isempty(overlap.ranges) && continue
       # Interpolate trajectories using MATLAB's pchip routine
-      sattracks = interpolate_satdata(ms, sat, satranges)
+      sattracks = interpolate_satdata(ms, sat, overlap)
       flighttracks = interpolate_flightdata(ms, flight, precision)
       # Calculate intersections and store in Vector
       intersects = find_intersections(intersects, flight, flighttracks,

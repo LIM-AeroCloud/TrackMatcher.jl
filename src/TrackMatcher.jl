@@ -286,10 +286,12 @@ Any data that can be attached to `FlightData` with keyword argument `remarks`.
 Instatiate by giving a String with identifiers of the `DBtype` and an equal number
 of `folder` paths as characters in the `DBtype` `String`. Optionally add a minimum
 altitude threshold for the data (default = `15000`) and any remarks
-(comments or additional data).
+(comments or additional data). Define the delimiter in the input files of the
+online data with the keyword `odelim`. Use any character or string as delimiter.
+By default (`odelim=nothing`), auto-detection is used.
 
     FlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
-      altmin::Int=15_000, remarks=nothing)
+      altmin::Int=15_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
 
 `DBtype` can be identified with:
 - `1` or `i`: VOLPE AEDT inventory
@@ -319,7 +321,7 @@ struct FlightDB
     archive = checkDBtype(archive, "FlightAware")
     onlineData = checkDBtype(onlineData, "flightaware.com")
 
-    new(inventory, archive, onlineData, tc, remarks)
+    new(inventory, archive, onlineData, created, remarks)
   end #constructor 1 FlightDB
 
   """
@@ -327,7 +329,7 @@ struct FlightDB
   database type and the respective folder path for that database.
   """
   function FlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
-    altmin::Int=15_000, remarks=nothing)
+    altmin::Int=15_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
 
     # Check DBtype addresses all folder paths
     if length(DBtype) ≠ length(folder)
@@ -357,7 +359,7 @@ struct FlightDB
     for i in i3
       ifiles = findFiles(ifiles, folder[i], ".txt", ".dat")
     end
-    onlineData = loadOnlineData(ifiles, altmin=altmin)
+    onlineData = loadOnlineData(ifiles, altmin=altmin, delim=odelim)
 
     println("\ndone loading data to properties\n- inventory\n- archive\n- onlineData\n", "")
 

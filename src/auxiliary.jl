@@ -279,9 +279,9 @@ Check whether the `DB` vector with `FlightData` contains only entries of the des
 Remove entries of a wrong type and return the revised vector.
 """
 function checkDBtype(DB::Vector{FlightData}, type::String)
-  DB = [flights.archive; flights.onlineData[end-1:end]]
   removed = count([d.metadata.source.≠type for d in DB])
-  DB = DB[[d.metadata.source.==type for d in DB]]
+  removed > 0 && @warn "$removed entries removed of database of type $type."
+  DB[[d.metadata.source.==type for d in DB]]
 end #function checkDBtype
 
 
