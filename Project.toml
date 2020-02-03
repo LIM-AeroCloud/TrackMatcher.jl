@@ -2,12 +2,15 @@ name = "TrackMatcher"
 uuid = "2cc584ca-dc9e-11e9-3e2d-1d1fc79f0777"
 authors = ["Peter Bräuer <pb866.git@gmail.com>"]
 julia = "≥1.0"
-version = "0.1.0-DEV"
+version = "0.1.0"
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Geodesy = "0ef565a4-170c-5f04-8de2-149903a85f3d"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 MATLAB = "10e44e05-a98a-55b3-a45b-ba969058deb6"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
