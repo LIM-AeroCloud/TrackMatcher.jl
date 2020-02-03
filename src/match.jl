@@ -32,14 +32,14 @@ function intersection(flights::FlightDB, sat::SatDB, sattype::Symbol=:CLay;
   try @pm.showprogress 1 "find intersections..." for outer flight in
     [flights.inventory; flights.archive; flights.onlineData]
       # Find sat tracks in the vicinity of flight tracks, where intersections are possible
-      overlap = get_satranges(flight, sat, sattype, deltat)
+      overlap = findoverlap(flight, sat, sattype, deltat)
       isempty(overlap.ranges) && continue
       # Interpolate trajectories using MATLAB's pchip routine
-      sattracks = interpolate_satdata(ms, sat, overlap)
+      sattracks = interpolate_satdata(ms, sat, overlap, flight.metadata)
       flighttracks = interpolate_flightdata(ms, flight, precision)
       # Calculate intersections and store in Vector
       intersects = find_intersections(intersects, flight, flighttracks,
-        sat, satranges.type, sattracks, deltat, flightspan, satspan, precision)
+        sat, overlap.type, sattracks, deltat, flightspan, satspan, precision)
     end #loop over flights
   catch
     # Issue warning on failure of interpolating track or time data
@@ -115,7 +115,7 @@ end #function find_intersections
 
 
 """
-    get_satranges(flight::FlightData, sat::SatDB, sattype::Symbol, deltat::Int)
+    findoverlap(flight::FlightData, sat::SatDB, sattype::Symbol, deltat::Int)
 
 From the data of the current `flight` and the `sat` data, calculate the data ranges
 in the sat data that are in the vicinity of the flight track (min/max of lat/lon).
@@ -123,7 +123,7 @@ Prefer `sat` data of `sattype` (`:CLay`/`:CPro`) for the calculations and consid
 only satellite data of ± `deltat` minutes before the start and after the end of the
 flight.
 """
-function get_satranges(flight::FlightData, sat::SatDB, sattype::Symbol, deltat::Int)
+function findoverlap(flight::FlightData, sat::SatDB, sattype::Symbol, deltat::Int)
 
   # Initialise
   satranges = UnitRange[]; t1 = t2 = nothing; satdata = DataFrame();
@@ -139,7 +139,12 @@ function get_satranges(flight::FlightData, sat::SatDB, sattype::Symbol, deltat::
     sattype = swap_sattype(sattype)
   end
   # return empty ranges, if no complete overlap is found
-  (isnothing(t1) || isnothing(t2)) && return (ranges=satranges, type=sattype)
+  if isnothing(t1) || isnothing(t2)
+    @warn string("no sufficient satellite data for time index ",
+      "$(flight.data.time[1] - Dates.Minute(deltat))...",
+      "$(flight.data.time[end] + Dates.Minute(deltat))")
+    return (ranges=satranges, type=sattype)
+  end
   # Find overlaps in flight and sat data
   satoverlap = (flight.metadata.area.latmin .≤ satdata.lat[t1:t2] .≤ flight.metadata.area.latmax) .&
     ((flight.metadata.area.plonmin .≤ satdata.lon[t1:t2] .≤ flight.metadata.area.plonmax) .|
@@ -162,7 +167,7 @@ function get_satranges(flight::FlightData, sat::SatDB, sattype::Symbol, deltat::
   end
   # Return tuple with sat ranges, and the type of sat data that was used for the calculations
   return (ranges=satranges, type=sattype)
-end#function get_satranges
+end#function findoverlap
 
 
 """
@@ -171,29 +176,32 @@ end#function get_satranges
 Using the satellite data in the `DB` database, and the stored `sat` ranges and types,
 interpolate the data with the pchip method in the MATLAB session (`ms`).
 """
-function interpolate_satdata(ms::mat.MSession, DB::SatDB, sat)
+function interpolate_satdata(ms::mat.MSession, DB::SatDB, overlap, flight::MetaData)
 
   # Get the satellite data of the correct type
-  satdata = getfield(DB, sat.type).data
+  satdata = getfield(DB, overlap.type).data
 
   # Interpolate satellite tracks and flight times for all segments of interest
   interpolated_satdata = []
   # Loop over satellite data
-  for r in sat.ranges
+  for r in overlap.ranges
     # Find possible flex points in satellite tracks
     satsegments = findFlex(satdata.lat[r])
 
     # Loop over satellite segments
     for seg in satsegments
-      length(seg) > 1 || continue #ignore points or empty data in segments
+      length(seg.range) > 1 || continue #ignore points or empty data in segments
       # Pass variables to MATLAB
-      mat.put_variable(ms, :x, satdata.lat[r])
-      mat.put_variable(ms, :y, satdata.lon[r])
+      mat.put_variable(ms, :x, satdata.lat[r][seg.range])
+      mat.put_variable(ms, :y, satdata.lon[r][seg.range])
+      mat.put_variable(ms, :meta, flight)
       # Convert times to UNIX times for interpolation
-      mat.put_variable(ms, :t, Dates.datetime2unix.(satdata.time[r]))
-      mat.eval_string(ms, "ps = pchip(x, y);")
+      mat.put_variable(ms, :t, Dates.datetime2unix.(satdata.time[r][seg.range]))
+      mat.eval_string(ms,
+        "try\nps = pchip(x, y);\ncatch\ndisp(\"Error in sat track interpolation for\")\ndisp([\"database/ID:\",meta.source, meta.dbID])\nend")
       ps = mat.get_mvariable(ms, :ps)
-      mat.eval_string(ms, "pt = pchip(x, t);")
+      mat.eval_string(ms,
+        "try\npt = pchip(x, t);\ncatch\ndisp(\"Error in sat time interpolation for\")\ndisp([\"database/ID:\",meta.source, meta.dbID])\nend")
       pt = mat.get_mvariable(ms, :pt)
       # Re-convert UNIX time values to DateTimes
       # Save the interpolation functions for track and time data for the current dataset
@@ -201,8 +209,7 @@ function interpolate_satdata(ms::mat.MSession, DB::SatDB, sat)
       push!(interpolated_satdata, (track=Minterpolate(ms, ps), time=Minterpolate(ms, pt),
         min=seg.min, max=seg.max))
     end #loop over sat segments
-
-  end
+  end #loop over sat ranges
 
   # Return a vector with interpolation functions for each dataset
   return interpolated_satdata
@@ -226,16 +233,19 @@ function interpolate_flightdata(ms::mat.MSession, flight::FlightData, precision:
     # Hand over variables to MATLAB
     mat.put_variable(ms, :x, x[f.range])
     mat.put_variable(ms, :y, y[f.range])
+    mat.put_variable(ms, :meta, flight.metadata)
     # Convert times to UNIX times for interpolation
     mat.put_variable(ms, :t, Dates.datetime2unix.(flight.data.time[f.range]))
     # Interpolate with MATLAB
-    mat.eval_string(ms, "pf = pchip(x, y);")
+    mat.eval_string(ms,
+      "try\npf = pchip(x, y);\ncatch\ndisp(\"Error in flight track interpolation for\")\ndisp([\"database/ID:\",meta.source, meta.dbID])\nend")
     # Retrieve variables from MATLAB
     pf = mat.get_mvariable(ms, :pf)
     xr = interpolatedtrack(x[f.range], precision)
     # Consider only data segments with more than one data point
     length(xr) > 1 || continue
-    mat.eval_string(ms, "pt = pchip(x, t);")
+    mat.eval_string(ms,
+      "try\npt = pchip(x, t);\ncatch\ndisp(\"Error in flight time interpolation for\")\ndisp([\"database/ID:\",meta.source, meta.dbID])\nend")
     pt = mat.get_mvariable(ms, :pt)
     # Save the interpolated data to a vector
     flight.metadata.useLON ? (push!(flightdata, (lat = Minterpolate(ms, pf)(xr),

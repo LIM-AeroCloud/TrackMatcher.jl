@@ -30,7 +30,7 @@ or cloud tracks as well.
 module TrackMatcher
 
 # Track changes during development
-# using Revise
+using Revise
 
 # Import Julia packages
 import CSV
@@ -361,7 +361,7 @@ struct FlightDB
     end
     onlineData = loadOnlineData(ifiles, altmin=altmin, delim=odelim)
 
-    println("\ndone loading data to properties\n- inventory\n- archive\n- onlineData\n", "")
+    @info "done loading data to properties\n- inventory\n- archive\n- onlineData"
 
     new(inventory, archive, onlineData, tc, remarks)
   end # constructor 2 FlightDB
@@ -553,6 +553,7 @@ struct SatDB
     mat.close(ms)
     tc = tz.now(tz.localzone())
 
+    @info "done loading data to properties\n- CLay\n- CPro"
     new(cl, cp, tc, remarks)
   end #constructor 2 SatDB
 end #struct SatDB
