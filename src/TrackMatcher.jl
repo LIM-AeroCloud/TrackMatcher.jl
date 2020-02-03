@@ -64,7 +64,7 @@ Immutable struct to hold metadata for `FlightData` of the `FlightDB` with fields
 - `route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}}`
 - `aircraft::Union{Missing,AbstractString}`
 - `date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}`
-- `area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),Tuple{Float64,Float64,Float64,Float64,Float64,Float64}}`
+- `area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),Tuple{Float64,Float64,Float64,Float64,Float64,Float64}}`
 - `file::AbstractString`
 
 ## dbID
@@ -86,10 +86,10 @@ flights passing the date line.
 Fields:
 - `latmin`
 - `latmax`
-- `plonmin`
-- `plonmax`
-- `nlonmin`
-- `nlonmax`
+- `elonmin`
+- `elonmax`
+- `wlonmin`
+- `wlonmax`
 
 ## date
 `NamedTuple` with fields `start` and `stop` for start and end time of the current
@@ -127,7 +127,7 @@ struct MetaData
   route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}}
   aircraft::Union{Missing,AbstractString}
   date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
-  area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),NTuple{6,Float64}}
+  area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,Float64}}
   flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}}
   useLON::Bool
   source::AbstractString
@@ -137,7 +137,7 @@ struct MetaData
   function MetaData(dbID::Union{Int,AbstractString}, flightID::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
     aircraft::Union{Missing,AbstractString}, date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
-    area::NamedTuple{(:latmin,:latmax,:plonmin,:plonmax,:nlonmin,:nlonmax),NTuple{6,Float64}},
+    area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,Float64}},
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
     useLON::Bool, source::AbstractString, file::AbstractString)
 
@@ -157,12 +157,12 @@ struct MetaData
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
     source::AbstractString, file::AbstractString)
 
-    plonmax = isempty(lon[lon.≥0]) ? NaN : maximum(lon[lon.≥0])
-    plonmin = isempty(lon[lon.≥0]) ? NaN : minimum(lon[lon.≥0])
-    nlonmax = isempty(lon[lon.<0]) ? NaN : maximum(lon[lon.<0])
-    nlonmin = isempty(lon[lon.<0]) ? NaN : minimum(lon[lon.<0])
+    elonmax = isempty(lon[lon.≥0]) ? NaN : maximum(lon[lon.≥0])
+    elonmin = isempty(lon[lon.≥0]) ? NaN : minimum(lon[lon.≥0])
+    wlonmax = isempty(lon[lon.<0]) ? NaN : maximum(lon[lon.<0])
+    wlonmin = isempty(lon[lon.<0]) ? NaN : minimum(lon[lon.<0])
     area = (latmin=minimum(lat), latmax=maximum(lat),
-      plonmin=plonmin, plonmax=plonmax, nlonmin=nlonmin, nlonmax=nlonmax)
+      elonmin=elonmin, elonmax=elonmax, wlonmin=wlonmin, wlonmax=wlonmax)
     new(dbID, flightID, route, aircraft, (start=date[1], stop=date[end]), area,
       flex, useLON, source, file)
   end #constructor 2 MetaData

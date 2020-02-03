@@ -147,8 +147,8 @@ function findoverlap(flight::FlightData, sat::SatDB, sattype::Symbol, deltat::In
   end
   # Find overlaps in flight and sat data
   satoverlap = (flight.metadata.area.latmin .≤ satdata.lat[t1:t2] .≤ flight.metadata.area.latmax) .&
-    ((flight.metadata.area.plonmin .≤ satdata.lon[t1:t2] .≤ flight.metadata.area.plonmax) .|
-    (flight.metadata.area.nlonmin .≤ satdata.lon[t1:t2] .≤ flight.metadata.area.nlonmax))
+    ((flight.metadata.area.elonmin .≤ satdata.lon[t1:t2] .≤ flight.metadata.area.elonmax) .|
+    (flight.metadata.area.wlonmin .≤ satdata.lon[t1:t2] .≤ flight.metadata.area.wlonmax))
   # Return only overlaps with at least 2 data points
   length(satoverlap) > 1 || return (ranges=satranges, type=sattype)
   # Convert boolean vector of satellite overlapping data into ranges
