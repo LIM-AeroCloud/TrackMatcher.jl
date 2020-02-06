@@ -103,7 +103,7 @@ function find_intersections(intersects::Vector{Intersection}, flight::FlightData
       # Find minimum in distance and check whether it is within precision
       m = argmin(d)
       # Calculate minimum accuracy at equator
-      dprec = Geodesy.distance(Geodesy.LatLon(0,0), Geodesy.LatLon(0,0+prec))
+      dprec = Geodesy.distance(Geodesy.LatLon(0,0), Geodesy.LatLon(0,0+precision))
       tm = Dates.unix2datetime(st.time(ilat[m]))
       if d[m] < dprec && Dates.Minute(-deltat) < ft.t[m] - tm < Dates.Minute(deltat)
         push!(intersects, Intersection(flight, sat, sattype, ft.t[m], tm, ilat[m], flon[m], flightspan, satspan, d[m]))
