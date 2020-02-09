@@ -13,7 +13,7 @@ or cloud tracks as well.
   - `archive`: commercially available database by FlightAware
   - `onlineData`: free online data by FlightAware
 - `FlightData` stores `FlightDB` data of a single flight
-- `MetaData` holds metadata to every flight
+- `FlightMetadata` holds metadata to every flight
 - `SatDB` stores CALIPSO cloud layer and profile data from the CALIOP satellite
 - `CLay` CALIPSO cloud layer data
 - `CPro` CALIPSO cloud profile data
@@ -55,7 +55,7 @@ logg.global_logger(logger)
 
 ### Define own structs
 """
-# struct MetaData
+# struct FlightMetadata
 
 Immutable struct to hold metadata for `FlightData` of the `FlightDB` with fields
 
@@ -101,19 +101,19 @@ String holding the absolute folder path and file name.
 
 # Instantiation
 
-`MetaData` is constructed automatically, when `FlightData` is instatiated using
+`FlightMetadata` is constructed automatically, when `FlightData` is instatiated using
 a modified constructor and `dbID`, `flightID`, `aircraft` type, `route`, and `file`.
 Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
 
-    MetaData(dbID::Union{Int,AbstractString},
+    FlightMetadata(dbID::Union{Int,AbstractString},
       flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
       route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
       lat::Vector{<:Union{Missing,Float64}}, lon::Vector{<:Union{Missing,Float64}},
-      date::Vector{DateTime}, file::AbstractString) -> struct MetaData
+      date::Vector{DateTime}, file::AbstractString) -> struct FlightMetadata
 
-Or construct `MetaData` by directly handing over every field:
+Or construct `FlightMetadata` by directly handing over every field:
 
-    MetaData(dbID::Union{Int,AbstractString}, flightID::Union{Missing,AbstractString},
+    FlightMetadata(dbID::Union{Int,AbstractString}, flightID::Union{Missing,AbstractString},
       route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
       aircraft::Union{Missing,AbstractString}, date::Vector{DateTime},
       lat::Vector{<:Union{Missing,Float64}}, lon::Vector{<:Union{Missing,Float64}},
@@ -121,7 +121,7 @@ Or construct `MetaData` by directly handing over every field:
       flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
       file::AbstractString)
 """
-struct MetaData
+struct FlightMetadata
   dbID::Union{Int,AbstractString}
   flightID::Union{Missing,AbstractString}
   route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}}
@@ -133,8 +133,8 @@ struct MetaData
   source::AbstractString
   file::AbstractString
 
-  """ Unmodified constructor for `Metadata` """
-  function MetaData(dbID::Union{Int,AbstractString}, flightID::Union{Missing,AbstractString},
+  """ Unmodified constructor for `FlightMetadata` """
+  function FlightMetadata(dbID::Union{Int,AbstractString}, flightID::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
     aircraft::Union{Missing,AbstractString}, date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
     area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,Float64}},
@@ -142,14 +142,14 @@ struct MetaData
     useLON::Bool, source::AbstractString, file::AbstractString)
 
     new(dbID, flightID, route, aircraft, date, area, flex, useLON, source, file)
-  end #constructor 1 MetaData
+  end #constructor 1 FlightMetadata
 
 
   """
-  Modified constructor for MetaData with some automated construction of fields
+  Modified constructor for FlightMetadata with some automated construction of fields
   and variable checks.
   """
-  function MetaData(dbID::Union{Int,AbstractString}, flightID::Union{Missing,AbstractString},
+  function FlightMetadata(dbID::Union{Int,AbstractString}, flightID::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
     aircraft::Union{Missing,AbstractString}, date::Vector{DateTime},
     lat::Vector{<:Union{Missing,Float64}}, lon::Vector{<:Union{Missing,Float64}},
@@ -165,8 +165,24 @@ struct MetaData
       elonmin=elonmin, elonmax=elonmax, wlonmin=wlonmin, wlonmax=wlonmax)
     new(dbID, flightID, route, aircraft, (start=date[1], stop=date[end]), area,
       flex, useLON, source, file)
-  end #constructor 2 MetaData
-end #struct MetaData
+  end #constructor 2 FlightMetadata
+end #struct FlightMetadata
+
+
+"""
+# struct DBMetadata
+
+Immutable struct with additional information of databases:
+
+- `created`: time of creation of database
+- `loadtime`: time it took to read data files and load it to the struct
+- `remarks`: any additional data or comments that can be attached to the database
+"""
+struct DBMetadata
+  created::Union{DateTime,ZonedDateTime}
+  loadtime::Dates.CompoundPeriod
+  remarks
+end #struct DBMetadata
 
 
 """
@@ -174,7 +190,7 @@ end #struct MetaData
 
 Aircraft data with fields
 - `data::DataFrame`
-- `metadata::MetaData`
+- `metadata::FlightMetadata`
 
 The `DataFrame` of `data` has columns in the following order with the respective types:
 
@@ -198,7 +214,7 @@ The `DataFrame` of `data` has columns in the following order with the respective
       file::AbstractString) -> struct FlightData
 
 Construct `FlightData` from columns for the `data` `DataFrame` and additonal information
-`dbID`, `flightID`, `aircraft` type, `route`, and `file` name for `MetaData`.
+`dbID`, `flightID`, `aircraft` type, `route`, and `file` name for `FlightMetadata`.
 For `data`, `time` is the only exception, which is given as `ZonedDateTime` and
 will be converted to `UTC` standard time.
 
@@ -207,16 +223,16 @@ Or construct by directly handing over every field:
     FlightData(time::Vector{DateTime}, lat::Vector{<:Union{Missing,Float64}},
       lon::Vector{<:Union{Missing,Float64}}, alt::Vector{<:Union{Missing,Float64}},
       heading::Vector{<:Union{Missing,Int}}, climb::Vector{<:Union{Missing,Int}},
-      speed::Vector{<:Union{Missing,Float64}}, metadata::MetaData)
+      speed::Vector{<:Union{Missing,Float64}}, metadata::FlightMetadata)
 
 Checks exist that the order, names, and types of the `data` `DataFrame` are correct.
 """
 struct FlightData
   data::DataFrame
-  metadata::MetaData
+  metadata::FlightMetadata
 
   """ Unmodified constructor for `FlightData` with basic checks for correct `data`"""
-  function FlightData(data::DataFrame, metadata::MetaData)
+  function FlightData(data::DataFrame, metadata::FlightMetadata)
 
     # Column checks and warnings
     standardnames = [:time, :lat, :lon, :alt, :heading, :climb, :speed]
@@ -248,7 +264,7 @@ struct FlightData
     heading = checklength(heading, t)
     climb = checklength(climb, t)
     speed = checklength(speed, t)
-    metadata = MetaData(dbID,flightID,route,aircraft,t,lat,lon,useLON,flex,source,file)
+    metadata = FlightMetadata(dbID,flightID,route,aircraft,t,lat,lon,useLON,flex,source,file)
 
     new(DataFrame(time=t,lat=lat,lon=lon,alt=alt,heading=heading,climb=climb,speed=speed),metadata)
   end #constructor 2 FlightData
@@ -262,8 +278,10 @@ Database for aircraft data of different database types with fields:
 - `inventory::Vector{FlightData}`
 - `archive::Vector{FlightData}`
 - `onlineData::Vector{FlightData}`
-- `created::Union{DateTime,ZonedDateTime}`
-- `remarks`
+- `metadata`: `DBMetatadata` with information about
+  - `created`: time of creation
+  - `loadtime`
+  - `remarks` (any additional data or comments)
 
 ## inventory
 Flight data from csv files.
@@ -274,11 +292,8 @@ Commercial flight data by FlightAware.
 ## onlineData
 Online data from FlightAware website.
 
-## created
-Time of creation as `DateTime` or `ZonedDateTime` (default).
-
-## remarks
-Any data that can be attached to `FlightData` with keyword argument `remarks`.
+## metadata
+Immutable struct `DBMetadata`.
 
 
 # Instantiation
@@ -305,23 +320,20 @@ struct FlightDB
   inventory::Vector{FlightData}
   archive::Vector{FlightData}
   onlineData::Vector{FlightData}
-  created::Union{DateTime,ZonedDateTime}
-  remarks
+  metadata::DBMetadata
 
   """
   Unmodified constructor for `FlightDB` with basic checks for correct dataset type
-  in each dataset field and presets for field created (now) and remarks (nothing).
+  in each dataset field.
   """
-  function FlightDB(inventory::Vector{FlightData},
-    archive::Vector{FlightData}, onlineData::Vector{FlightData},
-    created::Union{DateTime,ZonedDateTime}=tz.now(tz.localzone()),
-    remarks=nothing)
+  function FlightDB(inventory::Vector{FlightData}, archive::Vector{FlightData},
+    onlineData::Vector{FlightData}, metadata::DBMetadata)
 
     inventory = checkDBtype(inventory, "VOLPE AEDT")
     archive = checkDBtype(archive, "FlightAware")
     onlineData = checkDBtype(onlineData, "flightaware.com")
 
-    new(inventory, archive, onlineData, created, remarks)
+    new(inventory, archive, onlineData, metadata)
   end #constructor 1 FlightDB
 
   """
@@ -331,12 +343,12 @@ struct FlightDB
   function FlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
     altmin::Int=15_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
 
+    # Save time of database creation
+    tstart = Dates.now()
     # Check DBtype addresses all folder paths
     if length(DBtype) ≠ length(folder)
       throw(ArgumentError("Number of characters in `DBtype` must match length of vararg `folder`"))
     end
-    # Save time of database creation
-    tc = tz.now(tz.localzone())
     # Find database types
     i1 = [findall(isequal('i'), DBtype); findall(isequal('1'), DBtype)]
     i2 = [findall(isequal('a'), DBtype); findall(isequal('2'), DBtype)]
@@ -361,9 +373,15 @@ struct FlightDB
     end
     onlineData = loadOnlineData(ifiles, altmin=altmin, delim=odelim)
 
-    @info "done loading data to properties\n- inventory\n- archive\n- onlineData"
+    tend = Dates.now()
+    tc = tz.ZonedDateTime(tend, tz.localzone())
+    loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
 
-    new(inventory, archive, onlineData, tc, remarks)
+    @info string("FlightDB data loaded to properties in ",
+      "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", "))",
+      "\n- inventory\n- archive\n- onlineData\n- metadata")
+
+    new(inventory, archive, onlineData, DBMetadata(tc, loadtime, remarks))
   end # constructor 2 FlightDB
 end #struct FlightDB
 
@@ -501,21 +519,20 @@ Immutable struct with fields
 
 - `CLay::CLay`
 - `CPro::CPro`
-- `created::Union{DateTime,ZonedDateTime}`
-- `remarks`
+- `metadata::DBMetadata`
+
 
 ## CLay and CPro
 
 CALIOP satellite data currently holding time as `DateTime` in `UTC`
 and position (`lat`/`lon`) of cloud layer and profile data in a `DataFrame`.
 
-## created
+## metadata
 
-Time of creation of satellite database as `DateTime` or with timezone information
-as `ZonedDateTime` (default).
-
-## remarks
-Any data can be attached to the satellite data with the keyword `remarks`.
+Immutable struct of type `DBMetadata` with fields:
+- `created::Union{ZonedDateTime,DateTime}`: time of creation
+- `loadtime::CompoundPeriod`: time it to to read data files and load data to struct
+- `remarks`: Any additional data or comments
 
 # Instantiation
 
@@ -533,13 +550,11 @@ argument defaulting to `nothing`):
 struct SatDB
   CLay::CLay
   CPro::CPro
-  created::Union{DateTime,ZonedDateTime}
-  remarks
+  metadata::DBMetadata
 
   """ Unmodified constructor for `SatDB` """
-  function SatDB(CLay::CLay, CPro::CPro,
-    created::Union{DateTime,ZonedDateTime}=tz.now(tz.localzone()), remarks=nothing)
-    new(CLay, CPro, created, remarks)
+  function SatDB(CLay::CLay, CPro::CPro, metadata::DBMetadata)
+    new(CLay, CPro, metadata)
   end #constructor 1 SatDb
 
   """
@@ -547,14 +562,19 @@ struct SatDB
   can be attached in the field remarks.
   """
   function SatDB(folders::String...; remarks=nothing)
+    tstart = Dates.now()
     ms = mat.MSession()
     cl = CLay(ms, folders...)
     cp = CPro(ms, folders...)
     mat.close(ms)
-    tc = tz.now(tz.localzone())
+    tend = Dates.now()
+    tc = tz.ZonedDateTime(tend, tz.localzone())
+    loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
 
-    @info "done loading data to properties\n- CLay\n- CPro"
-    new(cl, cp, tc, remarks)
+    @info string("SatDB data loaded to properties in ",
+      "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", "))",
+      "\n- CLay\n- CPro\n- metadata")
+    new(cl, cp, DBMetadata(tc, loadtime, remarks))
   end #constructor 2 SatDB
 end #struct SatDB
 
@@ -685,7 +705,7 @@ end #constructor 2 Intersection
 
 export FlightDB,
        FlightData,
-       MetaData,
+       FlightMetadata,
        CLay,
        CPro,
        SatDB,

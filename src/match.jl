@@ -2,7 +2,7 @@
 
 """
     intersection(flights::FlightDB, sat::SatDB, sattype::Symbol=:CLay;
-      deltat::Int=30, flightspan::Int=0, satspan::Int=15, precision::Float64=0.001)
+      deltat::Int=30, flightspan::Int=0, satspan::Int=15, precision::Float64=0.01)
       -> Vector{Intersection}
 
 From `flights` and `sat` data derive a `Vector{Intersection}` holding information
@@ -22,7 +22,7 @@ are saved. Additionally, a variable time span (`flightspan`/`satspan`) can be sa
 default `flightspan=0` and `satspan=15`).
 """
 function intersection(flights::FlightDB, sat::SatDB, sattype::Symbol=:CLay;
-  deltat::Int=30, flightspan::Int=0, satspan::Int=15, precision::Float64=0.001)
+  deltat::Int=30, flightspan::Int=0, satspan::Int=15, precision::Float64=0.01)
   # Initialise Vector with Intersection data
   intersects = Intersection[]
   # New MATLAB session
@@ -176,7 +176,7 @@ end#function findoverlap
 Using the satellite data in the `DB` database, and the stored `sat` ranges and types,
 interpolate the data with the pchip method in the MATLAB session (`ms`).
 """
-function interpolate_satdata(ms::mat.MSession, DB::SatDB, overlap, flight::MetaData)
+function interpolate_satdata(ms::mat.MSession, DB::SatDB, overlap, flight::FlightMetadata)
 
   # Get the satellite data of the correct type
   satdata = getfield(DB, overlap.type).data
