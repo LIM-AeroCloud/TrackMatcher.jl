@@ -186,6 +186,35 @@ end #struct DBMetadata
 
 
 """
+# struct XMetadata
+
+Immutable struct with additional information of intersection data:
+
+- `cirrus`: flag for cirrus clouds at flight altitude level
+- `deltat`: maximum time difference allowed between satellite overpass and
+  aircraft passing at intersection
+- `precision`: minimum precision in degrees at equation used to interpolate track data
+- `Xradius`: radius in meters around an intersection in which further intersections
+  will be removed as duplicates due to the interpolation algorithm
+- `preferred`: Symbol, which satellite data type was preferred to find intersections in
+  flight and satellite trajectories (either `:CLay` (default) or `:CPro`)
+- `created`: time of creation of database
+- `loadtime`: time it took to find intersections and load it to the struct
+- `remarks`: any additional data or comments that can be attached to the database
+"""
+struct XMetadata
+  cirrus::Bool
+  deltat::Int
+  precision::Float64
+  Xradius::Real
+  preferred::Symbol
+  created::Union{DateTime,ZonedDateTime}
+  loadtime::Dates.CompoundPeriod
+  remarks
+end #struct XMetaData
+
+
+"""
 # struct FlightData
 
 Aircraft data with fields
@@ -584,133 +613,148 @@ end #struct SatDB
 
 Immutable struct with fields
 
-- `lat::Float64`
-- `lon::Float64`
-- `tdiff::Dates.CompoundPeriod`
-- `accuracy::Float64`
-- `cirrus::Bool`
-- `sat::SatDB`
-- `flight::FlightData`
+- `coord::DataFrame`
+- `tracked::DataFrame`
+- `accuracy::DataFrame`
+- `metadata::XMetadata`
 
-## lat/lon
+## coord
 
-Position of intersection in degrees.
+DataFrame `coord` holds the interpolated spatial and temporal coordinates of all
+calcalated intersections in the current dataset in columns:
+
+- `id::Vector{String}`
+- `lat::Vector{Float64}`
+- `lon::Vector{Float64}`
+- `tdiff::Vector{Dates.CompoundPeriod}`
+- `tflight::Vector{DateTime}`
+- `tsat::Vector{DateTime}`
 
 
-## tdiff
+## tracked
 
-Time difference between aircraft and satellite overpass at intersection.
-Positive time differences mean satellite overpass before flight overpass,
-negative times mean flight reaches intersection before satellite.
+DataFrame `tracked` holds the actual measured flight and satellite data closest
+to the intersection with additional ±`flightspan` and ±`satspan` datapoints in
+columns:
+
+- `id::Vector{String}` (same as in `coord`)
+- `flight::Vector{FlightData}`
+- `sat::Vector{SatDB}`
 
 
 ## accuracy
 
-Accuracy during of the interpolation in meters.
+DataFrame `accuracy` list the accuracy achived during the calculation of the
+intersections in columns:
+
+- `id::Vector{String}`
+- `intersection::Vector{Float64}`: distance between calculated intersection using
+  either sat or flight data
+- `flightcoord`:: distance between calculated intersection and closest flight measurement
+- `satcoord`:: distance between calculated intersection and closest satellite measurement
+- `flighttime`:: difference between calculated time of aircraft at intersection and
+  time of the closest flight measurement
+- `sattime`:: difference between calculated time of satellite overpass at intersection and
+  time of the closest satellite measurement
 
 
-## cirrus
+## metadata
 
-Flag for cirrus clouds at flight level at the intersection.
-
-
-## sat
-
-Satellite cloud layer and profile data (as available) stored in `SatDB` for ±15
-time steps.
-
-
-## flight
-
-`FlightData` for the uninterpolated timepoint closest to the overpass at the intersection.
+`XMetadata` with flags used during instatiation and time of creation and computation time
+for reproducable results.
 
 
 # Instatiation
 
-Instantiate with position (`lat`/`lon`) of Intersection, the time difference `tdiff`
-of the flight and satellite overpass, the `accuracy` of the interpolation, a flag
-for `cirrus` clouds at flight level at the intersection, `SatDB` with any available
-`CLay` and `CPro` data in the vicinity of the intersection (default ± 15 time steps),
-and `FlightData` with the closest measured point to the intersection.
+    Intersection(flights::FlightDB, sat::SatDB, sattype::Symbol=:CLay;
+      deltat::Int=30, flightspan::Int=0, satspan::Int=15, precision::Float64=0.01,
+      Xradius::Real=5000, remarks=nothing)
 
-    Intersection(flight::FlightData, sat::SatDB, sattype::Symbol,
-      tflight::DateTime, tsat::DateTime, lat::Float64, lon::Float64,
-      flightspan::Int, satspan::Int, accuracy::Float64)
+Instantiate with the `flights` and `sat` database and the `sattype` of the sat data
+preferred for the calculations (`CLay` by default). The following kwargs
+(with default values) can be used to define parameters of the calculation:
 
-Or construct directly from the fields in `Intersection`:
-
-    Intersection(lat::Float64, lon::Float64, tdiff::Dates.CompoundPeriod,
-      accuracy::Float64, cirrus::Bool, sat::SatDB, flight::FlightData)
+- `deltat::Int=30`: maximum time difference in minutes allowed between satellite overpass and
+  aircraft passing at intersection
+- `flightspan::Int=0`: ± additional measurement points to the measurement closest to the intersection
+  saved in `tracked.flight`
+- `satspan::Int=15`: ± additional measurement points to the measurement closest to the intersection
+  saved in `tracked.sat`
+- `precision`: step width in degrees (lat/lon at equator) used for the interpolation of track data
+- `Xradius`: radius in meters around an intersection in which further intersections
+  will be removed as duplicates due to the interpolation algorithm
+- remarks: any additional data or comments attached to the metadata of the struct
 """
 struct Intersection
-  # tflight::DateTime
-  # tsat::DateTime
-  lat::Float64
-  lon::Float64
-  tdiff::Dates.CompoundPeriod
-  accuracy::Float64
-  cirrus::Bool
-  sat::SatDB
-  flight::FlightData
+  coord::DataFrame
+  tracked::DataFrame
+  accuracy::DataFrame
+  metadata::XMetadata
 
+  #=
   """ Unmodified constructor for `Intersection` """
   function Intersection(lat::Float64, lon::Float64, tdiff::Dates.CompoundPeriod,
     accuracy::Float64, cirrus::Bool, sat::SatDB, flight::FlightData)
     new(lat, lon, tdiff, accuracy, cirrus, sat, flight)
   end #constructor 1 Intersection
+  =#
 
   """ Modified constructor with some automated calculations of the intersection data. """
-  function Intersection(flight::FlightData, sat::SatDB, sattype::Symbol,
-    tflight::DateTime, tsat::DateTime, lat::Float64, lon::Float64,
-    flightspan::Int, satspan::Int, accuracy::Float64)
-
-    # Calculate time difference between flight and satellite overpass at intersection
-    tdiff = Dates.canonicalize(Dates.CompoundPeriod(tflight - tsat))
-    # Find the index (DataFrame row) of the intersection in the flight data
-    tf = argmin(abs.(flight.data.time .- tflight))
-
-    # Construct FlightData at Intersection
-    flightdata =
-      FlightData(extract_timespan(flight.data, tf, flightspan), flight.metadata)
-
-    # Get satellite data used to find the intersection and find DataFrame row of intersection
-    satprim = getfield(sat, sattype).data
-    tsp = argmin(abs.(satprim.time .- tsat))
-    # Retrieve DataFrame at Intersection ± 15 time steps
-    primdata = extract_timespan(satprim, tsp, satspan)
-
-    # Switch to other satellite data (CLay/CPro) and check whether data is available
-    # at intersection and retrieve ±15 time steps as well
-    sattype = swap_sattype(sattype)
-    secdata = try satsec = getfield(sat, sattype).data
-      tss = argmin(abs.(satsec.time .- tsat))
-      extract_timespan(satsec, tss, satspan)
-    catch
-      # Return an empty DataFrame, if no data is available
-      DataFrame(time=DateTime[], lat=Float64[], lon=Float64[])
-    end
-    # Save satellite data in SatDB
-    satdb = sattype == :CPro ? SatDB(CLay(primdata), CPro(secdata), sat.created, sat.remarks) :
-      SatDB(CLay(secdata), CPro(primdata), sat.created, sat.remarks)
-
-    # Instatiate new Intersection
-    new(lat, lon, tdiff, accuracy, false, satdb, flightdata)
-  end
-end #constructor 2 Intersection
+  function Intersection(flights::FlightDB, sat::SatDB, sattype::Symbol=:CLay;
+    deltat::Int=30, flightspan::Int=0, satspan::Int=15, precision::Float64=0.01,
+    Xradius::Real=5000, remarks=nothing)
+    # Initialise DataFrames with Intersection data and monitor start time
+    tstart = Dates.now()
+    coord = DataFrame(id=String[], lat=Float64[], lon=Float64[],
+      tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[])
+    track = DataFrame(id=String[], flight=FlightData[], sat=SatDB[])
+    accuracy = DataFrame(id=String[], intersection=Float64[], flightcoord=Float64[],
+      satcoord=Float64[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
+    # New MATLAB session
+    ms = mat.MSession()
+    # Loop over data and interpolate track data and time, throw error on failure
+    @pm.showprogress 1 "find intersections..." for flight in
+      [flights.inventory; flights.archive; flights.onlineData]
+      try
+        # Find sat tracks in the vicinity of flight tracks, where intersections are possible
+        overlap = findoverlap(flight, sat, sattype, deltat)
+        isempty(overlap.ranges) && continue
+        # Interpolate trajectories using MATLAB's pchip routine
+        sattracks = interpolate_satdata(ms, sat, overlap, flight.metadata)
+        flighttracks = interpolate_flightdata(ms, flight, precision)
+        # Calculate intersections and store data and metadata in DataFrames
+        currcoord, currtrack, curraccuracy = find_intersections(flight, flighttracks,
+          sat, overlap.type, sattracks, deltat, precision, Xradius, flightspan, satspan)
+        append!(coord, currcoord); append!(track, currtrack)
+        append!(accuracy, curraccuracy)
+      catch
+        # Issue warning on failure of interpolating track or time data
+        @warn string("Track data and/or time could not be interpolated for flight ",
+          "$(flight.metadata.dbID) of $(flight.metadata.source) dataset. Data ignored.")
+      end
+    end #loop over flights
+    # Close MATLAB session after looping over all data
+    mat.close(ms)
+    # Calculate load time
+    tend = Dates.now()
+    tc = tz.ZonedDateTime(tend, tz.localzone())
+    loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
+    # Return Intersections after completion
+    @info string("Intersection data loaded to properties in ",
+      "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", "))",
+      "\n- coord\n- tracked\n- accuracy\n- metadata")
+    new(coord, track, accuracy,
+      XMetadata(false,deltat,precision,Xradius,sattype,tc,loadtime,remarks))
+  end #constructor Intersection
+end #struct Intersection
 
 # Needed for julia 1.0.x?:
 # SatDB(CLay::CLay, CPro::CPro, created::Union{DateTime,ZonedDateTime}) = SatDB(CLay, CPro, created, nothing)
 # SatDB(CLay::CLay, CPro::CPro) = SatDB(CLay, CPro, tz.now(tz.localtime()), nothing)
 
 
-export FlightDB,
-       FlightData,
-       FlightMetadata,
-       CLay,
-       CPro,
-       SatDB,
-       Intersection,
-       intersection
+export FlightDB, FlightData, SatDB, CLay, CPro, Intersection,
+       FlightMetadata, DBMetadata, XMetadata
 
 
 include("auxiliary.jl")       # helper functions
