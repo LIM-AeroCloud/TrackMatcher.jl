@@ -49,8 +49,9 @@ import TimeZones.ZonedDateTime
 
 
 # Define Logger with log level
-logger = logg.ConsoleLogger(stdout, logg.Info)
-logg.global_logger(logger)
+try logger = logg.SimpleLogger(logfile, logg.Info)
+catch; logger = logg.ConsoleLogger(stdout, logg.Info)
+end
 
 
 ### Define own structs
@@ -143,7 +144,6 @@ struct FlightMetadata
 
     new(dbID, flightID, route, aircraft, date, area, flex, useLON, source, file)
   end #constructor 1 FlightMetadata
-
 
   """
   Modified constructor for FlightMetadata with some automated construction of fields
@@ -727,7 +727,11 @@ struct Intersection
           sat, overlap.type, sattracks, deltat, precision, Xradius, flightspan, satspan)
         append!(coord, currcoord); append!(track, currtrack)
         append!(accuracy, curraccuracy)
-      catch
+      catch e
+        @debug begin
+          @show flight.metadata.dbID
+          rethrow(e)
+        end
         # Issue warning on failure of interpolating track or time data
         @warn string("Track data and/or time could not be interpolated for flight ",
           "$(flight.metadata.dbID) of $(flight.metadata.source) dataset. Data ignored.")
@@ -757,6 +761,7 @@ export FlightDB, FlightData, SatDB, CLay, CPro, Intersection,
        FlightMetadata, DBMetadata, XMetadata
 
 
+### Import functions for other Julia files
 include("auxiliary.jl")       # helper functions
 include("loadFlightData.jl")  # functions related to loading flight databases/datasets
 include("match.jl")           # functions related to finding track intersections

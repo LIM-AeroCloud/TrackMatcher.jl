@@ -358,3 +358,7 @@ function get_trackdata(flight::FlightData, sat::SatDB, sattype::Symbol,
   # Instatiate new Intersection
   return flightdata, satdata
 end
+
+
+timesec(t::Real) = round(Dates.unix2datetime(t), Dates.Second)
+timesec(t::Union{DateTime,ZonedDateTime}) = round(t, Dates.Second)
