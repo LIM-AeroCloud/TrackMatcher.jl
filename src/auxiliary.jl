@@ -44,7 +44,7 @@ function convertUTC(t::Float64)
   s = floor(Int, utc - 3600h - 60m)
 
   # Return a DateTime from date and time (h/m/s) with timezone UTC
-  return DateTime(d, Time(h,m,s))
+  return DateTime(Dates.yearmonthday(d)..., h, m, s)
 end
 
 
@@ -67,6 +67,24 @@ function findFiles(inventory::Vector{String}, folder::String, filetypes::String.
     elseif isdir(cwd)
       # Step into subdirectories and scan them, too
       inventory = findFiles(inventory, cwd, filetypes...)
+    end
+  end
+
+  return inventory
+end # function findFiles
+
+function findFiles(inventory::Vector{String}, folder::String, filetypes::String)
+  # Scan directory for files and folders and save directory
+  dir = readdir(folder); path = abspath(folder)
+  for file in dir
+    # Save current directory/file
+    cwd = joinpath(path, file)
+    if endswith(file, filetypes)
+      # Save files of correct type
+      push!(inventory, cwd)
+    elseif isdir(cwd)
+      # Step into subdirectories and scan them, too
+      inventory = findFiles(inventory, cwd, filetypes)
     end
   end
 

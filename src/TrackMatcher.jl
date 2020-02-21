@@ -357,7 +357,12 @@ struct FlightDB
     archive = loadArchive(ifiles, altmin=altmin)
     ifiles = String[]
     for i in i3
-      ifiles = findFiles(ifiles, folder[i], ".txt", ".dat")
+      if VERSION ≥ v"1.2"
+        ifiles = findFiles(ifiles, folder[i], ".txt", ".dat")
+      else
+        ifiles = findFiles(ifiles, folder[i], ".txt")
+        ifiles = findFiles(ifiles, folder[i], ".dat")
+      end
     end
     onlineData = loadOnlineData(ifiles, altmin=altmin, delim=odelim)
 
@@ -537,9 +542,9 @@ struct SatDB
   remarks
 
   """ Unmodified constructor for `SatDB` """
-  function SatDB(CLay::CLay, CPro::CPro,
+  function SatDB(clay::CLay, cpro::CPro,
     created::Union{DateTime,ZonedDateTime}=tz.now(tz.localzone()), remarks=nothing)
-    new(CLay, CPro, created, remarks)
+    new(clay, cpro, created, remarks)
   end #constructor 1 SatDb
 
   """
@@ -548,13 +553,13 @@ struct SatDB
   """
   function SatDB(folders::String...; remarks=nothing)
     ms = mat.MSession()
-    cl = CLay(ms, folders...)
-    cp = CPro(ms, folders...)
+    clay = CLay(ms, folders...)
+    cpro = CPro(ms, folders...)
     mat.close(ms)
     tc = tz.now(tz.localzone())
 
     @info "done loading data to properties\n- CLay\n- CPro"
-    new(cl, cp, tc, remarks)
+    new(clay, cpro, tc, remarks)
   end #constructor 2 SatDB
 end #struct SatDB
 
