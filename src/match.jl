@@ -135,11 +135,11 @@ function findoverlap(flight::FlightData, sat::SatDB, sattype::Symbol, deltat::In
     # Determine time span of flight ± deltat minutes
     t1 = findfirst(satdata.time .≥ flight.data.time[1] - Dates.Minute(deltat))
     t2 = findlast(satdata.time .≤ flight.data.time[end] + Dates.Minute(deltat))
-    !isnothing(t1) && !isnothing(t2) && break #exit on success, otherwise switch sattype
+    t1 ≠ nothing && t2 ≠ nothing && break #exit on success, otherwise switch sattype
     sattype = swap_sattype(sattype)
   end
   # return empty ranges, if no complete overlap is found
-  if isnothing(t1) || isnothing(t2)
+  if t1 == nothing || t2 == nothing
     @warn string("no sufficient satellite data for time index ",
       "$(flight.data.time[1] - Dates.Minute(deltat))...",
       "$(flight.data.time[end] + Dates.Minute(deltat))")

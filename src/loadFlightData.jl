@@ -20,8 +20,9 @@ function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::Bo
   for file in files
 
     # Load data
+    parallel = VERSION ≥ v"1.3" ? true : false
     flights = CSV.read(file, datarow=3, footerskip=2, ignoreemptylines=true,
-      silencewarnings=true, threaded=true, dateformat="HH:MM:SS.sssm")
+      silencewarnings=true, threaded=parallel, dateformat="HH:MM:SS.sssm")
 
     # Calculate time from individual columns and add as DateTime to DataFrame
     flights.time = [ZonedDateTime(flights.SEGMENT_YEAR[i], flights.SEGMENT_MONTH[i],
@@ -90,8 +91,9 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree:
   # Loop over database files
   @pm.showprogress 1 "load archive..." for file in files
     # Load data
+    parallel = VERSION ≥ v"1.3" ? true : false
     flights = CSV.read(file, datarow=2, normalizenames=true, ignoreemptylines=true,
-      silencewarnings=true, threaded=false, copycols=true, dateformat="m/d/y H:M:S",
+      silencewarnings=true, threaded=parallel, copycols=true, dateformat="m/d/y H:M:S",
       types = Dict(:Altitude_feet_ => Float64, :Groundspeed_knots_ => Float64))
     # Calculate time from individual columns and add as DateTime to DataFrame
     flights.Time_UTC_ = ZonedDateTime.(flights.Time_UTC_, tz.tz"UTC")
@@ -174,8 +176,9 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
   # Loop over files with online data
   @pm.showprogress 1 "load online data..." for (n, file) in enumerate(files)
     # Read flight data
+    parallel = VERSION ≥ v"1.3" ? true : false
     flight = CSV.read(file, delim=delim, ignoreemptylines=true, normalizenames=true, copycols=true,
-      silencewarnings=true, threaded=false, types=Dict(:Latitude => Float64,
+      silencewarnings=true, threaded=parallel, types=Dict(:Latitude => Float64,
       :Longitude => Float64, :feet => String, :kts => Float64, :Course => String,
       :Rate => String))
 
@@ -230,16 +233,21 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
       else
         # Calculate time manually otherwise
         t = Time(flight[i,1][5:12], "H:M:S")
-        if flight[i,1][end-1:end] == "PM" && !(Dates.hour(t)==12 && Dates.minute(t)==0 &&
-          Dates.second(t)==0)
+        if flight[i,1][end-1:end] == "PM" && !(Dates.hour(t)==12)
           t += Dates.Hour(12)
-        elseif flight[i,1][end-1:end] == "AM" && Dates.hour(t)==12 &&
-          Dates.minute(t)==0 && Dates.second(t)==0
+        elseif flight[i,1][end-1:end] == "AM" && Dates.hour(t)==12
           t -= Dates.Hour(12)
+        else
+          t
         end
       end
       # Save data that needed tweaking of current time step
-      push!(flighttime, ZonedDateTime(DateTime(date, t), timezone))
+      if VERSION ≥ v"1.1"
+        push!(flighttime, ZonedDateTime(DateTime(date, t), timezone))
+      else
+        push!(flighttime, ZonedDateTime(DateTime(Dates.yearmonthday(date)...,
+          Dates.hour(t), Dates.minute(t), Dates.second(t)), timezone))
+      end
       push!(altitude, alt); push!(climbingrate, climb); push!(heading, head)
     end #loop of flight
 
