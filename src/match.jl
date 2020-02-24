@@ -197,11 +197,13 @@ function interpolate_satdata(ms::mat.MSession, DB::SatDB, overlap, flight::Fligh
       mat.put_variable(ms, :meta, flight)
       # Convert times to UNIX times for interpolation
       mat.put_variable(ms, :t, Dates.datetime2unix.(satdata.time[r][seg.range]))
-      mat.eval_string(ms,
-        "try\nps = pchip(x, y);\ncatch\ndisp(\"Error in sat track interpolation for\")\ndisp([\"database/ID:\",meta.source, meta.dbID])\nend")
+      mat.eval_string(ms, string("try\nps = pchip(x, y);\ncatch\n",
+        "disp('Error in sat track interpolation for')\n",
+        "disp(['database/ID: ', string(meta.source), '/', string(meta.dbID)])\nend"))
       ps = mat.get_mvariable(ms, :ps)
-      mat.eval_string(ms,
-        "try\npt = pchip(x, t);\ncatch\ndisp(\"Error in sat time interpolation for\")\ndisp([\"database/ID:\",meta.source, meta.dbID])\nend")
+      mat.eval_string(ms, string("try\npt = pchip(x, t);\ncatch\n",
+        "disp('Error in sat time interpolation for')\n",
+        "disp(['database/ID: ', string(meta.source), '/', string(meta.dbID)])\nend"))
       pt = mat.get_mvariable(ms, :pt)
       # Re-convert UNIX time values to DateTimes
       # Save the interpolation functions for track and time data for the current dataset
@@ -237,15 +239,17 @@ function interpolate_flightdata(ms::mat.MSession, flight::FlightData, precision:
     # Convert times to UNIX times for interpolation
     mat.put_variable(ms, :t, Dates.datetime2unix.(flight.data.time[f.range]))
     # Interpolate with MATLAB
-    mat.eval_string(ms,
-      "try\npf = pchip(x, y);\ncatch\ndisp(\"Error in flight track interpolation for\")\ndisp([\"database/ID:\",meta.source, meta.dbID])\nend")
+    mat.eval_string(ms, string("try\npf = pchip(x, y);\ncatch\n",
+      "disp('Error in flight track interpolation for')\n",
+      "disp(['database/ID: ', string(meta.source), '/', string(meta.dbID)])\nend"))
     # Retrieve variables from MATLAB
     pf = mat.get_mvariable(ms, :pf)
     xr = interpolatedtrack(x[f.range], precision)
     # Consider only data segments with more than one data point
     length(xr) > 1 || continue
-    mat.eval_string(ms,
-      "try\npt = pchip(x, t);\ncatch\ndisp(\"Error in flight time interpolation for\")\ndisp([\"database/ID:\",meta.source, meta.dbID])\nend")
+    mat.eval_string(ms, string("try\npt = pchip(x, t);\ncatch\n",
+      "disp('Error in flight time interpolation for')\n",
+      "disp(['database/ID: ', string(meta.source), '/', string(meta.dbID)])\nend"))
     pt = mat.get_mvariable(ms, :pt)
     # Save the interpolated data to a vector
     flight.metadata.useLON ? (push!(flightdata, (lat = Minterpolate(ms, pf)(xr),
