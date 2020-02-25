@@ -408,7 +408,7 @@ struct FlightDB
 
     @info string("FlightDB data loaded to properties in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", "))",
-      "\n- inventory\n- archive\n- onlineData\n- metadata")
+      "\n▪ inventory\n▪ archive\n▪ onlineData\n▪ metadata")
 
     new(inventory, archive, onlineData, DBMetadata(tc, loadtime, remarks))
   end # constructor 2 FlightDB
@@ -582,8 +582,8 @@ struct SatDB
   metadata::DBMetadata
 
   """ Unmodified constructor for `SatDB` """
-  function SatDB(CLay::CLay, CPro::CPro, metadata::DBMetadata)
-    new(CLay, CPro, metadata)
+  function SatDB(clay::CLay, cpro::CPro, metadata::DBMetadata)
+    new(clay, cpro, metadata)
   end #constructor 1 SatDb
 
   """
@@ -593,8 +593,8 @@ struct SatDB
   function SatDB(folders::String...; remarks=nothing)
     tstart = Dates.now()
     ms = mat.MSession()
-    cl = CLay(ms, folders...)
-    cp = CPro(ms, folders...)
+    clay = CLay(ms, folders...)
+    cpro = CPro(ms, folders...)
     mat.close(ms)
     tend = Dates.now()
     tc = tz.ZonedDateTime(tend, tz.localzone())
@@ -602,8 +602,8 @@ struct SatDB
 
     @info string("SatDB data loaded to properties in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", "))",
-      "\n- CLay\n- CPro\n- metadata")
-    new(cl, cp, DBMetadata(tc, loadtime, remarks))
+      "\n▪ CLay\n▪ CPro\n▪ metadata")
+    new(clay, cpro, DBMetadata(tc, loadtime, remarks))
   end #constructor 2 SatDB
 end #struct SatDB
 
@@ -746,7 +746,7 @@ struct Intersection
     # Return Intersections after completion
     @info string("Intersection data loaded to properties in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", "))",
-      "\n- coord\n- tracked\n- accuracy\n- metadata")
+      "\n▪ coord\n▪ tracked\n▪ accuracy\n▪ metadata")
     new(coord, track, accuracy,
       XMetadata(false,deltat,precision,Xradius,sattype,tc,loadtime,remarks))
   end #constructor Intersection

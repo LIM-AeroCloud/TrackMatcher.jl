@@ -17,11 +17,14 @@ function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::Bo
   inventory = FlightData[]
 
   # Loop over files
+  prog = pm.Progress(2length(files), "load inventory...")
   for file in files
 
     # Load data
     flights = CSV.read(file, datarow=3, footerskip=2, ignoreemptylines=true,
       silencewarnings=true, threaded=true, dateformat="HH:MM:SS.sssm")
+    # Monitor progress for progress bar
+    pm.next!(prog, showvalues = [(:file,splitext(basename(file))[1])])
 
     # Calculate time from individual columns and add as DateTime to DataFrame
     flights.time = [ZonedDateTime(flights.SEGMENT_YEAR[i], flights.SEGMENT_MONTH[i],
@@ -34,7 +37,7 @@ function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::Bo
     alt = Float64[]; t = ZonedDateTime[]; speed = Float64[]
 
     # Loop over all data points
-    @pm.showprogress 1 "load inventory from $(basename(splitext(file)[1]))..." for i = 1:length(flights.time)
+    for i = 1:length(flights.time)
       # If the next flight ID is found, save current flight
       if flights.FLIGHT_ID[i] ≠ FID || i == length(flights.time)
         # Ignore data with less than 2 data points
@@ -67,7 +70,10 @@ function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::Bo
         push!(t, flights.time[i])
       end
     end #loop over flights
+    # Monitor progress for progress bar
+    pm.next!(prog, showvalues = [(:file,splitext(basename(file))[1])])
   end #loop over files
+  pm.finish!(prog)
 
   return inventory
 end #function loadInventory
@@ -88,7 +94,8 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree:
   # Initialise archive file array
   archive = FlightData[]
   # Loop over database files
-  @pm.showprogress 1 "load archive..." for file in files
+  prog = pm.Progress(length(files), "load archive...")
+  for file in files
     # Load data
     flights = CSV.read(file, datarow=2, normalizenames=true, ignoreemptylines=true,
       silencewarnings=true, threaded=false, copycols=true, dateformat="m/d/y H:M:S",
@@ -143,7 +150,10 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree:
         push!(alt, flights.Altitude_feet_[i]); push!(speed, flights.Groundspeed_knots_[i])
         push!(climb, flights.Rate[i]); push!(head, flights.Course[i])
       end
-    end
+      # Monitor progress for progress bar
+      pm.next!(prog, showvalues = [(:file,splitext(basename(file))[1])])
+    end #loop over files
+    pm.finish!(prog)
 
     return archive
   end
@@ -172,12 +182,19 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
   # Initialise inventory file array
   archive = FlightData[]
   # Loop over files with online data
-  @pm.showprogress 1 "load online data..." for (n, file) in enumerate(files)
+  prog = pm.Progress(length(files), "load online data...")
+  for (n, file) in enumerate(files)
     # Read flight data
     flight = CSV.read(file, delim=delim, ignoreemptylines=true, normalizenames=true, copycols=true,
       silencewarnings=true, threaded=false, types=Dict(:Latitude => Float64,
       :Longitude => Float64, :feet => String, :kts => Float64, :Course => String,
       :Rate => String))
+    if df.names(flight)[2:9] ≠ [:Latitude, :Longitude, :Course, :kts, :mph, :feet, :Rate, :Reporting_Facility]
+      println()
+      println()
+      @warn "Unknown file format in $file.\nData skipped."
+      continue
+    end
 
     ### Get timezone from input data or use local time for undefined timezones
     # Define timezones as UTC offset to avoid conflicts during
@@ -194,9 +211,21 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
     end
     # Retrieve date and metadata from filename
     filename = splitext(basename(file))[1]
-    flightID, datestr, course = match(r"(.*?)_(.*?)_(.*)", filename).captures
+    flightID, datestr, course = try match(r"(.*?)_(.*?)_(.*)", filename).captures
+    catch
+      println()
+      println()
+      @warn "Flight ID, date, and course not found in $file. Data skipped."
+      continue
+    end
     orig, dest = match(r"(.*)[-|_](.*)", course).captures
-    date = Dates.Date(datestr, "d-u-y", locale="english")
+    date = try Dates.Date(datestr, "d-u-y", locale="english")
+    catch
+      println()
+      println()
+      @warn "Unable to parse date in $file. Data skipped."
+      continue
+    end
     # Set to 2 days prior to allow corrections for timezone diffences in the next step
     date -= Dates.Day(2)
     ### Convert times to datetime and extract heading and climbing rate as Int32
@@ -266,7 +295,10 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
     push!(archive, FlightData(flight.time, flight.Latitude, flight.Longitude,
       flight.feet, flight.Course, flight.Rate, flight.kts, n, flightID, missing,
       (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
+    # Monitor progress for progress bar
+    pm.next!(prog, showvalues = [(:file,filename)])
   end #loop over files
+  pm.finish!(prog)
 
   return archive
 end #function loadOnlineData
