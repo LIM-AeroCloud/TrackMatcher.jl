@@ -331,3 +331,52 @@ function swap_sattype(sattype::Symbol)::Symbol
   swap = Dict(:CPro => :CLay, :CLay => :CPro)
   swap[sattype]
 end
+
+
+"""
+    get_trackdata(flight::FlightData, sat::SatDB, sattype::Symbol,
+      tflight::DateTime, tsat::DateTime, flightspan::Int, satspan::Int)
+      -> flightdata::FlightData, satdata::SatDB
+
+From the measured `flight` and `sat` data and the times of the aircraf (`tflight`)
+and the satellite (`tsat`) at the intersection, save the closest measured value
+to the interpolated intersection of each dataset ±`flightspan`/`satspan` data points
+to `flightdata` and `satdata`, respectively, and return the datasets.
+"""
+function get_trackdata(flight::FlightData, sat::SatDB, sattype::Symbol,
+  tflight::DateTime, tsat::DateTime, flightspan::Int, satspan::Int)
+
+  # Find the index (DataFrame row) of the intersection in the flight data
+  tf = argmin(abs.(flight.data.time .- tflight))
+
+  # Construct FlightData at Intersection
+  flightdata =
+    FlightData(extract_timespan(flight.data, tf, flightspan), flight.metadata)
+
+  # Get satellite data used to find the intersection and find DataFrame row of intersection
+  satprim = getfield(sat, sattype).data
+  tsp = argmin(abs.(satprim.time .- tsat))
+  # Retrieve DataFrame at Intersection ± 15 time steps
+  primdata = extract_timespan(satprim, tsp, satspan)
+
+  # Switch to other satellite data (CLay/CPro) and check whether data is available
+  # at intersection and retrieve ±15 time steps as well
+  sattype = swap_sattype(sattype)
+  secdata = try satsec = getfield(sat, sattype).data
+    tss = argmin(abs.(satsec.time .- tsat))
+    extract_timespan(satsec, tss, satspan)
+  catch
+    # Return an empty DataFrame, if no data is available
+    DataFrame(time=DateTime[], lat=Float64[], lon=Float64[])
+  end
+  # Save satellite data in SatDB
+  satdata = sattype == :CPro ? SatDB(CLay(primdata), CPro(secdata), sat.metadata) :
+    SatDB(CLay(secdata), CPro(primdata), sat.metadata)
+
+  # Instatiate new Intersection
+  return flightdata, satdata
+end
+
+
+timesec(t::Real) = round(Dates.unix2datetime(t), Dates.Second)
+timesec(t::Union{DateTime,ZonedDateTime}) = round(t, Dates.Second)
