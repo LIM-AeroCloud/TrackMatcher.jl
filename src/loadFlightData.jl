@@ -192,10 +192,11 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
       silencewarnings=true, threaded=parallel, types=Dict(:Latitude => Float64,
       :Longitude => Float64, :feet => String, :kts => Float64, :Course => String,
       :Rate => String))
-    if df.names(flight)[2:9] ≠ [:Latitude, :Longitude, :Course, :kts, :mph, :feet, :Rate, :Reporting_Facility]
+    if length(df.names(flight)) ≠ 9 || df.names(flight)[2:9] ≠
+      [:Latitude, :Longitude, :Course, :kts, :mph, :feet, :Rate, :Reporting_Facility]
       println()
       println()
-      @warn "Unknown file format in $file.\nData skipped."
+      @warn "Unknown file format in $file.\nTry to specify column delimiter. Data skipped."
       continue
     end
 
