@@ -468,12 +468,26 @@ struct CLay
     @pm.showprogress 1 "load CLay data..." for file in files
       # Find files with cloud layer data
       if occursin("CLay", basename(file))
-        # Extract time and convert to UTC
-        t = mat.mxcall(ms, :hdfread,1,file,"Profile_UTC_Time")[:,2]
-        utc = [utc; convertUTC.(t)]
-        # Extract lat/lon
-        lon = [lon; mat.mxcall(ms, :hdfread,1,file, "Longitude")[:,2]]
-        lat = [lat; mat.mxcall(ms, :hdfread,1,file, "Latitude")[:,2]]
+        utc, lon, lat = try
+          # Extract time
+          mat.put_variable(ms, :file, file)
+          mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
+          t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
+          # Extract lat/lon
+          mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
+          longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
+          mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
+          latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
+          # Save time converted to UTC and lat/lon
+          [utc; convertUTC.(t)],
+          [lon; longitude],
+          [lat; latitude]
+        catch
+          # Skip data on failure and warn
+          @warn string("read error in CALIPSO granule ",
+            "$(splitext(basename(file))[1])\ndata skipped")
+          utc, lon, lat
+        end
       end
     end
 
@@ -531,16 +545,30 @@ struct CPro
     @pm.showprogress 1 "load CPro data..." for file in files
       # Find files with cloud profile data
       if occursin("CPro", basename(file))
-        # Extract time and convert to UTC
-        t = mat.mxcall(ms, :hdfread,1,file,"Profile_UTC_Time")[:,2]
-        utc = [utc; convertUTC.(t)]
-        # Extract lat/lon
-        lon = [lon; mat.mxcall(ms, :hdfread,1,file, "Longitude")[:,2]]
-        lat = [lat; mat.mxcall(ms, :hdfread,1,file, "Latitude")[:,2]]
+        utc, lon, lat = try
+          # Extract time
+          mat.put_variable(ms, :file, file)
+          mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
+          t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
+          # Extract lat/lon
+          mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
+          longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
+          mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
+          latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
+          # Save time converted to UTC and lat/lon
+          [utc; convertUTC.(t)],
+          [lon; longitude],
+          [lat; latitude]
+        catch
+          # Skip data on failure and warn
+          @warn string("read error in CALIPSO granule ",
+            "$(splitext(basename(file))[1])\ndata skipped")
+          utc, lon, lat
+        end
       end
     end
 
-    # Save time, lat/lon arrays in CLay struct
+    # Save time, lat/lon arrays in CPro struct
     new(DataFrame(time=utc, lat=lat, lon=lon))
   end #constructor 2 CPro
 end #struct CPro
