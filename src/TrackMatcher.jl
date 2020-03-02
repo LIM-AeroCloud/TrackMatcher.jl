@@ -474,7 +474,8 @@ struct CLay
     # Initialise arrays
     utc = DateTime[]; lon = Float64[]; lat = Float64[]
     # Loop over files
-    @pm.showprogress 1 "load CLay data..." for file in files
+    prog = pm.Progress(length(files), "load CLay data...")
+    for file in files
       # Find files with cloud layer data
       if occursin("CLay", basename(file))
         utc, lon, lat = try
@@ -498,7 +499,10 @@ struct CLay
           utc, lon, lat
         end
       end
-    end
+      # Monitor progress for progress bar
+      pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
+    end #loop over files
+    pm.finish!(prog)
 
     # Save time, lat/lon arrays in CLay struct
     new(DataFrame(time=utc, lat=lat, lon=lon))
@@ -551,7 +555,8 @@ struct CPro
     # Initialise arrays
     utc = DateTime[]; lon = Float64[]; lat = Float64[]
     # Loop over files
-    @pm.showprogress 1 "load CPro data..." for file in files
+    prog = pm.Progress(length(files), "load CPro data...")
+    for file in files
       # Find files with cloud profile data
       if occursin("CPro", basename(file))
         utc, lon, lat = try
@@ -575,7 +580,10 @@ struct CPro
           utc, lon, lat
         end
       end
-    end
+      # Monitor progress for progress bar
+      pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
+    end #loop over files
+    pm.finish!(prog)
 
     # Save time, lat/lon arrays in CPro struct
     new(DataFrame(time=utc, lat=lat, lon=lon))
