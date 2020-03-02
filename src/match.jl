@@ -1,6 +1,6 @@
 """
     find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB,
-      sattype::Symbol, sattracks::Vector, deltat::Int, precision::Float64, Xradius::Real,
+      sattype::Symbol, sattracks::Vector, maxtimediff::Int, stepwidth::Float64, Xradius::Real,
       flightspan::Int, satspan::Int) -> coord::DataFrame, track::DataFrame, accuracy::DataFrame
 
 Using interpolated `flighttracks` and `sattracks`, add new spatial and temporal
@@ -8,13 +8,13 @@ Using interpolated `flighttracks` and `sattracks`, add new spatial and temporal
 near the intersection (±`flightspan`/±`satspan` datapoints of the intersection).
 
 For the calculation of the satellite data, prefer data of `sattype` (`CLay` by default,
-otherwise `CPro`) and find intersections using the `precision` for the step width
-of the interpolated data to find intersections with a maximum time delay `deltat`
+otherwise `CPro`) and find intersections using the `stepwidth` for the step width
+of the interpolated data to find intersections with a maximum time delay `maxtimediff`
 between the aircraft and satellite overpass. Intersections within `Xradius` in meters
-are viewed as duplicates and only the one with the highest precision is stored.
+are viewed as duplicates and only the one with the highest stepwidth is stored.
 """
 function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB,
-  sattype::Symbol, sattracks::Vector, deltat::Int, precision::Float64, Xradius::Real,
+  sattype::Symbol, sattracks::Vector, maxtimediff::Int, stepwidth::Float64, Xradius::Real,
   flightspan::Int, satspan::Int)
 
   # Initialise DataFrames for current flight
@@ -60,7 +60,7 @@ function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB
         m1+1
       end
       # Calculate minimum accuracy at equator
-      dprec = geo.distance(geo.LatLon(0,0), geo.LatLon(0,0+precision))
+      dprec = geo.distance(geo.LatLon(0,0), geo.LatLon(0,0+stepwidth))
       # Determine intersection between the 2 point pairs analytically by linear interpolation
       X = (((fcoord[m1].lat*fcoord[m2].lon - fcoord[m1].lon*fcoord[m2].lat) *
         (scoord[m1].lat - scoord[m2].lat) - (fcoord[m1].lat - fcoord[m2].lat) *
@@ -83,7 +83,7 @@ function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB
       tms = timesec(st.time(X[1]))
       dt = Dates.canonicalize(Dates.CompoundPeriod(tms-tmf))
       # Consider only intersections within allowed time span
-      Dates.Minute(-deltat) < tmf - tms < Dates.Minute(deltat) || continue
+      Dates.Minute(-maxtimediff) < tmf - tms < Dates.Minute(maxtimediff) || continue
       # Look at previous intersection coordinates within the current flight
       dup = findfirst([geo.distance(Xf, geo.LatLon(coord[i,[:lat,:lon]]...))
         for i = 1:length(coord.id)] .< dprec)
@@ -132,34 +132,34 @@ end #function find_intersections
 
 
 """
-    findoverlap(flight::FlightData, sat::SatDB, sattype::Symbol, deltat::Int)
+    findoverlap(flight::FlightData, sat::SatDB, sattype::Symbol, maxtimediff::Int)
 
 From the data of the current `flight` and the `sat` data, calculate the data ranges
 in the sat data that are in the vicinity of the flight track (min/max of lat/lon).
 Prefer `sat` data of `sattype` (`:CLay`/`:CPro`) for the calculations and consider
-only satellite data of ± `deltat` minutes before the start and after the end of the
+only satellite data of ± `maxtimediff` minutes before the start and after the end of the
 flight.
 """
-function findoverlap(flight::FlightData, sat::SatDB, sattype::Symbol, deltat::Int)
+function findoverlap(flight::FlightData, sat::SatDB, sattype::Symbol, maxtimediff::Int)
 
   # Initialise
   satranges = UnitRange[]; t1 = t2 = nothing; satdata = DataFrame();
-  # Try to retrieve sat data in the range ±deltat minutes before and after the flight
+  # Try to retrieve sat data in the range ±maxtimediff minutes before and after the flight
   # Try prefer sattype, and on failure other sattype
   for i = 1:2
     # Get sat data of sattype
     satdata = getfield(sat, sattype).data
-    # Determine time span of flight ± deltat minutes
-    t1 = findfirst(satdata.time .≥ flight.data.time[1] - Dates.Minute(deltat))
-    t2 = findlast(satdata.time .≤ flight.data.time[end] + Dates.Minute(deltat))
+    # Determine time span of flight ± maxtimediff minutes
+    t1 = findfirst(satdata.time .≥ flight.data.time[1] - Dates.Minute(maxtimediff))
+    t2 = findlast(satdata.time .≤ flight.data.time[end] + Dates.Minute(maxtimediff))
     t1 ≠ nothing && t2 ≠ nothing && break #exit on success, otherwise switch sattype
     sattype = swap_sattype(sattype)
   end
   # return empty ranges, if no complete overlap is found
   if t1 == nothing || t2 == nothing
     @warn string("no sufficient satellite data for time index ",
-      "$(flight.data.time[1] - Dates.Minute(deltat))...",
-      "$(flight.data.time[end] + Dates.Minute(deltat))")
+      "$(flight.data.time[1] - Dates.Minute(maxtimediff))...",
+      "$(flight.data.time[end] + Dates.Minute(maxtimediff))")
     return (ranges=satranges, type=sattype)
   elseif length(t1:t2) ≤ 1
     @warn string("no sufficient overlap between flight/satellite data for flight ",
@@ -239,12 +239,12 @@ end #function interpolate_satdata
 
 
 """
-    interpolate_flightdata(ms::mat.MSession, flight::FlightData, precision::Real)
+    interpolate_flightdata(ms::mat.MSession, flight::FlightData, stepwidth::Real)
 
 Using the `flight` data, interpolate the data with the pchip method in the MATLAB
 session (`ms`) with a `precission` in degrees.
 """
-function interpolate_flightdata(ms::mat.MSession, flight::FlightData, precision::Real)
+function interpolate_flightdata(ms::mat.MSession, flight::FlightData, stepwidth::Real)
 
   # Define x and y data based on useLON
   x, y = flight.metadata.useLON ?
@@ -264,7 +264,7 @@ function interpolate_flightdata(ms::mat.MSession, flight::FlightData, precision:
       "disp(['database/ID: ', string(meta.source), '/', string(meta.dbID)])\nend"))
     # Retrieve variables from MATLAB
     pf = mat.get_mvariable(ms, :pf)
-    xr = interpolatedtrack(x[f.range], precision)
+    xr = interpolatedtrack(x[f.range], stepwidth)
     # Consider only data segments with more than one data point
     length(xr) > 1 || continue
     mat.eval_string(ms, string("try\npt = pchip(x, t);\ncatch\n",
@@ -286,11 +286,11 @@ end #function interpolate_flightdata
 
 
 """
-    interpolatedtrack(xdata::Vector{Float64}, precision::Real)
+    interpolatedtrack(xdata::Vector{Float64}, stepwidth::Real)
 
-Return an interpolated vector of `xdata` with a step width of `precision`.
+Return an interpolated vector of `xdata` with a step width of `stepwidth`.
 Data are ascending or descending depending on the first and last data point of
 `xdata`.
 """
-interpolatedtrack(xdata::Vector{Float64}, precision::Real) = xdata[1] < xdata[end] ?
-  collect(Float64, xdata[1]:precision:xdata[end]) : collect(Float64, xdata[1]:-precision:xdata[end])
+interpolatedtrack(xdata::Vector{Float64}, stepwidth::Real) = xdata[1] < xdata[end] ?
+  collect(Float64, xdata[1]:stepwidth:xdata[end]) : collect(Float64, xdata[1]:-stepwidth:xdata[end])
