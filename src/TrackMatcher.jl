@@ -174,11 +174,13 @@ end #struct FlightMetadata
 
 Immutable struct with additional information of databases:
 
+- `date`: NamedTuple with entries `start`/`stop` giving the time range of the database
 - `created`: time of creation of database
 - `loadtime`: time it took to read data files and load it to the struct
 - `remarks`: any additional data or comments that can be attached to the database
 """
 struct DBMetadata
+  date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
   created::Union{DateTime,ZonedDateTime}
   loadtime::Dates.CompoundPeriod
   remarks
@@ -406,6 +408,12 @@ struct FlightDB
       end
     end
     onlineData = loadOnlineData(ifiles, altmin=altmin, delim=odelim)
+    tmin = minimum([[f.metadata.date.start for f in inventory];
+      [f.metadata.date.start for f in archive];
+      [f.metadata.date.start for f in onlineData]])
+    tmax = maximum([[f.metadata.date.stop for f in inventory];
+      [f.metadata.date.stop for f in archive];
+      [f.metadata.date.stop for f in onlineData]])
 
     tend = Dates.now()
     tc = tz.ZonedDateTime(tend, tz.localzone())
@@ -415,7 +423,8 @@ struct FlightDB
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", "))",
       "\n▪ inventory\n▪ archive\n▪ onlineData\n▪ metadata")
 
-    new(inventory, archive, onlineData, DBMetadata(tc, loadtime, remarks))
+    new(inventory, archive, onlineData,
+      DBMetadata((start=tmin, stop=tmax), tc, loadtime, remarks))
   end # constructor 2 FlightDB
 end #struct FlightDB
 
@@ -629,6 +638,8 @@ struct SatDB
     clay = CLay(ms, folders...)
     cpro = CPro(ms, folders...)
     mat.close(ms)
+    tmin = minimum([clay.data.time; cpro.data.time])
+    tmax = maximum([clay.data.time; cpro.data.time])
     tend = Dates.now()
     tc = tz.ZonedDateTime(tend, tz.localzone())
     loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
@@ -636,7 +647,7 @@ struct SatDB
     @info string("SatDB data loaded to properties in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", "))",
       "\n▪ CLay\n▪ CPro\n▪ metadata")
-    new(clay, cpro, DBMetadata(tc, loadtime, remarks))
+    new(clay, cpro, DBMetadata((start=tmin, stop=tmax), tc, loadtime, remarks))
   end #constructor 2 SatDB
 end #struct SatDB
 
