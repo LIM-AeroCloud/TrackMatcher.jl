@@ -193,9 +193,9 @@ end #struct DBMetadata
 Immutable struct with additional information of intersection data:
 
 - `cirrus`: flag for cirrus clouds at flight altitude level
-- `deltat`: maximum time difference allowed between satellite overpass and
+- `maxtimediff`: maximum time difference allowed between satellite overpass and
   aircraft passing at intersection
-- `precision`: minimum precision in degrees at equation used to interpolate track data
+- `stepwidth`: stepwidth (in degrees at equator) used to interpolate track data
 - `Xradius`: radius in meters around an intersection in which further intersections
   will be removed as duplicates due to the interpolation algorithm
 - `preferred`: Symbol, which satellite data type was preferred to find intersections in
@@ -206,8 +206,8 @@ Immutable struct with additional information of intersection data:
 """
 struct XMetadata
   cirrus::Bool
-  deltat::Int
-  precision::Float64
+  maxtimediff::Int
+  stepwidth::Float64
   Xradius::Real
   preferred::Symbol
   created::Union{DateTime,ZonedDateTime}
@@ -711,20 +711,20 @@ for reproducable results.
 # Instatiation
 
     Intersection(flights::FlightDB, sat::SatDB, sattype::Symbol=:CLay;
-      deltat::Int=30, flightspan::Int=0, satspan::Int=15, precision::Float64=0.01,
+      maxtimediff::Int=30, flightspan::Int=0, satspan::Int=15, stepwidth::Float64=0.01,
       Xradius::Real=5000, remarks=nothing)
 
 Instantiate with the `flights` and `sat` database and the `sattype` of the sat data
 preferred for the calculations (`CLay` by default). The following kwargs
 (with default values) can be used to define parameters of the calculation:
 
-- `deltat::Int=30`: maximum time difference in minutes allowed between satellite overpass and
+- `maxtimediff::Int=30`: maximum time difference in minutes allowed between satellite overpass and
   aircraft passing at intersection
 - `flightspan::Int=0`: ± additional measurement points to the measurement closest to the intersection
   saved in `tracked.flight`
 - `satspan::Int=15`: ± additional measurement points to the measurement closest to the intersection
   saved in `tracked.sat`
-- `precision`: step width in degrees (lat/lon at equator) used for the interpolation of track data
+- `stepwidth`: stepwidth in degrees (lat/lon at equator) used for the interpolation of track data
 - `Xradius`: radius in meters around an intersection in which further intersections
   will be removed as duplicates due to the interpolation algorithm
 - remarks: any additional data or comments attached to the metadata of the struct
@@ -745,7 +745,7 @@ struct Intersection
 
   """ Modified constructor with some automated calculations of the intersection data. """
   function Intersection(flights::FlightDB, sat::SatDB, sattype::Symbol=:CLay;
-    deltat::Int=30, flightspan::Int=0, satspan::Int=15, precision::Float64=0.01,
+    maxtimediff::Int=30, flightspan::Int=0, satspan::Int=15, stepwidth::Float64=0.01,
     Xradius::Real=5000, remarks=nothing)
     # Initialise DataFrames with Intersection data and monitor start time
     tstart = Dates.now()
@@ -761,14 +761,14 @@ struct Intersection
       [flights.inventory; flights.archive; flights.onlineData]
       try
         # Find sat tracks in the vicinity of flight tracks, where intersections are possible
-        overlap = findoverlap(flight, sat, sattype, deltat)
+        overlap = findoverlap(flight, sat, sattype, maxtimediff)
         isempty(overlap.ranges) && continue
         # Interpolate trajectories using MATLAB's pchip routine
         sattracks = interpolate_satdata(ms, sat, overlap, flight.metadata)
-        flighttracks = interpolate_flightdata(ms, flight, precision)
+        flighttracks = interpolate_flightdata(ms, flight, stepwidth)
         # Calculate intersections and store data and metadata in DataFrames
         currcoord, currtrack, curraccuracy = find_intersections(flight, flighttracks,
-          sat, overlap.type, sattracks, deltat, precision, Xradius, flightspan, satspan)
+          sat, overlap.type, sattracks, maxtimediff, stepwidth, Xradius, flightspan, satspan)
         append!(coord, currcoord); append!(track, currtrack)
         append!(accuracy, curraccuracy)
       catch e
@@ -792,7 +792,7 @@ struct Intersection
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", "))",
       "\n▪ coord\n▪ tracked\n▪ accuracy\n▪ metadata")
     new(coord, track, accuracy,
-      XMetadata(false,deltat,precision,Xradius,sattype,tc,loadtime,remarks))
+      XMetadata(false,maxtimediff,stepwidth,Xradius,sattype,tc,loadtime,remarks))
   end #constructor Intersection
 end #struct Intersection
 
