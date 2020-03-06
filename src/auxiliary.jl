@@ -99,8 +99,8 @@ end # function findFiles
 Remove entries with duplicate `x` and `y` (`lat`/`lon` or `lon`/`lat`) values from
 these arrays as well as `alt`, `speed`, and `t`.
 """
-function remdup(x::Vector{<:Float64}, y::Vector{<:Float64},
-  alt::Vector{<:Float64}, speed::Vector{<:Float64}, t::Vector{<:ZonedDateTime})
+function remdup(x::Vector{<:Float64}, y::Vector{<:Float64}, t::Vector{<:ZonedDateTime},
+  alt::Vector{<:Float64}, speed::Vector{<:Float64}, head::Vector{<:Int}, climb::Vector{<:Int})
   # Initialise
   i = 1
   iEnd = length(x)
@@ -112,8 +112,9 @@ function remdup(x::Vector{<:Float64}, y::Vector{<:Float64},
       δ = eps(x[i]); Δ = 0
       if y[i] == y[j]
         # Delete entries from all arrays with equal x and y data
-        deleteat!(x, i); deleteat!(y, i); deleteat!(alt, i); deleteat!(speed, i)
-        deleteat!(t, i)
+        deleteat!(x, i); deleteat!(y, i); deleteat!(t, i)
+        deleteat!(alt, i); deleteat!(speed, i); deleteat!(head, i); deleteat!(climb, i)
+
         # Decrease the counter for the end of the arrays
         iEnd -= 1
       else
@@ -128,7 +129,41 @@ function remdup(x::Vector{<:Float64}, y::Vector{<:Float64},
   end
 
   # Return revised data
-  return x, y, alt, speed, t
+  return x, y, t, alt, speed, head, climb
+end
+
+
+
+function remdup(data::DataFrame, useLON::Bool)
+  # Define x and y data
+  x, y = useLON ? (:Longitude, :Latitude) : (:Latitude, :Longitude)
+  # Initialise
+  i = 1
+  iEnd = length(data[!,x])
+  # Loop over entries in vector
+  while i < iEnd
+    j = i + 1 # index for next consecutive line
+    while j ≤ iEnd && data[i, x] == data[j, x]
+      # Define a infinitessimal small value δ which can be repeatedly applied via Δ
+      δ = eps(data[i, x]); Δ = 0
+      if data[i, y] == data[j, y]
+        # Delete entries from all arrays with equal x and y data
+        df.deleterows!(data, i)
+        # Decrease the counter for the end of the arrays
+        iEnd -= 1
+      else
+        # If x values are equal, but y values differ add multiples of δ repeatedly
+        # by adding δ to Δ, and Δ to x.
+        Δ += δ
+        data[j, x] += Δ
+        j += 1 # set to next index
+      end
+    end
+    i += 1 # increase line counter
+  end
+
+  # Return revised data
+  return data
 end
 
 

@@ -50,14 +50,16 @@ function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::Bo
         # for flight interpolation (info stored as bool useLON)
         useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ? true : false
         useLON ? (x = lon; y = lat) : (x = lat; y = lon)
+        # Define missing columns with NaNs
+        head = [missing for i = 1:length(t)]
+        climb = [missing for i = 1:length(t)]
         # Remove duplicate points in data
-        x, y, alt, speed, t = remdup(x, y, alt, speed, t)
+        x, y, t, alt, speed, head, climb = remdup(x, y, t, alt, speed, head, climb)
         # find flex points to cut data in segments needed for the interpolation
         flex = findFlex(x)
         # Save the FlightData in the inventory vector
-        push!(inventory, FlightData(t, lat, lon, alt, [missing for i = 1:length(t)],
-          [missing for i = 1:length(t)], speed, FID, missing,
-          missing, missing, flex, useLON, "VOLPE AEDT", file))
+        push!(inventory, FlightData(t, lat, lon, alt, head, climb, speed, FID,
+          missing, missing, missing, flex, useLON, "VOLPE AEDT", file))
         # Empty data vectors
         lat = Float64[]; lon = Float64[];
         alt = Float64[]; t = ZonedDateTime[]; speed = Float64[]
@@ -127,7 +129,10 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree:
         ln = any(lon .< 0) ? maximum(lon[lon.<0]) - minimum(lon[lon.<0]) : 0
         # Determine main direction of flight (N<>S, E<>W) and use it as x values
         # for flight interpolation (info stored as bool useLON)
-        useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ? true : false
+        useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ?
+          true : false
+        # Remove duplicate points in data
+        x, y, t, alt, speed, head, climb = remdup(x, y, t, alt, speed, head, climb)
         # find flex points to cut data in segments needed for the interpolation
         flex = useLON ? findFlex(lon) : findFlex(lat)
         # Save the FlightData in the archive vector
@@ -206,12 +211,12 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
 
     # Time is the first column and has to be addressed as flight[!,1] in the code
     # due to different column names, in which the timezone is included
-    if occursin("_CET_", string(names(flight)[1]))
-      timezone = tz.tz"+0100"
+    timezone = if occursin("_CET_", string(names(flight)[1]))
+      tz.tz"+0100"
     elseif occursin("_CEST_", string(names(flight)[1]))
-      timezone = tz.tz"+0200"
+      tz.tz"+0200"
     else
-      timezone = tz.localzone()
+      tz.localzone()
     end
     # Retrieve date and metadata from filename
     filename = splitext(basename(file))[1]
@@ -231,7 +236,7 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
       continue
     end
     # Set to 2 days prior to allow corrections for timezone diffences in the next step
-    date -= Dates.Day(2)
+    date += Dates.Day(2)
     ### Convert times to datetime and extract heading and climbing rate as Int32
     # Initialise time vector
     flighttime = ZonedDateTime[]
@@ -241,11 +246,14 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
     climbingrate = Union{Missing,Int}[]
     # Loop over times
     for i=length(flight[!,1]):-1:1
-      alt = try parse(Float64, join([n for n in flight.feet[i] if isnumeric(n)]))
+      alt = try parse(Float64, join([n for n in flight.feet[i]
+        if isnumeric(n) || n == '.']))
       catch; missing;  end
-      climb = try parse(Int, join([n for n in flight.Rate[i] if isnumeric(n) || n == '-']))
+      climb = try parse(Int, join([n for n in flight.Rate[i]
+        if isnumeric(n) || n == '.' || n == '-']))
       catch; missing;  end
-      head = try parse(Int, join([n for n in flight.Course[i] if isnumeric(n)]))
+      head = try parse(Int, join([n for n in flight.Course[i]
+        if isnumeric(n) || n == '.']))
       catch; missing;  end
       if length(flight[i,1]) ≠ 15 || ismissing(flight.Latitude[i]) ||
           ismissing(flight.Longitude[i]) || ismissing(alt) || alt < altmin
@@ -254,7 +262,7 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
       end
       # Derive date from day of week and filename
       while Dates.dayabbr(date) ≠ flight[i,1][1:3]
-        date += Dates.Day(1)
+        date -= Dates.Day(1)
       end
       # Derive time from time string
       t = if VERSION ≥ v"1.3"
@@ -273,15 +281,15 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
       end
       # Save data that needed tweaking of current time step
       if VERSION ≥ v"1.1"
-        push!(flighttime, ZonedDateTime(DateTime(date, t), timezone))
+        pushfirst!(flighttime, ZonedDateTime(DateTime(date, t), timezone))
       else
-        push!(flighttime, ZonedDateTime(DateTime(Dates.yearmonthday(date)...,
+        pushfirst!(flighttime, ZonedDateTime(DateTime(Dates.yearmonthday(date)...,
           Dates.hour(t), Dates.minute(t), Dates.second(t)), timezone))
       end
-      push!(altitude, alt); push!(climbingrate, climb); push!(heading, head)
+      pushfirst!(altitude, alt); pushfirst!(climbingrate, climb); pushfirst!(heading, head)
     end #loop of flight
 
-    # Skip data with all data points below the altitude threshold
+    # Skip data with all data points below the altitude threshold or missing
     isempty(altitude) && continue
     # Save revised data to DataFrame
     flight.time = flighttime
@@ -298,6 +306,7 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
       maximum(flight.Longitude[flight.Longitude.<0]) - minimum(flight.Longitude[flight.Longitude.<0]) : 0
     useLON = maximum(flight.Latitude) - minimum(flight.Latitude) ≤ (lp + ln) *
       cosd(stats.mean(flight.Latitude)) ? true : false
+    flight = remdup(flight, useLON)
     flex = useLON ? findFlex(flight.Longitude) : findFlex(flight.Latitude)
 
     # Save data as FlightData
