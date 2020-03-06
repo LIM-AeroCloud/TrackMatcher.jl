@@ -190,7 +190,7 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
   archive = FlightData[]
   # Loop over files with online data
   prog = pm.Progress(length(files), "load online data...")
-  for (n, file) in enumerate(files)
+  for file in files
     # Read flight data
     parallel = VERSION ≥ v"1.3" ? true : false
     flight = CSV.read(file, delim=delim, ignoreemptylines=true, normalizenames=true, copycols=true,
@@ -311,8 +311,8 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
 
     # Save data as FlightData
     push!(archive, FlightData(flight.time, flight.Latitude, flight.Longitude,
-      flight.feet, flight.Course, flight.Rate, flight.kts, n, flightID, missing,
-      (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
+      flight.feet, flight.Course, flight.Rate, flight.kts, replace(filename, "_" => "/"),
+      flightID, missing, (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
     # Monitor progress for progress bar
     pm.next!(prog, showvalues = [(:file,filename)])
   end #loop over files
