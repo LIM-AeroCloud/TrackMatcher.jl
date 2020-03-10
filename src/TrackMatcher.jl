@@ -44,7 +44,7 @@ import ProgressMeter; const pm = ProgressMeter
 import Logging; const logg = Logging
 # Import structs from packages
 import DataFrames.DataFrame
-import Dates.DateTime, Dates.Date, Dates.Time
+import Dates: DateTime, Date, Time
 import TimeZones.ZonedDateTime
 
 
