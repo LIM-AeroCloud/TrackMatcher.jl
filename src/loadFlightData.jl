@@ -49,12 +49,12 @@ function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::Bo
         # Determine main direction of flight (N<>S, E<>W) and use it as x values
         # for flight interpolation (info stored as bool useLON)
         useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ? true : false
-        useLON ? (x = lon; y = lat) : (x = lat; y = lon)
+        x, y = useLON ? (lon, lat) : (lat, lon)
         # Define missing columns with NaNs
         head = [missing for i = 1:length(t)]
         climb = [missing for i = 1:length(t)]
         # Remove duplicate points in data
-        x, y, t, alt, speed, head, climb = remdup(x, y, t, alt, speed, head, climb)
+        remdup!(x, y, t, alt, speed, head, climb)
         # find flex points to cut data in segments needed for the interpolation
         flex = findFlex(x)
         # Save the FlightData in the inventory vector
@@ -67,7 +67,7 @@ function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::Bo
         # segtime = DateTime[]; segdist = Float64[]
       end
       # Filter altitude threshold
-      if flights.ALTITUDE[i] ≥ altmin
+      if ismissing(flights.ALTITUDE[i]) || flights.ALTITUDE[i] ≥ altmin
         push!(lat, flights.LATITUDE[i]); push!(lon, flights.LONGITUDE[i])
         push!(alt, flights.ALTITUDE[i]); push!(speed, flights.SPEED[i])
         push!(t, flights.time[i])
@@ -110,7 +110,7 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree:
     # Initialise loop over file
     FID = flights.Flight_ID[1]; n = 1
     lat = Float64[]; lon = Float64[]
-    alt = Float64[]; t = ZonedDateTime[]; speed = Union{Missing,Float64}[]
+    alt = Union{Missing,Float64}[]; t = ZonedDateTime[]; speed = Union{Missing,Float64}[]
     climb = Union{Missing,Int}[]; head = Union{Missing,Int}[]
 
     # Initialise loop over file
@@ -131,8 +131,9 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree:
         # for flight interpolation (info stored as bool useLON)
         useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ?
           true : false
+        x, y = useLON ? (lon, lat) : (lat, lon)
         # Remove duplicate points in data
-        x, y, t, alt, speed, head, climb = remdup(x, y, t, alt, speed, head, climb)
+        remdup!(x, y, t, alt, speed, head, climb)
         # find flex points to cut data in segments needed for the interpolation
         flex = useLON ? findFlex(lon) : findFlex(lat)
         # Save the FlightData in the archive vector
@@ -143,7 +144,7 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree:
 
         # Reset temporary data arrays
         lat = Float64[]; lon = Float64[]
-        alt = Float64[]; t = ZonedDateTime[]; speed = Union{Missing,Float64}[]
+        alt = Union{Missing,Float64}[]; t = ZonedDateTime[]; speed = Union{Missing,Float64}[]
         climb = Union{Missing,Int}[]; head = Union{Missing,Int}[]
         # Set Flight ID and position to next flight
         n = i
@@ -151,7 +152,7 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree:
       end
       # Filter data
       if !ismissing(flights.Latitude[i]) && !ismissing(flights.Longitude[i]) &&
-        !ismissing(flights.Altitude_feet_[i]) && flights.Altitude_feet_[i] ≥ altmin
+        (ismissing(flights.Altitude_feet_[i]) || flights.Altitude_feet_[i] ≥ altmin)
         push!(t, flights.Time_UTC_[i])
         push!(lat, flights.Latitude[i]); push!(lon, flights.Longitude[i])
         push!(alt, flights.Altitude_feet_[i]); push!(speed, flights.Groundspeed_knots_[i])
@@ -256,7 +257,7 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
         if isnumeric(n) || n == '.']))
       catch; missing;  end
       if length(flight[i,1]) ≠ 15 || ismissing(flight.Latitude[i]) ||
-          ismissing(flight.Longitude[i]) || ismissing(alt) || alt < altmin
+          ismissing(flight.Longitude[i]) || (!ismissing(alt) && alt < altmin)
         df.deleterows!(flight, i)
         continue
       end

@@ -49,58 +49,42 @@ end
 
 
 """
-    findFiles(inventory::Vector{String}, folder::String, filetypes::String...) -> inventory
+    findfiles!(inventory::Vector{String}, folder::String, filetypes::String...) -> inventory
 
 Scan `folder` recursively for files of `filetype` and add to the `inventory`.
 """
-function findFiles(inventory::Vector{String}, folder::String, filetypes::String...)
+function findfiles!(inventory::Vector{String}, folder::String, filetypes::String...)
   # Construct Regex of file endings from filetypes
-  fileendings = Regex(join(filetypes,'|'))
+  fileextensions = Regex(join(filetypes,'|'))
   # Scan directory for files and folders and save directory
   dir = readdir(folder); path = abspath(folder)
   for file in dir
     # Save current directory/file
     cwd = joinpath(path, file)
-    if endswith(file, fileendings)
+    if isdir(cwd)
+      # Step into subdirectories and scan them, too
+      findfiles!(inventory, cwd, filetypes...)
+    elseif endswith(file, fileextensions) && !startswith(file, ".")
       # Save files of correct type
       push!(inventory, cwd)
-    elseif isdir(cwd)
-      # Step into subdirectories and scan them, too
-      inventory = findFiles(inventory, cwd, filetypes...)
     end
   end
 
   return inventory
-end # function findFiles
-
-function findFiles(inventory::Vector{String}, folder::String, filetypes::String)
-  # Scan directory for files and folders and save directory
-  dir = readdir(folder); path = abspath(folder)
-  for file in dir
-    # Save current directory/file
-    cwd = joinpath(path, file)
-    if endswith(file, filetypes)
-      # Save files of correct type
-      push!(inventory, cwd)
-    elseif isdir(cwd)
-      # Step into subdirectories and scan them, too
-      inventory = findFiles(inventory, cwd, filetypes)
-    end
-  end
-
-  return inventory
-end # function findFiles
+end # function findfiles!
 
 
 """
-    remdup(x::Vector{<:Float64}, y::Vector{<:Float64},
+    remdup!(x::Vector{<:Float64}, y::Vector{<:Float64},
       alt::Vector{<:Float64}, speed::Vector{<:Float64}, t::Vector{<:ZonedDateTime})
 
 Remove entries with duplicate `x` and `y` (`lat`/`lon` or `lon`/`lat`) values from
-these arrays as well as `alt`, `speed`, and `t`.
+these arrays as well as `alt`, `speed`, and `t`. Increase x by an infinitessimal
+number if x data is identical, but y data is not.
 """
-function remdup(x::Vector{<:Float64}, y::Vector{<:Float64}, t::Vector{<:ZonedDateTime},
-  alt::Vector{<:Float64}, speed::Vector{<:Float64}, head::Vector{<:Int}, climb::Vector{<:Int})
+function remdup!(x::Vector{Float64}, y::Vector{Float64}, t::Vector{ZonedDateTime},
+  alt::Vector{<:Union{Missing,Float64}}, speed::Vector{<:Union{Missing,Float64}},
+  head::Vector{<:Union{Missing,Int}}, climb::Vector{<:Union{Missing,Int}})
   # Initialise
   i = 1
   iEnd = length(x)
@@ -130,11 +114,18 @@ function remdup(x::Vector{<:Float64}, y::Vector{<:Float64}, t::Vector{<:ZonedDat
 
   # Return revised data
   return x, y, t, alt, speed, head, climb
-end
+end #function remdup!
 
 
 
-function remdup(data::DataFrame, useLON::Bool)
+"""
+    remdup!(data::DataFrame, useLON::Bool)
+
+Remove entries with duplicate x and y (`lat`/`lon` or `lon`/`lat`) values from
+`data` or increase x by an infinitessimal number if x data is identical, but y data
+is not.
+"""
+function remdup!(data::DataFrame, useLON::Bool)
   # Define x and y data
   x, y = useLON ? (:Longitude, :Latitude) : (:Latitude, :Longitude)
   # Initialise
@@ -164,7 +155,7 @@ function remdup(data::DataFrame, useLON::Bool)
 
   # Return revised data
   return data
-end
+end #function remdup!
 
 
 """
@@ -413,5 +404,17 @@ function get_trackdata(flight::FlightData, sat::SatDB, sattype::Symbol,
 end
 
 
+"""
+    timesec(t::Real) -> DateTime
+
+From a UNIX DateTime, return a DateTime rounded to the second
+"""
 timesec(t::Real) = round(Dates.unix2datetime(t), Dates.Second)
+
+
+"""
+    timesec(t::Union{DateTime,ZonedDateTime}) -> DateTime
+
+Round a `DateTime` or `ZonedDateTime` to the second.
+"""
 timesec(t::Union{DateTime,ZonedDateTime}) = round(t, Dates.Second)

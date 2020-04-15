@@ -29,9 +29,6 @@ or cloud tracks as well.
 """
 module TrackMatcher
 
-# Track changes during development
-# using Revise
-
 # Import Julia packages
 import CSV
 import DataFrames; const df = DataFrames
@@ -389,22 +386,22 @@ struct FlightDB
     # VOLPE AEDT inventory
     ifiles = String[]
     for i in i1
-      ifiles = findFiles(ifiles, folder[i], ".csv")
+      findfiles!(ifiles, folder[i], ".csv")
     end
     inventory = loadInventory(ifiles, altmin=altmin)
     # FlightAware commercial archive
     ifiles = String[]
     for i in i2
-      ifiles = findFiles(ifiles, folder[i], ".csv")
+      findfiles!(ifiles, folder[i], ".csv")
     end
     archive = loadArchive(ifiles, altmin=altmin)
     ifiles = String[]
     for i in i3
       if VERSION ≥ v"1.2"
-        ifiles = findFiles(ifiles, folder[i], ".txt", ".dat")
+        findfiles!(ifiles, folder[i], ".txt", ".dat")
       else
-        ifiles = findFiles(ifiles, folder[i], ".txt")
-        ifiles = findFiles(ifiles, folder[i], ".dat")
+        findfiles!(ifiles, folder[i], ".txt")
+        findfiles!(ifiles, folder[i], ".dat")
       end
     end
     onlineData = loadOnlineData(ifiles, altmin=altmin, delim=odelim)
@@ -465,39 +462,32 @@ struct CLay
   Modified constructor of `CLay` reading data from hdf files given in `folders...`
   using MATLAB session `ms`.
   """
-  function CLay(ms::mat.MSession, folders::String...)
-    # Scan folders for HDF4 files
-    files = String[];
-    for folder in folders
-      files = findFiles(files, folder, ".hdf")
-    end
+  function CLay(ms::mat.MSession, files::Vector{String})
     # Initialise arrays
     utc = DateTime[]; lon = Float64[]; lat = Float64[]
     # Loop over files
     prog = pm.Progress(length(files), "load CLay data...")
     for file in files
       # Find files with cloud layer data
-      if occursin("CLay", basename(file))
-        utc, lon, lat = try
-          # Extract time
-          mat.put_variable(ms, :file, file)
-          mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-          t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
-          # Extract lat/lon
-          mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-          longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
-          mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-          latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
-          # Save time converted to UTC and lat/lon
-          [utc; convertUTC.(t)],
-          [lon; longitude],
-          [lat; latitude]
-        catch
-          # Skip data on failure and warn
-          @warn string("read error in CALIPSO granule ",
-            "$(splitext(basename(file))[1])\ndata skipped")
-          utc, lon, lat
-        end
+      utc, lon, lat = try
+        # Extract time
+        mat.put_variable(ms, :file, file)
+        mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
+        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
+        # Extract lat/lon
+        mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
+        longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
+        mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
+        latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
+        # Save time converted to UTC and lat/lon
+        [utc; convertUTC.(t)],
+        [lon; longitude],
+        [lat; latitude]
+      catch
+        # Skip data on failure and warn
+        @warn string("read error in CALIPSO granule ",
+          "$(splitext(basename(file))[1])\ndata skipped")
+        utc, lon, lat
       end
       # Monitor progress for progress bar
       pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
@@ -546,39 +536,32 @@ struct CPro
   Modified constructor of `CPro` reading data from hdf files given in `folders...`
   using MATLAB session `ms`.
   """
-  function CPro(ms::mat.MSession, folders::String...)
-    # Scan folders for HDF4 files
-    files = String[];
-    for folder in folders
-      files = findFiles(files, folder, ".hdf")
-    end
+  function CPro(ms::mat.MSession, files::Vector{String})
     # Initialise arrays
     utc = DateTime[]; lon = Float64[]; lat = Float64[]
     # Loop over files
     prog = pm.Progress(length(files), "load CPro data...")
     for file in files
       # Find files with cloud profile data
-      if occursin("CPro", basename(file))
-        utc, lon, lat = try
-          # Extract time
-          mat.put_variable(ms, :file, file)
-          mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-          t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
-          # Extract lat/lon
-          mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-          longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
-          mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-          latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
-          # Save time converted to UTC and lat/lon
-          [utc; convertUTC.(t)],
-          [lon; longitude],
-          [lat; latitude]
-        catch
-          # Skip data on failure and warn
-          @warn string("read error in CALIPSO granule ",
-            "$(splitext(basename(file))[1])\ndata skipped")
-          utc, lon, lat
-        end
+      utc, lon, lat = try
+        # Extract time
+        mat.put_variable(ms, :file, file)
+        mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
+        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
+        # Extract lat/lon
+        mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
+        longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
+        mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
+        latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
+        # Save time converted to UTC and lat/lon
+        [utc; convertUTC.(t)],
+        [lon; longitude],
+        [lat; latitude]
+      catch
+        # Skip data on failure and warn
+        @warn string("read error in CALIPSO granule ",
+          "$(splitext(basename(file))[1])\ndata skipped")
+        utc, lon, lat
       end
       # Monitor progress for progress bar
       pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
@@ -642,16 +625,27 @@ struct SatDB
   """
   function SatDB(folders::String...; remarks=nothing)
     tstart = Dates.now()
+    # Scan folders for HDF4 files
+    files = String[];
+    for folder in folders
+      findfiles!(files, folder, ".hdf")
+    end
+    # Start MATLAB session
     ms = mat.MSession()
-    clay = CLay(ms, folders...)
-    cpro = CPro(ms, folders...)
+    # Load CALIPSO cloud layer and profile data based on file names
+    clay = CLay(ms, files[occursin.("CLay", basename.(files))])
+    cpro = CPro(ms, files[occursin.("CPro", basename.(files))])
+    # Close MATLAB session
     mat.close(ms)
+    # Calculate time span of satellite data
     tmin = minimum([clay.data.time; cpro.data.time])
     tmax = maximum([clay.data.time; cpro.data.time])
     tend = Dates.now()
+    # Save computing times
     tc = tz.ZonedDateTime(tend, tz.localzone())
     loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
 
+    # Instantiate new struct
     @info string("SatDB data loaded to properties in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", "))",
       "\n▪ CLay\n▪ CPro\n▪ metadata")
