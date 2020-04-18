@@ -206,7 +206,7 @@ function interpolate_satdata(ms::mat.MSession, DB::SatDB, overlap, flight::Fligh
   # Loop over satellite data
   for r in overlap.ranges
     # Find possible flex points in satellite tracks
-    satsegments = findFlex(satdata.lat[r])
+    satsegments = findflex(satdata.lat[r])
 
     # Loop over satellite segments
     for seg in satsegments

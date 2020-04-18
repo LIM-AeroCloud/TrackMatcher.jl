@@ -127,7 +127,7 @@ is not.
 """
 function remdup!(data::DataFrame, useLON::Bool)
   # Define x and y data
-  x, y = useLON ? (:Longitude, :Latitude) : (:Latitude, :Longitude)
+  x, y = useLON ? (:lon, :lat) : (:lat, :lon)
   # Initialise
   i = 1
   iEnd = length(data[!,x])
@@ -159,12 +159,12 @@ end #function remdup!
 
 
 """
-    findFlex(x::Vector{<:Real}) -> Vector{ NamedTuple{(:range, :min, :max), Tuple{UnitRange, Float64, Float64}}}
+    findflex(x::Vector{<:Real}) -> Vector{ NamedTuple{(:range, :min, :max), Tuple{UnitRange, Float64, Float64}}}
 
 Find inflection points in `x` and return a vector of named tuples with index ranges
 between inflection points and corresponding extrema.
 """
-function findFlex(x::Vector{<:Real})
+function findflex(x::Vector{<:Real})
   # Save starting index
   flex = Int[1]
   # Loop over data points
@@ -189,7 +189,7 @@ function findFlex(x::Vector{<:Real})
 
   # Return all ranges between flex points together with the corresponding extrema
   return Tuple(ranges)
-end #function findFlex
+end #function findflex
 
 
 """
@@ -418,3 +418,32 @@ timesec(t::Real) = round(Dates.unix2datetime(t), Dates.Second)
 Round a `DateTime` or `ZonedDateTime` to the second.
 """
 timesec(t::Union{DateTime,ZonedDateTime}) = round(t, Dates.Second)
+
+
+"""
+    preptrack(flight::DataFrame) -> flight, flex, useLON
+
+Use the `flight` data to prepare the track for interpolation. Find the predominant
+flight direction and inflection (flex) points in the flight track.
+
+Return a tidied flight data from which duplicate entries are removed together
+with the `flex` points in the x data for interpolation and a boolean `useLON`,
+which is true for longitude values used x data in the track interpolation.
+"""
+function preptrack(flight::DataFrame)
+  # calculate area covered by flight
+  lp = any(flight.lon .≥ 0) ? maximum(filter(l -> l ≥ 0, flight.lon)) -
+    minimum(filter(l -> l ≥ 0, flight.lon)) : 0
+  ln = any(flight.lon .< 0) ? maximum(filter(l -> l < 0, flight.lon)) -
+    minimum(filter(l -> l < 0, flight.lon)) : 0
+  # Determine main direction of flight (N<>S, E<>W) and use it as x values
+  # for flight interpolation (info stored as bool useLON)
+  useLON = maximum(flight.lat) - minimum(flight.lat) ≤ (lp + ln) *
+    cosd(stats.mean(flight.lat)) ? true : false
+  # Adjust for duplicate entries and
+  remdup!(flight, useLON)
+  # find flex points to cut data in segments needed for the interpolation
+  flex = useLON ? findflex(flight.lon) : findflex(flight.lat)
+
+  return flight, flex, useLON
+end #function preptrack

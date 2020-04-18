@@ -46,9 +46,10 @@ import TimeZones.ZonedDateTime
 
 
 # Define Logger with log level
-try logger = logg.SimpleLogger(logfile, logg.Info)
-catch; logger = logg.ConsoleLogger(stdout, logg.Info)
+logger = try logg.SimpleLogger(logfile, logg.Info)
+catch; logg.ConsoleLogger(stdout, logg.Info)
 end
+logg.global_logger(logger)
 
 
 ### Define own structs
@@ -276,24 +277,27 @@ struct FlightData
   end #constructor 1 FlightData
 
   """ Modified constructor with variable checks and some automated calculation of fields """
-  function FlightData(time::Vector{ZonedDateTime}, lat::Vector{<:Union{Missing,Float64}},
-    lon::Vector{<:Union{Missing,Float64}}, alt::Vector{<:Union{Missing,Float64}},
-    heading::Vector{<:Union{Missing,Int}}, climb::Vector{<:Union{Missing,Int}},
-    speed::Vector{<:Union{Missing,Float64}}, dbID::Union{Int,AbstractString},
+  function FlightData(flightdata::DataFrame, dbID::Union{Int,AbstractString},
     flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
     useLON::Bool, source::String, file::AbstractString)
 
-    t = [t.utc_datetime for t in time]
-    lat = checklength(lat, t)
-    lon = checklength(lon, t)
-    alt = checklength(alt, t)
-    heading = checklength(heading, t)
-    climb = checklength(climb, t)
-    speed = checklength(speed, t)
+    # Check dataframe columns of flight data; fill missing columns with missing values
+    t = getproperty(flightdata, :time)
+    t = t isa Vector{ZonedDateTime} ? [zt.utc_datetime for zt in t] : t
+    lat = getproperty(flightdata, :lat)
+    lon = getproperty(flightdata, :lon)
+    alt = getproperty(flightdata, :alt)
+    heading = hasproperty(flightdata, :heading) ? getproperty(flightdata, :heading) :
+      [missing for i in t]
+    climb = hasproperty(flightdata, :climb) ? getproperty(flightdata, :climb) :
+      [missing for i in t]
+    speed = hasproperty(flightdata, :speed) ? getproperty(flightdata, :speed) :
+      [missing for i in t]
     metadata = FlightMetadata(dbID,flightID,route,aircraft,t,lat,lon,useLON,flex,source,file)
 
+    # Instatiate new FlightData
     new(DataFrame(time=t,lat=lat,lon=lon,alt=alt,heading=heading,climb=climb,speed=speed),metadata)
   end #constructor 2 FlightData
 end #struct FlightData
