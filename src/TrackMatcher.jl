@@ -29,7 +29,7 @@ or cloud tracks as well.
 """
 module TrackMatcher
 
-# Import Julia packages
+## Import Julia packages
 import CSV
 import DataFrames; const df = DataFrames
 import Dates
@@ -52,7 +52,7 @@ end
 logg.global_logger(logger)
 
 
-### Define own structs
+## Define own Metadata structs
 """
 # struct FlightMetadata
 
@@ -203,7 +203,6 @@ Immutable struct with additional information of intersection data:
 - `remarks`: any additional data or comments that can be attached to the database
 """
 struct XMetadata
-  cirrus::Bool
   maxtimediff::Int
   stepwidth::Float64
   Xradius::Real
@@ -214,6 +213,7 @@ struct XMetadata
 end #struct XMetaData
 
 
+## Define structs related to flight data
 """
 # struct FlightData
 
@@ -430,6 +430,7 @@ struct FlightDB
 end #struct FlightDB
 
 
+## Define structs related to sat data
 """
 # struct CLay
 
@@ -658,19 +659,20 @@ struct SatDB
 end #struct SatDB
 
 
+## Define structs related to intersection data
 """
 # struct Intersection
 
 Immutable struct with fields
 
-- `coord::DataFrame`
+- `data::DataFrame`
 - `tracked::DataFrame`
 - `accuracy::DataFrame`
 - `metadata::XMetadata`
 
-## coord
+## data
 
-DataFrame `coord` holds the interpolated spatial and temporal coordinates of all
+DataFrame `data` holds the interpolated spatial and temporal coordinates of all
 calcalated intersections in the current dataset in columns:
 
 - `id::Vector{String}`
@@ -687,7 +689,7 @@ DataFrame `tracked` holds the actual measured flight and satellite data closest
 to the intersection with additional ±`flightspan` and ±`satspan` datapoints in
 columns:
 
-- `id::Vector{String}` (same as in `coord`)
+- `id::Vector{String}` (same as in `data`)
 - `flight::Vector{FlightData}`
 - `sat::Vector{SatDB}`
 
@@ -736,7 +738,7 @@ preferred for the calculations (`CLay` by default). The following kwargs
 - remarks: any additional data or comments attached to the metadata of the struct
 """
 struct Intersection
-  coord::DataFrame
+  data::DataFrame
   tracked::DataFrame
   accuracy::DataFrame
   metadata::XMetadata
@@ -755,8 +757,8 @@ struct Intersection
     Xradius::Real=5000, remarks=nothing)
     # Initialise DataFrames with Intersection data and monitor start time
     tstart = Dates.now()
-    coord = DataFrame(id=String[], lat=Float64[], lon=Float64[],
-      tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[])
+    idata = DataFrame(id=String[], lat=Float64[], lon=Float64[],
+      tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[]) # , feature = Symbol[]
     track = DataFrame(id=String[], flight=FlightData[], sat=SatDB[])
     accuracy = DataFrame(id=String[], intersection=Float64[], flightcoord=Float64[],
       satcoord=Float64[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
@@ -773,9 +775,9 @@ struct Intersection
         sattracks = interpolate_satdata(ms, sat, overlap, flight.metadata)
         flighttracks = interpolate_flightdata(ms, flight, stepwidth)
         # Calculate intersections and store data and metadata in DataFrames
-        currcoord, currtrack, curraccuracy = find_intersections(flight, flighttracks,
+        currdata, currtrack, curraccuracy = find_intersections(flight, flighttracks,
           sat, overlap.type, sattracks, maxtimediff, stepwidth, Xradius, flightspan, satspan)
-        append!(coord, currcoord); append!(track, currtrack)
+        append!(idata, currdata); append!(track, currtrack)
         append!(accuracy, curraccuracy)
       catch e
         @debug begin
@@ -796,22 +798,19 @@ struct Intersection
     # Return Intersections after completion
     @info string("Intersection data loaded to properties in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", "))",
-      "\n▪ coord\n▪ tracked\n▪ accuracy\n▪ metadata")
-    new(coord, track, accuracy,
-      XMetadata(false,maxtimediff,stepwidth,Xradius,sattype,tc,loadtime,remarks))
+      "\n▪ data\n▪ tracked\n▪ accuracy\n▪ metadata")
+    new(idata, track, accuracy,
+      XMetadata(maxtimediff,stepwidth,Xradius,sattype,tc,loadtime,remarks))
   end #constructor Intersection
 end #struct Intersection
 
-# Needed for julia 1.0.x?:
-# SatDB(CLay::CLay, CPro::CPro, created::Union{DateTime,ZonedDateTime}) = SatDB(CLay, CPro, created, nothing)
-# SatDB(CLay::CLay, CPro::CPro) = SatDB(CLay, CPro, tz.now(tz.localtime()), nothing)
 
-
+## Export structs
 export FlightDB, FlightData, SatDB, CLay, CPro, Intersection,
        FlightMetadata, DBMetadata, XMetadata
 
 
-### Import functions for other Julia files
+## Import functions for Julia include files
 include("auxiliary.jl")       # helper functions
 include("loadFlightData.jl")  # functions related to loading flight databases/datasets
 include("match.jl")           # functions related to finding track intersections

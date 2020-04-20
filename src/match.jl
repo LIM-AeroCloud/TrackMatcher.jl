@@ -1,10 +1,10 @@
 """
     find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB,
       sattype::Symbol, sattracks::Vector, maxtimediff::Int, stepwidth::Float64, Xradius::Real,
-      flightspan::Int, satspan::Int) -> coord::DataFrame, track::DataFrame, accuracy::DataFrame
+      flightspan::Int, satspan::Int) -> idata::DataFrame, track::DataFrame, accuracy::DataFrame
 
 Using interpolated `flighttracks` and `sattracks`, add new spatial and temporal
-`coord`inates of the current flight along with the measured `flight` and `sat` `track`
+coordinates of the current flight along with the measured `flight` and `sat` `track`
 near the intersection (±`flightspan`/±`satspan` datapoints of the intersection).
 
 For the calculation of the satellite data, prefer data of `sattype` (`CLay` by default,
@@ -18,8 +18,8 @@ function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB
   flightspan::Int, satspan::Int)
 
   # Initialise DataFrames for current flight
-  coord = DataFrame(id=String[], lat=Float64[], lon=Float64[],
-    tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[])
+  idata = DataFrame(id=String[], lat=Float64[], lon=Float64[],
+    tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[]) # , feature = Symbol[]
   track = DataFrame(id=String[], flight=FlightData[], sat=SatDB[])
   accuracy = DataFrame(id=String[], intersection=Float64[], flightcoord=Float64[],
     satcoord=Float64[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
@@ -85,8 +85,8 @@ function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB
       # Consider only intersections within allowed time span
       Dates.Minute(-maxtimediff) < tmf - tms < Dates.Minute(maxtimediff) || continue
       # Look at previous intersection coordinates within the current flight
-      dup = findfirst([geo.distance(Xf, geo.LatLon(coord[i,[:lat,:lon]]...))
-        for i = 1:length(coord.id)] .< dprec)
+      dup = findfirst([geo.distance(Xf, geo.LatLon(idata[i,[:lat,:lon]]...))
+        for i = 1:length(idata.id)] .< dprec)
       # Only save the most accurate intersection calculation within an Xradius
       # of the current intersection, i.e. only continue, if current intersection
       # is more accurate or new (not within Xradius)
@@ -107,7 +107,7 @@ function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB
           counter += 1
           id = string(flight.metadata.source,-,flight.metadata.dbID,-,counter)
           # Save intersection data
-          push!(coord, (id=id, lat=Xf.lat, lon=Xf.lon, tdiff=dt,
+          push!(idata, (id=id, lat=Xf.lat, lon=Xf.lon, tdiff=dt,
             tflight = tmf, tsat = tms))
           push!(track, (id=id, flight=flightdata, sat=satdb))
           # Save accuracies
@@ -115,7 +115,7 @@ function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB
             satcoord=geo.distance(Xs, sxmeas), flighttime=ftmeas, sattime=stmeas))
         else # more exact intersection calculations
           # Save intersection data
-          coord[dup,:] = (id=id, lat=Xf.lat, lon=Xf.lon, tdiff=dt,
+          idata[dup,:] = (id=id, lat=Xf.lat, lon=Xf.lon, tdiff=dt,
             tflight = tmf, tsat = tms)
           track[dup,:] = (id=id, flight=flightdata, sat=satdb)
           # Save accuracies
@@ -127,7 +127,7 @@ function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB
   end #loop over flight and sat tracks
 
   # Return intersection data of current flight
-  return coord, track, accuracy
+  return idata, track, accuracy
 end #function find_intersections
 
 
