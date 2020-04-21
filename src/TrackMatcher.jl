@@ -530,8 +530,9 @@ struct CPro
 
   """ Unmodified constructor for `CPro` """
   function CPro(data::DataFrame)
-    standardnames = [:time, :lat, :lon]
-    standardtypes = [Vector{DateTime}, Vector{Float64}, Vector{Float64}]
+    standardnames = [:time, :lat, :lon, :FCF, :EC532]
+    standardtypes = [Vector{DateTime}, Vector{Float64}, Vector{Float64},
+      Vector{Vector{<:Union{Missing,UInt16}}}, Vector{Vector{<:Union{Missing,Float32}}}]
     bounds = Tuple{Real,Real}[]
     data = checkcols(data, standardnames, standardtypes, bounds, "CPro", nothing)
     new(data)
@@ -541,13 +542,17 @@ struct CPro
   Modified constructor of `CPro` reading data from hdf files given in `folders...`
   using MATLAB session `ms`.
   """
-  function CPro(ms::mat.MSession, files::Vector{String})
+  function CPro(ms::mat.MSession, files::Vector{String}, lidar::NamedTuple)
     # Initialise arrays
+    # essential data
     utc = DateTime[]; lon = Float64[]; lat = Float64[]
+    # non-essential data
+    avd = Vector{<:Union{Missing,UInt16}}[]; ec532 = Vector{<:Union{Missing,Float32}}[]
     # Loop over files
     prog = pm.Progress(length(files), "load CPro data...")
+    # Loop over files with cloud profile data
     for file in files
-      # Find files with cloud profile data
+      # Retrieve essential data
       utc, lon, lat = try
         # Extract time
         mat.put_variable(ms, :file, file)
@@ -568,13 +573,24 @@ struct CPro
           "$(splitext(basename(file))[1])\ndata skipped")
         utc, lon, lat
       end
+      # Retrieve non-essential data
+      # Extract feature classification flags
+      avd = try append_lidardata!(avd, ms, "Atmospheric_Volume_Description", lidar)
+      catch
+        [avd; [missing for i = 1:length(lidar.refined)]]
+      end
+      ec532 = try append_lidardata!(ec532, ms, "Extinction_Coefficient_532", lidar,
+        true, missingvalues = -9999)
+        catch
+          [ec532; [missing for i = 1:length(lidar.coarse)]]
+        end
       # Monitor progress for progress bar
       pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
     end #loop over files
     pm.finish!(prog)
 
-    # Save time, lat/lon arrays in CPro struct
-    new(DataFrame(time=utc, lat=lat, lon=lon))
+    # Save time, lat/lon arrays, and feature classification flags (FCF) in CPro struct
+    new(DataFrame(time=utc, lat=lat, lon=lon, FCF=avd, EC532=ec532))
   end #constructor 2 CPro
 end #struct CPro
 
@@ -637,9 +653,11 @@ struct SatDB
     end
     # Start MATLAB session
     ms = mat.MSession()
+    # Get lidar altitude levels
+    lidar = get_lidarheights()
     # Load CALIPSO cloud layer and profile data based on file names
     clay = CLay(ms, files[occursin.("CLay", basename.(files))])
-    cpro = CPro(ms, files[occursin.("CPro", basename.(files))])
+    cpro = CPro(ms, files[occursin.("CPro", basename.(files))], lidar)
     # Close MATLAB session
     mat.close(ms)
     # Calculate time span of satellite data
@@ -758,7 +776,8 @@ struct Intersection
     # Initialise DataFrames with Intersection data and monitor start time
     tstart = Dates.now()
     idata = DataFrame(id=String[], lat=Float64[], lon=Float64[],
-      tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[]) # , feature = Symbol[]
+      tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[],
+      feature = Symbol[])
     track = DataFrame(id=String[], flight=FlightData[], sat=SatDB[])
     accuracy = DataFrame(id=String[], intersection=Float64[], flightcoord=Float64[],
       satcoord=Float64[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
@@ -812,6 +831,7 @@ export FlightDB, FlightData, SatDB, CLay, CPro, Intersection,
 
 ## Import functions for Julia include files
 include("auxiliary.jl")       # helper functions
+include("lidar.jl")           # functions related to processing CALIOP data
 include("loadFlightData.jl")  # functions related to loading flight databases/datasets
 include("match.jl")           # functions related to finding track intersections
 

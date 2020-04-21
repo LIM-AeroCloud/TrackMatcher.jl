@@ -19,7 +19,7 @@ function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB
 
   # Initialise DataFrames for current flight
   idata = DataFrame(id=String[], lat=Float64[], lon=Float64[],
-    tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[]) # , feature = Symbol[]
+    tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[], feature = Symbol[])
   track = DataFrame(id=String[], flight=FlightData[], sat=SatDB[])
   accuracy = DataFrame(id=String[], intersection=Float64[], flightcoord=Float64[],
     satcoord=Float64[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
@@ -108,7 +108,7 @@ function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB
           id = string(flight.metadata.source,-,flight.metadata.dbID,-,counter)
           # Save intersection data
           push!(idata, (id=id, lat=Xf.lat, lon=Xf.lon, tdiff=dt,
-            tflight = tmf, tsat = tms))
+            tflight = tmf, tsat = tms, feature=:no_signal))
           push!(track, (id=id, flight=flightdata, sat=satdb))
           # Save accuracies
           push!(accuracy, (id=id, intersection=dx, flightcoord=geo.distance(Xf,fxmeas),
@@ -116,7 +116,7 @@ function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB
         else # more exact intersection calculations
           # Save intersection data
           idata[dup,:] = (id=id, lat=Xf.lat, lon=Xf.lon, tdiff=dt,
-            tflight = tmf, tsat = tms)
+            tflight = tmf, tsat = tms, feature=:no_signal)
           track[dup,:] = (id=id, flight=flightdata, sat=satdb)
           # Save accuracies
           accuracy[dup,:] = (id=id, intersection=dx, flightcoord=geo.distance(Xf,fxmeas),

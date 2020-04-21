@@ -393,7 +393,10 @@ function get_trackdata(flight::FlightData, sat::SatDB, sattype::Symbol,
     extract_timespan(satsec, tss, satspan)
   catch
     # Return an empty DataFrame, if no data is available
-    DataFrame(time=DateTime[], lat=Float64[], lon=Float64[])
+    sattype == :CLay ?
+      DataFrame(time=DateTime[], lat=Float64[], lon=Float64[]) :
+      DataFrame(time=DateTime[], lat=Float64[], lon=Float64[],
+        FCF=Union{Missing,UInt16}[], EC532=Union{Missing,Float32}[])
   end
   # Save satellite data in SatDB
   satdata = sattype == :CPro ? SatDB(CLay(primdata), CPro(secdata), sat.metadata) :
@@ -447,127 +450,6 @@ function preptrack(flight::DataFrame)
 
   return flight, flex, useLON
 end #function preptrack
-
-
-"""
-classification(FCF::UInt16) -> UInt16, UInt16
-
-From the CALIPSO feature classification flag (`FCF`), return the `type` and `subtype`.
-
-
-# Detailed CALIPSO description
-
-This function accepts an array a feature classification flag (FCF) and
-returns the feature type and feature subtype. Feature and subtype are
-defined in Table 44 of the CALIPSO Data Products Catalog (Version 3.2).
-Note that the definition of feature subtype depends on the feature type!
-
-INPUTS
- FCF, an array of CALIPSO feature classification flags.
-     Type: UInt16
-OUTPUTS
- ftype, an array the same size as FCF containing the feature type.
-     Type: Int
- subtype, an array the same size as FCF containing the feature subtype.
-     Type: Int
-Modified from M. Vaughn's "extract5kmAerosolLayerDescriptors.m" code by
-J. Tackett September 23, 2010. jason.l.tackett@nasa.gov
-
-## Feature type
-These are the values returned and their definitions.
- 0 = invalid (bad or missing data)
- 1 = "clear air"
- 2 = cloud
- 3 = aerosol
- 4 = stratospheric feature; polar stratospheric cloud (PSC) or stratospheric aerosol
- 5 = surface
- 6 = subsurface
- 7 = no signal (totally attenuated)
-
-NOTE: The definition of feature subtype will depend on the feature type!
-See the feature classification flags definition table in the CALIPSO Data
-Products Catalog for more details.
-
-## Subtype definitions for AEROSOLS
- 0 = not determined
- 1 = clean marine
- 2 = dust
- 3 = polluted continental
- 4 = clean continental
- 5 = polluted dust
- 6 = smoke
- 7 = other
-
-## Subtype definitions for CLOUDS
- 0 = low overcast, transparent
- 1 = low overcast, opaque
- 2 = transition stratocumulus
- 3 = low, broken cumulus
- 4 = altocumulus (transparent)
- 5 = altostratus (opaque)
- 6 = cirrus (transparent)
- 7 = deep convective (opaque)
-"""
-classification(FCF::UInt16)::Tuple{UInt16,UInt16} = FCF & 7, FCF << -9 & 7
-
-
-"""
-    feature_classification(ftype::UInt16, fsub::UInt16) -> Symbol
-
-From the feature classification `ftype` and `fsub`type, return a descriptive `Symbol`
-explaining the feature classification type.
-"""
-function feature_classification(ftype::UInt16, fsub::UInt16)::Symbol
-  if ftype == 0
-    missing
-  elseif ftype == 1
-    :clear
-  elseif ftype == 2
-    if fsub == 0
-      :low_trasparent
-    elseif fsub == 1
-      :low_opaque
-    elseif fsub == 2
-      :transition_sc
-    elseif fsub == 3
-      :cu
-    elseif fsub == 4
-      :ac
-    elseif fsub == 5
-      :as
-    elseif fsub == 6
-      :ci
-    elseif fsub == 7
-      :cb
-    end
-  elseif ftype == 3
-    if fsub == 0
-      :aerosol
-    elseif fsub == 1
-      :marine
-    elseif fsub == 2
-      :dust
-    elseif fsub == 3
-      :polluted
-    elseif fsub == 4
-      :remote
-    elseif fsub == 5
-      :polluted_dust
-    elseif fsub == 6
-      :smoke
-    elseif fsub == 7
-      :other
-    end
-  elseif ftype == 4
-    :stratospheric
-  elseif ftype == 5
-    :surface
-  elseif ftype == 6
-    :subsurface
-  elseif ftype == 7
-    :no_signal
-  end
-end
 
 
 """Convert feet to kilomenters"""
