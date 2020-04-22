@@ -168,6 +168,19 @@ end #struct FlightMetadata
 
 
 """
+# struct SatMetadata
+
+Immutable struct with metadata for CALIOP cloud layer profiles storing information
+about the height levels of the measurements.
+"""
+struct SatMetadata
+  lidarrange::NamedTuple{(:top,:bottom), Tuple{Real,Real}}
+  lidarlevels::NamedTuple{(:coarse,:fine,:itop,:ibottom,:i30),
+    Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat},Int,Int,Int}}
+end #struct SatMetadata
+
+
+"""
 # struct DBMetadata
 
 Immutable struct with additional information of databases:
@@ -527,6 +540,7 @@ and types of each columns are checked and attempted to correct:
 """
 struct CPro
   data::DataFrame
+  metadata::SatMetadata
 
   """ Unmodified constructor for `CPro` """
   function CPro(data::DataFrame)
@@ -535,14 +549,15 @@ struct CPro
       Vector{Vector{<:Union{Missing,UInt16}}}, Vector{Vector{<:Union{Missing,Float32}}}]
     bounds = Tuple{Real,Real}[]
     data = checkcols(data, standardnames, standardtypes, bounds, "CPro", nothing)
-    new(data)
+    new(data, metadata)
   end #constructor 1 CPro
 
   """
   Modified constructor of `CPro` reading data from hdf files given in `folders...`
   using MATLAB session `ms`.
   """
-  function CPro(ms::mat.MSession, files::Vector{String}, lidar::NamedTuple)
+  function CPro(ms::mat.MSession, files::Vector{String}, lidar::NamedTuple,
+    lidarrange::Tuple{Real,Real})
     # Initialise arrays
     # essential data
     utc = DateTime[]; lon = Float64[]; lat = Float64[]
@@ -571,26 +586,31 @@ struct CPro
         # Skip data on failure and warn
         @warn string("read error in CALIPSO granule ",
           "$(splitext(basename(file))[1])\ndata skipped")
-        utc, lon, lat
+        continue
       end
       # Retrieve non-essential data
       # Extract feature classification flags
       avd = try append_lidardata!(avd, ms, "Atmospheric_Volume_Description", lidar)
       catch
-        [avd; [missing for i = 1:length(lidar.refined)]]
+        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
+        fcf = [[missing for i = 1:length(lidar.fine)] for i in t]
+        append!(avd, fcf)
       end
       ec532 = try append_lidardata!(ec532, ms, "Extinction_Coefficient_532", lidar,
         true, missingvalues = -9999)
-        catch
-          [ec532; [missing for i = 1:length(lidar.coarse)]]
-        end
+      catch
+        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
+        ec = [[missing for i = 1:length(lidar.coarse)] for i in t]
+        append!(ec532, ec)
+      end
       # Monitor progress for progress bar
       pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
     end #loop over files
     pm.finish!(prog)
 
     # Save time, lat/lon arrays, and feature classification flags (FCF) in CPro struct
-    new(DataFrame(time=utc, lat=lat, lon=lon, FCF=avd, EC532=ec532))
+    new(DataFrame(time=utc, lat=lat, lon=lon, FCF=avd, EC532=ec532),
+      SatMetadata((top=lidarrange[1], bottom=lidarrange[2]), lidar))
   end #constructor 2 CPro
 end #struct CPro
 
@@ -644,7 +664,7 @@ struct SatDB
   Automated constructor scanning for `HDF4` in `folders`; any data or comments
   can be attached in the field remarks.
   """
-  function SatDB(folders::String...; remarks=nothing)
+  function SatDB(folders::String...; lidarrange::Tuple{Real,Real}=(15,-Inf), remarks=nothing)
     tstart = Dates.now()
     # Scan folders for HDF4 files
     files = String[];
@@ -654,10 +674,10 @@ struct SatDB
     # Start MATLAB session
     ms = mat.MSession()
     # Get lidar altitude levels
-    lidar = get_lidarheights()
+    lidar = get_lidarheights(lidarrange)
     # Load CALIPSO cloud layer and profile data based on file names
     clay = CLay(ms, files[occursin.("CLay", basename.(files))])
-    cpro = CPro(ms, files[occursin.("CPro", basename.(files))], lidar)
+    cpro = CPro(ms, files[occursin.("CPro", basename.(files))], lidar, lidarrange)
     # Close MATLAB session
     mat.close(ms)
     # Calculate time span of satellite data

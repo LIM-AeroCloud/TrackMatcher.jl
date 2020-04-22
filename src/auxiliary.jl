@@ -75,50 +75,6 @@ end # function findfiles!
 
 
 """
-    remdup!(x::Vector{<:Float64}, y::Vector{<:Float64},
-      alt::Vector{<:Float64}, speed::Vector{<:Float64}, t::Vector{<:ZonedDateTime})
-
-Remove entries with duplicate `x` and `y` (`lat`/`lon` or `lon`/`lat`) values from
-these arrays as well as `alt`, `speed`, and `t`. Increase x by an infinitessimal
-number if x data is identical, but y data is not.
-"""
-function remdup!(x::Vector{Float64}, y::Vector{Float64}, t::Vector{ZonedDateTime},
-  alt::Vector{<:Union{Missing,Float64}}, speed::Vector{<:Union{Missing,Float64}},
-  head::Vector{<:Union{Missing,Int}}, climb::Vector{<:Union{Missing,Int}})
-  # Initialise
-  i = 1
-  iEnd = length(x)
-  # Loop over entries in vector
-  while i < iEnd
-    j = i + 1 # index for next consecutive line
-    while j ≤ iEnd && x[i] == x[j]
-      # Define a infinitessimal small value δ which can be repeatedly applied via Δ
-      δ = eps(x[i]); Δ = 0
-      if y[i] == y[j]
-        # Delete entries from all arrays with equal x and y data
-        deleteat!(x, i); deleteat!(y, i); deleteat!(t, i)
-        deleteat!(alt, i); deleteat!(speed, i); deleteat!(head, i); deleteat!(climb, i)
-
-        # Decrease the counter for the end of the arrays
-        iEnd -= 1
-      else
-        # If x values are equal, but y values differ add multiples of δ repeatedly
-        # by adding δ to Δ, and Δ to x.
-        Δ += δ
-        x[j] += Δ
-        j += 1 # set to next index
-      end
-    end
-    i += 1 # increase line counter
-  end
-
-  # Return revised data
-  return x, y, t, alt, speed, head, climb
-end #function remdup!
-
-
-
-"""
     remdup!(data::DataFrame, useLON::Bool)
 
 Remove entries with duplicate x and y (`lat`/`lon` or `lon`/`lat`) values from

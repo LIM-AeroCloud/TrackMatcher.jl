@@ -5,28 +5,39 @@
 
 Return a `NamedTuple` with the following entries:
 - `coarse`: altitude levels of the CALIOP lidar data as defined in the metadata of the hdf files
-- `refined`: altitude levels of CALIOP lidar data with 30m intervals below 8.3km
+- `fine`: altitude levels of CALIOP lidar data with 30m intervals below 8.3km
 - `i30`: vector index of the first altitude level with 30m intervals
 """
-function get_lidarheights()
+function get_lidarheights(lidarrange::Tuple{Real,Real})
   # Read CPro lidar altitude profile
   hfile = normpath(@__DIR__, "../data/CPro_Lidar_Altitudes_km.dat")
   hprofile = CSV.read(hfile)
+  # Consider only levels between max/min given in lidarrange
+  itop = findfirst(hprofile.CPro .≤ lidarrange[1])
+  ibottom = findlast(hprofile.CPro .≥ lidarrange[2])
+  levels = hprofile.CPro[itop:ibottom]
+
   # add extralayers for region with double precision
-  h30m = findlast(hprofile.CPro.≥8.3)
-  hrefined=[(hprofile.CPro[i] + hprofile.CPro[i+1])/2 for i = h30m:length(hprofile.CPro)-1]
-  hrefined = sort([hprofile.CPro; hrefined; hprofile.CPro[end]-0.03], rev=true)
+  h30m = findlast(levels.≥8.3)
+  hfine=[(levels[i] + levels[i+1])/2 for i = h30m:length(levels)-1]
+  hfine = sort([levels; hfine; levels[end]-0.03], rev=true)
 
   # Return original and refined altitude profiles as Vector{AbstractFloat}
-  return (coarse = float.(hprofile.CPro), refined = hrefined, i30=h30m)
+  return (coarse = levels, fine = hfine, itop=itop, ibottom=ibottom, i30=h30m)
 end #function get_lidarheights
 
 
 """
-    append_lidardata!(vec::Vector{Vector{UInt16}}, ms::mat.MSession, variable::String, lidar::NamedTuple)
+    function append_lidardata!(
+      vec::Vector{Vector{<:Union{Missing,T}}},
+      ms::mat.MSession,
+      variable::String,
+      lidar::NamedTuple,
+      coarse::Bool = false;
+      missingvalues = missing
+    ) where T
 
-Append `vec` by a vector of `variable`s using the refined height levels in the `lidar` data
-and the MATLAB session `ms`.
+
 """
 function append_lidardata!(
   vec::Vector{Vector{<:Union{Missing,T}}},
@@ -40,16 +51,16 @@ function append_lidardata!(
 	var = mat.jarray(mat.get_mvariable(ms, :var))
 	for i = 1:size(var, 1)
     if coarse && ismissing(missingvalues)
-      push!(vec, var[i,:])
+      push!(vec, var[i,lidar.itop:lidar.ibottom])
     elseif coarse
-      v = convert(Vector{Union{Missing,T}}, var[i,:])
+      v = convert(Vector{Union{Missing,T}}, var[i,lidar.itop:lidar.ibottom])
       v[v.==missingvalues] .= missing
       push!(vec, v)
     else
-  		v = Vector{T}(undef,length(lidar.refined))
-  		v[1:lidar.i30-1] = var[i,1:lidar.i30-1,1]
-  		v[lidar.i30:2:length(lidar.refined)] = var[i,lidar.i30:end,1]
-  		v[lidar.i30+1:2:length(lidar.refined)] = var[i,lidar.i30:end,2]
+  		v = Vector{T}(undef,length(lidar.fine))
+  		v[1:lidar.i30-1] = var[i,lidar.itop:lidar.itop+lidar.i30-2,1]
+  		v[lidar.i30:2:end] = var[i,lidar.itop+lidar.i30-1:lidar.ibottom,1]
+  		v[lidar.i30+1:2:end] = var[i,lidar.itop+lidar.i30-1:lidar.ibottom,2]
   		push!(vec, v)
     end
 	end
