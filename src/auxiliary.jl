@@ -1,33 +1,6 @@
 ### Helper functions
 
 """
-    checklength(vect, ref) -> vect
-
-Check that length of vector `vect` is the same as reference vector `ref`,
-otherwise warn and either fill missing entries with `missing` at the end or
-delete additional entries at the end of `vect` and return `vect`.
-"""
-function checklength(vect, ref)
-  # Compare lengths of vectors
-  len = length(ref) - length(vect)
-  if len > 0
-    # Warn of vector shorter than reference and fill with missing
-    @warn string("$(len) entries missing in vector compared to reference. ",
-      "Missing entries are filled with `missing` at the end of the vector.")
-    vect = [vect; [missing for i = 1:len]]
-  elseif len < 0
-    # Warn of vector longer than reference and delete additonal entries
-    @warn string("$(-len) additional entries found in vector compared to reference. ",
-      "Additional entries at the end of the vector are ignored.")
-    vect = vect[1:length(ref)]
-  end
-
-  # Return (modified) vector
-  return vect
-end #function checklength
-
-
-"""
     convertUTC(t::Float64) -> DateTime
 
 Convert the CALIOP Profile UTC time (`t`) to a `DateTime`.
@@ -49,78 +22,60 @@ end
 
 
 """
-    findFiles(inventory::Vector{String}, folder::String, filetypes::String...) -> inventory
+    findfiles!(inventory::Vector{String}, folder::String, filetypes::String...) -> inventory
 
 Scan `folder` recursively for files of `filetype` and add to the `inventory`.
 """
-function findFiles(inventory::Vector{String}, folder::String, filetypes::String...)
+function findfiles!(inventory::Vector{String}, folder::String, filetypes::String...)
   # Construct Regex of file endings from filetypes
-  fileendings = Regex(join(filetypes,'|'))
+  fileextensions = Regex(join(filetypes,'|'))
   # Scan directory for files and folders and save directory
   dir = readdir(folder); path = abspath(folder)
   for file in dir
     # Save current directory/file
     cwd = joinpath(path, file)
-    if endswith(file, fileendings)
+    if isdir(cwd)
+      # Step into subdirectories and scan them, too
+      findfiles!(inventory, cwd, filetypes...)
+    elseif endswith(file, fileextensions) && !startswith(file, ".")
       # Save files of correct type
       push!(inventory, cwd)
-    elseif isdir(cwd)
-      # Step into subdirectories and scan them, too
-      inventory = findFiles(inventory, cwd, filetypes...)
     end
   end
 
   return inventory
-end # function findFiles
-
-function findFiles(inventory::Vector{String}, folder::String, filetypes::String)
-  # Scan directory for files and folders and save directory
-  dir = readdir(folder); path = abspath(folder)
-  for file in dir
-    # Save current directory/file
-    cwd = joinpath(path, file)
-    if endswith(file, filetypes)
-      # Save files of correct type
-      push!(inventory, cwd)
-    elseif isdir(cwd)
-      # Step into subdirectories and scan them, too
-      inventory = findFiles(inventory, cwd, filetypes)
-    end
-  end
-
-  return inventory
-end # function findFiles
+end # function findfiles!
 
 
 """
-    remdup(x::Vector{<:Float64}, y::Vector{<:Float64},
-      alt::Vector{<:Float64}, speed::Vector{<:Float64}, t::Vector{<:ZonedDateTime})
+    remdup!(data::DataFrame, useLON::Bool)
 
-Remove entries with duplicate `x` and `y` (`lat`/`lon` or `lon`/`lat`) values from
-these arrays as well as `alt`, `speed`, and `t`.
+Remove entries with duplicate x and y (`lat`/`lon` or `lon`/`lat`) values from
+`data` or increase x by an infinitessimal number if x data is identical, but y data
+is not.
 """
-function remdup(x::Vector{<:Float64}, y::Vector{<:Float64},
-  alt::Vector{<:Float64}, speed::Vector{<:Float64}, t::Vector{<:ZonedDateTime})
+function remdup!(data::DataFrame, useLON::Bool)
+  # Define x and y data
+  x, y = useLON ? (:lon, :lat) : (:lat, :lon)
   # Initialise
   i = 1
-  iEnd = length(x)
+  iEnd = length(data[!,x])
   # Loop over entries in vector
   while i < iEnd
     j = i + 1 # index for next consecutive line
-    while j ≤ iEnd && x[i] == x[j]
+    while j ≤ iEnd && data[i, x] == data[j, x]
       # Define a infinitessimal small value δ which can be repeatedly applied via Δ
-      δ = eps(x[i]); Δ = 0
-      if y[i] == y[j]
+      δ = eps(data[i, x]); Δ = 0
+      if data[i, y] == data[j, y]
         # Delete entries from all arrays with equal x and y data
-        deleteat!(x, i); deleteat!(y, i); deleteat!(alt, i); deleteat!(speed, i)
-        deleteat!(t, i)
+        df.deleterows!(data, i)
         # Decrease the counter for the end of the arrays
         iEnd -= 1
       else
         # If x values are equal, but y values differ add multiples of δ repeatedly
         # by adding δ to Δ, and Δ to x.
         Δ += δ
-        x[j] += Δ
+        data[j, x] += Δ
         j += 1 # set to next index
       end
     end
@@ -128,17 +83,17 @@ function remdup(x::Vector{<:Float64}, y::Vector{<:Float64},
   end
 
   # Return revised data
-  return x, y, alt, speed, t
-end
+  return data
+end #function remdup!
 
 
 """
-    findFlex(x::Vector{<:Real}) -> Vector{ NamedTuple{(:range, :min, :max), Tuple{UnitRange, Float64, Float64}}}
+    findflex(x::Vector{<:Real}) -> Vector{ NamedTuple{(:range, :min, :max), Tuple{UnitRange, Float64, Float64}}}
 
 Find inflection points in `x` and return a vector of named tuples with index ranges
 between inflection points and corresponding extrema.
 """
-function findFlex(x::Vector{<:Real})
+function findflex(x::Vector{<:Real})
   # Save starting index
   flex = Int[1]
   # Loop over data points
@@ -163,7 +118,7 @@ function findFlex(x::Vector{<:Real})
 
   # Return all ranges between flex points together with the corresponding extrema
   return Tuple(ranges)
-end #function findFlex
+end #function findflex
 
 
 """
@@ -318,7 +273,7 @@ end #function extract_timespan
 
 
 """
-    swap_sattype(sattype::Symbol)::Symbol
+    swap_sattype!(sattype::Symbol)::Symbol
 
 Returns the other Symbol from the options
 
@@ -327,7 +282,104 @@ Returns the other Symbol from the options
 
 when `sattype` is given to switch between `SatDB` datasets.
 """
-function swap_sattype(sattype::Symbol)::Symbol
+function swap_sattype!(sattype::Symbol)::Symbol
   swap = Dict(:CPro => :CLay, :CLay => :CPro)
   swap[sattype]
 end
+
+
+"""
+    get_trackdata(flight::FlightData, sat::SatDB, sattype::Symbol,
+      tflight::DateTime, tsat::DateTime, flightspan::Int, satspan::Int)
+      -> flightdata::FlightData, satdata::SatDB
+
+From the measured `flight` and `sat` data and the times of the aircraf (`tflight`)
+and the satellite (`tsat`) at the intersection, save the closest measured value
+to the interpolated intersection of each dataset ±`flightspan`/`satspan` data points
+to `flightdata` and `satdata`, respectively, and return the datasets.
+"""
+function get_trackdata(flight::FlightData, sat::SatDB, sattype::Symbol,
+  tflight::DateTime, tsat::DateTime, flightspan::Int, satspan::Int)
+
+  # Find the index (DataFrame row) of the intersection in the flight data
+  tf = argmin(abs.(flight.data.time .- tflight))
+
+  # Construct FlightData at Intersection
+  flightdata =
+    FlightData(extract_timespan(flight.data, tf, flightspan), flight.metadata)
+
+  # Get satellite data used to find the intersection and find DataFrame row of intersection
+  satprim = getfield(sat, sattype).data
+  tsp = argmin(abs.(satprim.time .- tsat))
+  # Retrieve DataFrame at Intersection ± 15 time steps
+  primdata = extract_timespan(satprim, tsp, satspan)
+
+  # Switch to other satellite data (CLay/CPro) and check whether data is available
+  # at intersection and retrieve ±15 time steps as well
+  swap_sattype!(sattype)
+  secdata = try satsec = getfield(sat, sattype).data
+    tss = argmin(abs.(satsec.time .- tsat))
+    extract_timespan(satsec, tss, satspan)
+  catch
+    # Return an empty DataFrame, if no data is available
+    sattype == :CLay ?
+      DataFrame(time=DateTime[], lat=Float64[], lon=Float64[]) :
+      DataFrame(time=DateTime[], lat=Float64[], lon=Float64[],
+        FCF=Union{Missing,UInt16}[], EC532=Union{Missing,Float32}[])
+  end
+  # Save satellite data in SatDB
+  satdata = sattype == :CPro ? SatDB(CLay(primdata), CPro(secdata, sat.CPro.metadata), sat.metadata) :
+    SatDB(CLay(secdata), CPro(primdata, sat.CPro.metadata), sat.metadata)
+
+  return flightdata, satdata,
+    argmin(abs.(flightdata.data.time .- tflight)), argmin(abs.(primdata.time .- tsat))
+end
+
+
+"""
+    timesec(t::Real) -> DateTime
+
+From a UNIX DateTime, return a DateTime rounded to the second
+"""
+timesec(t::Real) = round(Dates.unix2datetime(t), Dates.Second)
+
+
+"""
+    timesec(t::Union{DateTime,ZonedDateTime}) -> DateTime
+
+Round a `DateTime` or `ZonedDateTime` to the second.
+"""
+timesec(t::Union{DateTime,ZonedDateTime}) = round(t, Dates.Second)
+
+
+"""
+    preptrack(flight::DataFrame) -> flight, flex, useLON
+
+Use the `flight` data to prepare the track for interpolation. Find the predominant
+flight direction and inflection (flex) points in the flight track.
+
+Return a tidied flight data from which duplicate entries are removed together
+with the `flex` points in the x data for interpolation and a boolean `useLON`,
+which is true for longitude values used x data in the track interpolation.
+"""
+function preptrack(flight::DataFrame)
+  # calculate area covered by flight
+  lp = any(flight.lon .≥ 0) ? maximum(filter(l -> l ≥ 0, flight.lon)) -
+    minimum(filter(l -> l ≥ 0, flight.lon)) : 0
+  ln = any(flight.lon .< 0) ? maximum(filter(l -> l < 0, flight.lon)) -
+    minimum(filter(l -> l < 0, flight.lon)) : 0
+  # Determine main direction of flight (N<>S, E<>W) and use it as x values
+  # for flight interpolation (info stored as bool useLON)
+  useLON = maximum(flight.lat) - minimum(flight.lat) ≤ (lp + ln) *
+    cosd(stats.mean(flight.lat)) ? true : false
+  # Adjust for duplicate entries and
+  remdup!(flight, useLON)
+  # find flex points to cut data in segments needed for the interpolation
+  flex = useLON ? findflex(flight.lon) : findflex(flight.lat)
+
+  return flight, flex, useLON
+end #function preptrack
+
+
+"""Convert feet to kilomenters"""
+ft2km(ft::Real) = 0.0003048ft

@@ -71,10 +71,10 @@ Intersection(flights::FlightDB, sat::SatDB, sattype::Symbol=:CLay; kwargs)
 
 ### kwargs
 
-- `deltat::Int=30`: maximum delay at intersection between aircraft/satellite
+- `maxtimediff::Int=30`: maximum delay at intersection between aircraft/satellite
 - `flightspan::Int=0`: number of flight data points saved before and after the closest measurement to the intersection
 - `satspan::Int=15`: number of satellite data points saved before and after the closest measurement to the intersection
-- `precision::Float64=0.01`: stepwidth in degrees used for the interpolation of flight and satellite tracks
+- `stepwidth::Float64=0.01`: stepwidth in degrees used for the interpolation of flight and satellite tracks
 - `remarks=nothing`: any data or comments that can be attached to the metadata of `Intersection`
 
 <!-- - `Xradius::Real=5000` -->
