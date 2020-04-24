@@ -2,37 +2,31 @@
 # Module TrackMatcher
 
 To find intersection between different trajectories. The module is aimed to find
-intersections between aircraft and satellite tracks, but can be used for flight
+intersections between aircraft and satellite tracks, but can be used for ship
 or cloud tracks as well.
 
-## Public structs
+## Exported structs
 
 - `FlightDB` stores flight track data and other relevant aircraft related data
   from 3 different inventories:
   - `inventory`: VOLPE AEDT inventory
   - `archive`: commercially available database by FlightAware
   - `onlineData`: free online data by FlightAware
-- `FlightData` stores `FlightDB` data of a single flight
+- `FlightData` stores data of a single flight in `FlightDB`
 - `FlightMetadata` holds metadata to every flight
 - `SatDB` stores CALIPSO cloud layer and profile data from the CALIOP satellite
 - `CLay` CALIPSO cloud layer data
 - `CPro` CALIPSO cloud profile data
+- `SatMetadata` with metadata of the CALIPSO cloud profile data
+- `DBMetadata` with metadata of the databases for satellite and flight data
 - `Intersection`: position of intersection between aircraft and satellite trajectory,
-  together with time difference between crossing and `FlightData` and `SatDB` in the
-  vicinity of the intersection
-
-
-## Public functions
-
-- `intersection` finds intersections in the trajectories of aircrafts and satellites
-  stored in `FlightDB` and `SatDB` and returns a vector of `Intersection` instances
+  together with time difference between crossing; and `FlightData` and `SatDB` in the
+  vicinity of the intersection as well as information about the accuracy of the data
+- `XMetadata` with metadata for the `Intersection` data
 """
 module TrackMatcher
 
-# Track changes during development
-# using Revise
-
-# Import Julia packages
+## Import Julia packages
 import CSV
 import DataFrames; const df = DataFrames
 import Dates
@@ -49,12 +43,13 @@ import TimeZones.ZonedDateTime
 
 
 # Define Logger with log level
-try logger = logg.SimpleLogger(logfile, logg.Info)
-catch; logger = logg.ConsoleLogger(stdout, logg.Info)
+logger = try logg.SimpleLogger(logfile, logg.Info)
+catch; logg.ConsoleLogger(stdout, logg.Info)
 end
+logg.global_logger(logger)
 
 
-### Define own structs
+## Define own Metadata structs
 """
 # struct FlightMetadata
 
@@ -66,6 +61,9 @@ Immutable struct to hold metadata for `FlightData` of the `FlightDB` with fields
 - `aircraft::Union{Missing,AbstractString}`
 - `date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}`
 - `area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),Tuple{Float64,Float64,Float64,Float64,Float64,Float64}}`
+- `flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}}`
+- `useLON::Bool`
+- `source::AbstractString`
 - `file::AbstractString`
 
 ## dbID
@@ -96,6 +94,21 @@ Fields:
 `NamedTuple` with fields `start` and `stop` for start and end time of the current
 flight.
 
+## flex
+`Tuple` of `NamedTuple`s with entries
+- `range` (`UnitRange`): flight segment between inflection points of the current flight track
+- `min` (`Float64`): minimum x value in the flight segment
+- `max` (`Float64`): maximum x value in the flight segment
+
+## useLON
+Flag (`Bool`) whether to use longitude as x data for track interpolation.
+
+## source
+String describing the database source of the current flight:
+- `"VOLPE AEDT"`
+- `"FlightAware"`
+- `"flightaware.com"`
+
 ## file
 String holding the absolute folder path and file name.
 
@@ -106,21 +119,34 @@ String holding the absolute folder path and file name.
 a modified constructor and `dbID`, `flightID`, `aircraft` type, `route`, and `file`.
 Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
 
-    FlightMetadata(dbID::Union{Int,AbstractString},
-      flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
+    function FlightMetadata(
+      dbID::Union{Int,AbstractString},
+      flightID::Union{Missing,AbstractString},
       route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
-      lat::Vector{<:Union{Missing,Float64}}, lon::Vector{<:Union{Missing,Float64}},
-      date::Vector{DateTime}, file::AbstractString) -> struct FlightMetadata
+      aircraft::Union{Missing,AbstractString},
+      date::Vector{DateTime},
+      lat::Vector{<:Union{Missing,Float64}},
+      lon::Vector{<:Union{Missing,Float64}},
+      useLON::Bool,
+      flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
+      source::AbstractString,
+      file::AbstractString
+    ) -> struct FlightMetadata
 
 Or construct `FlightMetadata` by directly handing over every field:
 
-    FlightMetadata(dbID::Union{Int,AbstractString}, flightID::Union{Missing,AbstractString},
+    function FlightMetadata(
+      dbID::Union{Int,AbstractString},
+      flightID::Union{Missing,AbstractString},
       route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
-      aircraft::Union{Missing,AbstractString}, date::Vector{DateTime},
-      lat::Vector{<:Union{Missing,Float64}}, lon::Vector{<:Union{Missing,Float64}},
-      useLON::Bool,
+      aircraft::Union{Missing,AbstractString},
+      date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+      area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,Float64}},
       flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
-      file::AbstractString)
+      useLON::Bool,
+      source::AbstractString,
+      file::AbstractString
+    ) -> struct FlightMetadata
 """
 struct FlightMetadata
   dbID::Union{Int,AbstractString}
@@ -135,12 +161,18 @@ struct FlightMetadata
   file::AbstractString
 
   """ Unmodified constructor for `FlightMetadata` """
-  function FlightMetadata(dbID::Union{Int,AbstractString}, flightID::Union{Missing,AbstractString},
+  function FlightMetadata(
+    dbID::Union{Int,AbstractString},
+    flightID::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
-    aircraft::Union{Missing,AbstractString}, date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+    aircraft::Union{Missing,AbstractString},
+    date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
     area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,Float64}},
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
-    useLON::Bool, source::AbstractString, file::AbstractString)
+    useLON::Bool,
+    source::AbstractString,
+    file::AbstractString
+  )
 
     new(dbID, flightID, route, aircraft, date, area, flex, useLON, source, file)
   end #constructor 1 FlightMetadata
@@ -149,13 +181,19 @@ struct FlightMetadata
   Modified constructor for FlightMetadata with some automated construction of fields
   and variable checks.
   """
-  function FlightMetadata(dbID::Union{Int,AbstractString}, flightID::Union{Missing,AbstractString},
+  function FlightMetadata(
+    dbID::Union{Int,AbstractString},
+    flightID::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
-    aircraft::Union{Missing,AbstractString}, date::Vector{DateTime},
-    lat::Vector{<:Union{Missing,Float64}}, lon::Vector{<:Union{Missing,Float64}},
+    aircraft::Union{Missing,AbstractString},
+    date::Vector{DateTime},
+    lat::Vector{<:Union{Missing,Float64}},
+    lon::Vector{<:Union{Missing,Float64}},
     useLON::Bool,
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
-    source::AbstractString, file::AbstractString)
+    source::AbstractString,
+    file::AbstractString
+  )
 
     elonmax = isempty(lon[lon.≥0]) ? NaN : maximum(lon[lon.≥0])
     elonmin = isempty(lon[lon.≥0]) ? NaN : minimum(lon[lon.≥0])
@@ -167,6 +205,19 @@ struct FlightMetadata
       flex, useLON, source, file)
   end #constructor 2 FlightMetadata
 end #struct FlightMetadata
+
+
+"""
+# struct SatMetadata
+
+Immutable struct with metadata for CALIOP cloud layer profiles storing information
+about the height levels of the measurements.
+"""
+struct SatMetadata
+  lidarrange::NamedTuple{(:top,:bottom), Tuple{Real,Real}}
+  lidarlevels::NamedTuple{(:coarse,:fine,:itop,:ibottom,:i30),
+    Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat},Int,Int,Int}}
+end #struct SatMetadata
 
 
 """
@@ -192,7 +243,6 @@ end #struct DBMetadata
 
 Immutable struct with additional information of intersection data:
 
-- `cirrus`: flag for cirrus clouds at flight altitude level
 - `maxtimediff`: maximum time difference allowed between satellite overpass and
   aircraft passing at intersection
 - `stepwidth`: stepwidth (in degrees at equator) used to interpolate track data
@@ -205,7 +255,6 @@ Immutable struct with additional information of intersection data:
 - `remarks`: any additional data or comments that can be attached to the database
 """
 struct XMetadata
-  cirrus::Bool
   maxtimediff::Int
   stepwidth::Float64
   Xradius::Real
@@ -216,6 +265,7 @@ struct XMetadata
 end #struct XMetaData
 
 
+## Define structs related to flight data
 """
 # struct FlightData
 
@@ -279,24 +329,27 @@ struct FlightData
   end #constructor 1 FlightData
 
   """ Modified constructor with variable checks and some automated calculation of fields """
-  function FlightData(time::Vector{ZonedDateTime}, lat::Vector{<:Union{Missing,Float64}},
-    lon::Vector{<:Union{Missing,Float64}}, alt::Vector{<:Union{Missing,Float64}},
-    heading::Vector{<:Union{Missing,Int}}, climb::Vector{<:Union{Missing,Int}},
-    speed::Vector{<:Union{Missing,Float64}}, dbID::Union{Int,AbstractString},
+  function FlightData(flightdata::DataFrame, dbID::Union{Int,AbstractString},
     flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
     useLON::Bool, source::String, file::AbstractString)
 
-    t = [t.utc_datetime for t in time]
-    lat = checklength(lat, t)
-    lon = checklength(lon, t)
-    alt = checklength(alt, t)
-    heading = checklength(heading, t)
-    climb = checklength(climb, t)
-    speed = checklength(speed, t)
+    # Check dataframe columns of flight data; fill missing columns with missing values
+    t = getproperty(flightdata, :time)
+    t = t isa Vector{ZonedDateTime} ? [zt.utc_datetime for zt in t] : t
+    lat = getproperty(flightdata, :lat)
+    lon = getproperty(flightdata, :lon)
+    alt = getproperty(flightdata, :alt)
+    heading = hasproperty(flightdata, :heading) ? getproperty(flightdata, :heading) :
+      [missing for i in t]
+    climb = hasproperty(flightdata, :climb) ? getproperty(flightdata, :climb) :
+      [missing for i in t]
+    speed = hasproperty(flightdata, :speed) ? getproperty(flightdata, :speed) :
+      [missing for i in t]
     metadata = FlightMetadata(dbID,flightID,route,aircraft,t,lat,lon,useLON,flex,source,file)
 
+    # Instatiate new FlightData
     new(DataFrame(time=t,lat=lat,lon=lon,alt=alt,heading=heading,climb=climb,speed=speed),metadata)
   end #constructor 2 FlightData
 end #struct FlightData
@@ -310,6 +363,7 @@ Database for aircraft data of different database types with fields:
 - `archive::Vector{FlightData}`
 - `onlineData::Vector{FlightData}`
 - `metadata`: `DBMetatadata` with information about
+  - `date`: date range of the dataset
   - `created`: time of creation
   - `loadtime`
   - `remarks` (any additional data or comments)
@@ -389,22 +443,22 @@ struct FlightDB
     # VOLPE AEDT inventory
     ifiles = String[]
     for i in i1
-      ifiles = findFiles(ifiles, folder[i], ".csv")
+      findfiles!(ifiles, folder[i], ".csv")
     end
     inventory = loadInventory(ifiles, altmin=altmin)
     # FlightAware commercial archive
     ifiles = String[]
     for i in i2
-      ifiles = findFiles(ifiles, folder[i], ".csv")
+      findfiles!(ifiles, folder[i], ".csv")
     end
     archive = loadArchive(ifiles, altmin=altmin)
     ifiles = String[]
     for i in i3
       if VERSION ≥ v"1.2"
-        ifiles = findFiles(ifiles, folder[i], ".txt", ".dat")
+        findfiles!(ifiles, folder[i], ".txt", ".dat")
       else
-        ifiles = findFiles(ifiles, folder[i], ".txt")
-        ifiles = findFiles(ifiles, folder[i], ".dat")
+        findfiles!(ifiles, folder[i], ".txt")
+        findfiles!(ifiles, folder[i], ".dat")
       end
     end
     onlineData = loadOnlineData(ifiles, altmin=altmin, delim=odelim)
@@ -429,6 +483,7 @@ struct FlightDB
 end #struct FlightDB
 
 
+## Define structs related to sat data
 """
 # struct CLay
 
@@ -439,7 +494,7 @@ CALIOP cloud layer `data` stored in a `DataFrame` with columns:
 
 # Instantiation
 
-    CLay(ms::mat.MSession, files::String...) -> struct CLay
+    CLay(ms::mat.MSession, files::Vector{String}) -> struct CLay
 
 Construct `CLay` from a list of file names (including directories) and a running
 MATLAB session.
@@ -465,39 +520,32 @@ struct CLay
   Modified constructor of `CLay` reading data from hdf files given in `folders...`
   using MATLAB session `ms`.
   """
-  function CLay(ms::mat.MSession, folders::String...)
-    # Scan folders for HDF4 files
-    files = String[];
-    for folder in folders
-      files = findFiles(files, folder, ".hdf")
-    end
+  function CLay(ms::mat.MSession, files::Vector{String})
     # Initialise arrays
     utc = DateTime[]; lon = Float64[]; lat = Float64[]
     # Loop over files
     prog = pm.Progress(length(files), "load CLay data...")
     for file in files
       # Find files with cloud layer data
-      if occursin("CLay", basename(file))
-        utc, lon, lat = try
-          # Extract time
-          mat.put_variable(ms, :file, file)
-          mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-          t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
-          # Extract lat/lon
-          mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-          longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
-          mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-          latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
-          # Save time converted to UTC and lat/lon
-          [utc; convertUTC.(t)],
-          [lon; longitude],
-          [lat; latitude]
-        catch
-          # Skip data on failure and warn
-          @warn string("read error in CALIPSO granule ",
-            "$(splitext(basename(file))[1])\ndata skipped")
-          utc, lon, lat
-        end
+      utc, lon, lat = try
+        # Extract time
+        mat.put_variable(ms, :file, file)
+        mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
+        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
+        # Extract lat/lon
+        mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
+        longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
+        mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
+        latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
+        # Save time converted to UTC and lat/lon
+        [utc; convertUTC.(t)],
+        [lon; longitude],
+        [lat; latitude]
+      catch
+        # Skip data on failure and warn
+        @warn string("read error in CALIPSO granule ",
+          "$(splitext(basename(file))[1])\ndata skipped")
+        utc, lon, lat
       end
       # Monitor progress for progress bar
       pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
@@ -517,76 +565,103 @@ CALIOP cloud profile `data` stored in a `DataFrame` with columns:
 - `time::Vector{DateTime}`
 - `lat::Vector{Float64}`
 - `lon::Vector{Float64}`
+- `FCF::Vector{UInt16}`
+- `EC532::Vector{<:Union{Missing,Symbol}}`
+
+Additional `SatMetadata` are stored in a immutable struct with fields:
+- `lidarrange::NamedTuple{(:top,:bottom), Tuple{Real,Real}}`
+- `lidarlevels::NamedTuple{(:coarse,:fine,:itop,:ibottom,:i30),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat},Int,Int,Int}}`
 
 # Instantiation
 
-    CPro(ms::mat.MSession, files::String...) -> struct CPro
+    CPro(ms::mat.MSession, files::Vector{String}, lidar::NamedTuple, lidarrange::Tuple{Real,Real})
+      -> struct CPro
 
 Construct `CPro` from a list of file names (including directories) and a running
-MATLAB session.
+MATLAB session. Furthermore, provide a `NamedTuple` `lidar` with information about
+the heights of the lidar levels and indices of important height levels in the
+vectorized data.
 
 Or construct `CPro` by directly handing over the `DataFrame` where the names, order,
 and types of each columns are checked and attempted to correct:
 
-    CPro(data::DataFrame) -> struct CPro
+    CPro(data::DataFrame, metadata::SatMetadata) -> struct CPro
 """
 struct CPro
   data::DataFrame
+  metadata::SatMetadata
 
   """ Unmodified constructor for `CPro` """
-  function CPro(data::DataFrame)
-    standardnames = [:time, :lat, :lon]
-    standardtypes = [Vector{DateTime}, Vector{Float64}, Vector{Float64}]
+  function CPro(data::DataFrame, metadata::SatMetadata)
+    standardnames = [:time, :lat, :lon, :FCF, :EC532]
+    standardtypes = [Vector{DateTime}, Vector{Float64}, Vector{Float64},
+      Vector{Vector{<:Union{Missing,UInt16}}}, Vector{Vector{<:Union{Missing,Float32}}}]
     bounds = Tuple{Real,Real}[]
     data = checkcols(data, standardnames, standardtypes, bounds, "CPro", nothing)
-    new(data)
+    new(data, metadata)
   end #constructor 1 CPro
 
   """
   Modified constructor of `CPro` reading data from hdf files given in `folders...`
   using MATLAB session `ms`.
   """
-  function CPro(ms::mat.MSession, folders::String...)
-    # Scan folders for HDF4 files
-    files = String[];
-    for folder in folders
-      files = findFiles(files, folder, ".hdf")
-    end
+  function CPro(ms::mat.MSession, files::Vector{String}, lidar::NamedTuple,
+    lidarrange::Tuple{Real,Real})
     # Initialise arrays
+    # essential data
     utc = DateTime[]; lon = Float64[]; lat = Float64[]
+    # non-essential data
+    avd = Vector{<:Union{Missing,UInt16}}[]; ec532 = Vector{<:Union{Missing,Float32}}[]
     # Loop over files
     prog = pm.Progress(length(files), "load CPro data...")
+    # Loop over files with cloud profile data
     for file in files
-      # Find files with cloud profile data
-      if occursin("CPro", basename(file))
-        utc, lon, lat = try
-          # Extract time
-          mat.put_variable(ms, :file, file)
-          mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-          t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
-          # Extract lat/lon
-          mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-          longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
-          mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-          latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
-          # Save time converted to UTC and lat/lon
-          [utc; convertUTC.(t)],
-          [lon; longitude],
-          [lat; latitude]
-        catch
-          # Skip data on failure and warn
-          @warn string("read error in CALIPSO granule ",
-            "$(splitext(basename(file))[1])\ndata skipped")
-          utc, lon, lat
-        end
+      # Retrieve essential data
+      utc, lon, lat = try
+        # Extract time
+        mat.put_variable(ms, :file, file)
+        mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
+        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
+        # Extract lat/lon
+        mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
+        longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
+        mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
+        latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
+        # Save time converted to UTC and lat/lon
+        [utc; convertUTC.(t)],
+        [lon; longitude],
+        [lat; latitude]
+      catch
+        # Skip data on failure and warn
+        @warn string("read error in CALIPSO granule ",
+          "$(splitext(basename(file))[1])\ndata skipped")
+        continue
+      end
+      # Retrieve non-essential data
+      # Extract feature classification flags
+      avd = try append_lidardata!(avd, ms, "Atmospheric_Volume_Description", lidar)
+      catch
+        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
+        fcf = [[missing for i = 1:length(lidar.fine)] for i in t]
+        append!(avd, fcf)
+        @warn "missing Atmosphericc Volume Description for granule", file
+      end
+      ec532 = try append_lidardata!(ec532, ms, "Extinction_Coefficient_532", lidar,
+        true, missingvalues = -9999)
+      catch
+        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
+        ec = [[missing for i = 1:length(lidar.coarse)] for i in t]
+        append!(ec532, ec)
+        @warn "missing Extinction Coefficient 532nm for granule", file
       end
       # Monitor progress for progress bar
       pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
     end #loop over files
     pm.finish!(prog)
 
-    # Save time, lat/lon arrays in CPro struct
-    new(DataFrame(time=utc, lat=lat, lon=lon))
+    # Save time, lat/lon arrays, and feature classification flags (FCF) in CPro struct
+    new(DataFrame(time=utc, lat=lat, lon=lon, FCF=avd, EC532=ec532),
+      SatMetadata((top=lidarrange[1], bottom=lidarrange[2]), lidar))
   end #constructor 2 CPro
 end #struct CPro
 
@@ -605,6 +680,8 @@ Immutable struct with fields
 
 CALIOP satellite data currently holding time as `DateTime` in `UTC`
 and position (`lat`/`lon`) of cloud layer and profile data in a `DataFrame`.
+Additionally, `CPro` currently holds feature classification flags `FCF` as `UInt16`
+and exticintion coefficients at 532 nm `EC532` as `Union{Missing,AbstractFloat}`.
 
 ## metadata
 
@@ -615,10 +692,14 @@ Immutable struct of type `DBMetadata` with fields:
 
 # Instantiation
 
-    SatDB(folder::String...; remarks=nothing) -> struct SatDB
+    SatDB(folder::String...; lidarrange::Tuple{Real,Real}=(15,-Inf), remarks=nothing)
+      -> struct SatDB
 
 Construct a CALIOP satellite database from HDF4 files (CALIOP version 4.x)
 in `folder` or any subfolder (several folders can be given as vararg).
+Only store height-resolved lidar data in the range `(top,bottom)` (in km) defaulting
+to all levels below 15km. Use `Inf` for top and `-Inf` for bottom value, if you want
+to store all data.
 Attach comments or any data with keyword argument `remarks`.
 
 Or construct by directly handing over struct fields (remarks are an optional
@@ -640,18 +721,31 @@ struct SatDB
   Automated constructor scanning for `HDF4` in `folders`; any data or comments
   can be attached in the field remarks.
   """
-  function SatDB(folders::String...; remarks=nothing)
+  function SatDB(folders::String...; lidarrange::Tuple{Real,Real}=(15,-Inf), remarks=nothing)
     tstart = Dates.now()
+    # Scan folders for HDF4 files
+    files = String[];
+    for folder in folders
+      findfiles!(files, folder, ".hdf")
+    end
+    # Start MATLAB session
     ms = mat.MSession()
-    clay = CLay(ms, folders...)
-    cpro = CPro(ms, folders...)
+    # Get lidar altitude levels
+    lidar = get_lidarheights(lidarrange)
+    # Load CALIPSO cloud layer and profile data based on file names
+    clay = CLay(ms, files[occursin.("CLay", basename.(files))])
+    cpro = CPro(ms, files[occursin.("CPro", basename.(files))], lidar, lidarrange)
+    # Close MATLAB session
     mat.close(ms)
+    # Calculate time span of satellite data
     tmin = minimum([clay.data.time; cpro.data.time])
     tmax = maximum([clay.data.time; cpro.data.time])
     tend = Dates.now()
+    # Save computing times
     tc = tz.ZonedDateTime(tend, tz.localzone())
     loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
 
+    # Instantiate new struct
     @info string("SatDB data loaded to properties in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", "))",
       "\n▪ CLay\n▪ CPro\n▪ metadata")
@@ -660,20 +754,22 @@ struct SatDB
 end #struct SatDB
 
 
+## Define structs related to intersection data
 """
 # struct Intersection
 
 Immutable struct with fields
 
-- `coord::DataFrame`
+- `data::DataFrame`
 - `tracked::DataFrame`
 - `accuracy::DataFrame`
 - `metadata::XMetadata`
 
-## coord
+## data
 
-DataFrame `coord` holds the interpolated spatial and temporal coordinates of all
-calcalated intersections in the current dataset in columns:
+DataFrame `data` holds the interpolated spatial and temporal coordinates of all
+calcalated intersections and the atmospheric condition at the intersection
+in the current dataset in columns:
 
 - `id::Vector{String}`
 - `lat::Vector{Float64}`
@@ -681,6 +777,7 @@ calcalated intersections in the current dataset in columns:
 - `tdiff::Vector{Dates.CompoundPeriod}`
 - `tflight::Vector{DateTime}`
 - `tsat::Vector{DateTime}`
+- `feature::Vector{<:Union{Missing,Symbol}}`
 
 
 ## tracked
@@ -689,7 +786,7 @@ DataFrame `tracked` holds the actual measured flight and satellite data closest
 to the intersection with additional ±`flightspan` and ±`satspan` datapoints in
 columns:
 
-- `id::Vector{String}` (same as in `coord`)
+- `id::Vector{String}` (same as in `data`)
 - `flight::Vector{FlightData}`
 - `sat::Vector{SatDB}`
 
@@ -738,7 +835,7 @@ preferred for the calculations (`CLay` by default). The following kwargs
 - remarks: any additional data or comments attached to the metadata of the struct
 """
 struct Intersection
-  coord::DataFrame
+  data::DataFrame
   tracked::DataFrame
   accuracy::DataFrame
   metadata::XMetadata
@@ -757,8 +854,9 @@ struct Intersection
     Xradius::Real=5000, remarks=nothing)
     # Initialise DataFrames with Intersection data and monitor start time
     tstart = Dates.now()
-    coord = DataFrame(id=String[], lat=Float64[], lon=Float64[],
-      tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[])
+    idata = DataFrame(id=String[], lat=Float64[], lon=Float64[],
+      tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[],
+      feature = Union{Missing,Symbol}[])
     track = DataFrame(id=String[], flight=FlightData[], sat=SatDB[])
     accuracy = DataFrame(id=String[], intersection=Float64[], flightcoord=Float64[],
       satcoord=Float64[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
@@ -775,9 +873,9 @@ struct Intersection
         sattracks = interpolate_satdata(ms, sat, overlap, flight.metadata)
         flighttracks = interpolate_flightdata(ms, flight, stepwidth)
         # Calculate intersections and store data and metadata in DataFrames
-        currcoord, currtrack, curraccuracy = find_intersections(flight, flighttracks,
+        currdata, currtrack, curraccuracy = find_intersections(flight, flighttracks,
           sat, overlap.type, sattracks, maxtimediff, stepwidth, Xradius, flightspan, satspan)
-        append!(coord, currcoord); append!(track, currtrack)
+        append!(idata, currdata); append!(track, currtrack)
         append!(accuracy, curraccuracy)
       catch e
         @debug begin
@@ -798,23 +896,21 @@ struct Intersection
     # Return Intersections after completion
     @info string("Intersection data loaded to properties in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", "))",
-      "\n▪ coord\n▪ tracked\n▪ accuracy\n▪ metadata")
-    new(coord, track, accuracy,
-      XMetadata(false,maxtimediff,stepwidth,Xradius,sattype,tc,loadtime,remarks))
+      "\n▪ data\n▪ tracked\n▪ accuracy\n▪ metadata")
+    new(idata, track, accuracy,
+      XMetadata(maxtimediff,stepwidth,Xradius,sattype,tc,loadtime,remarks))
   end #constructor Intersection
 end #struct Intersection
 
-# Needed for julia 1.0.x?:
-# SatDB(CLay::CLay, CPro::CPro, created::Union{DateTime,ZonedDateTime}) = SatDB(CLay, CPro, created, nothing)
-# SatDB(CLay::CLay, CPro::CPro) = SatDB(CLay, CPro, tz.now(tz.localtime()), nothing)
 
-
+## Export structs
 export FlightDB, FlightData, SatDB, CLay, CPro, Intersection,
-       FlightMetadata, DBMetadata, XMetadata
+       FlightMetadata, SatMetadata, DBMetadata, XMetadata
 
 
-### Import functions for other Julia files
+## Import functions for Julia include files
 include("auxiliary.jl")       # helper functions
+include("lidar.jl")           # functions related to processing CALIOP data
 include("loadFlightData.jl")  # functions related to loading flight databases/datasets
 include("match.jl")           # functions related to finding track intersections
 

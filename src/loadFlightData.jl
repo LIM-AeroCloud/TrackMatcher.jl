@@ -7,11 +7,9 @@ From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `inventory` field in `FlightDB`.
 
 When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
-altitude threshold of the aircraft data (default: `altmin=15_000`) and by the
-existance of cirrus clouds at flight level (default: `filterCloudfree=true`;
-currently only place holder, still needs to be implemented).
+altitude threshold of the aircraft data (default: `altmin=15_000`).
 """
-function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::Bool=true)
+function loadInventory(files::Vector{String}; altmin=15_000)
 
   # Initialise inventory file array and start MATLAB for PCHIP fitting
   inventory = FlightData[]
@@ -28,49 +26,41 @@ function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::Bo
     pm.next!(prog, showvalues = [(:file,splitext(basename(file))[1])])
 
     # Calculate time from individual columns and add as DateTime to DataFrame
-    flights.time = [ZonedDateTime(flights.SEGMENT_YEAR[i], flights.SEGMENT_MONTH[i],
+    flights.time = [DateTime(flights.SEGMENT_YEAR[i], flights.SEGMENT_MONTH[i],
       flights.SEGMENT_DAY[i], flights.SEGMENT_HOUR[i], flights.SEGMENT_MIN[i],
-      flights.SEGMENT_SEC[i], tz.tz"UTC") for i = 1:length(flights.FLIGHT_ID)]
+      flights.SEGMENT_SEC[i]) for i = 1:length(flights.FLIGHT_ID)]
 
     # Initialise loop over file
+    flightdata = DataFrame(time = DateTime[], lat = Float64[], lon = Float64[],
+      alt = Float64[], speed = Float64[])
     FID = flights.FLIGHT_ID[1]
-    lat = Float64[]; lon = Float64[];
-    alt = Float64[]; t = ZonedDateTime[]; speed = Float64[]
 
     # Loop over all data points
     for i = 1:length(flights.time)
       # If the next flight ID is found, save current flight
       if flights.FLIGHT_ID[i] ≠ FID || i == length(flights.time)
         # Ignore data with less than 2 data points
-        if length(t) ≤ 1  FID = flights.FLIGHT_ID[i]; continue  end
-        # calculate area covered by flight
-        lp = any(lon .> 0) ? maximum(lon[lon.≥0]) - minimum(lon[lon.≥0]) : 0
-        ln = any(lon .< 0) ? maximum(lon[lon.<0]) - minimum(lon[lon.<0]) : 0
-        # Determine main direction of flight (N<>S, E<>W) and use it as x values
-        # for flight interpolation (info stored as bool useLON)
-        useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ? true : false
-        useLON ? (x = lon; y = lat) : (x = lat; y = lon)
-        # Define missing columns with NaNs
-        head = [missing for i = 1:length(t)]
-        climb = [missing for i = 1:length(t)]
-        # Remove duplicate points in data
-        x, y, t, alt, speed, head, climb = remdup(x, y, t, alt, speed, head, climb)
-        # find flex points to cut data in segments needed for the interpolation
-        flex = findFlex(x)
+        if length(flightdata.time) ≤ 1
+          FID = flights.FLIGHT_ID[i]
+          # Empty possible entry
+          flightdata = DataFrame(time = DateTime[], lat = Float64[], lon = Float64[],
+            alt = Float64[], speed = Float64[])
+          continue
+        end
+        # Determine predominant flight direction, inflection points, and remove duplicate entries
+        flightdata, flex, useLON = preptrack(flightdata)
         # Save the FlightData in the inventory vector
-        push!(inventory, FlightData(t, lat, lon, alt, head, climb, speed, FID,
+        push!(inventory, FlightData(flightdata, FID,
           missing, missing, missing, flex, useLON, "VOLPE AEDT", file))
         # Empty data vectors
-        lat = Float64[]; lon = Float64[];
-        alt = Float64[]; t = ZonedDateTime[]; speed = Float64[]
+        flightdata = DataFrame(time = DateTime[], lat = Float64[], lon = Float64[],
+          alt = Float64[], speed = Float64[])
         FID = flights.FLIGHT_ID[i]
-        # segtime = DateTime[]; segdist = Float64[]
-      end
+      end # saving FlightData
       # Filter altitude threshold
-      if flights.ALTITUDE[i] ≥ altmin
-        push!(lat, flights.LATITUDE[i]); push!(lon, flights.LONGITUDE[i])
-        push!(alt, flights.ALTITUDE[i]); push!(speed, flights.SPEED[i])
-        push!(t, flights.time[i])
+      if ismissing(flights.ALTITUDE[i]) || flights.ALTITUDE[i] ≥ altmin
+        push!(flightdata, [flights.time[i], flights.LATITUDE[i],
+          flights.LONGITUDE[i], flights.ALTITUDE[i], flights.SPEED[i]])
       end
     end #loop over flights
     # Monitor progress for progress bar
@@ -89,11 +79,9 @@ From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `archive` field in `FlightDB`.
 
 When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
-altitude threshold of the aircraft data (default: `altmin=15_000`) and by the
-existance of cirrus clouds at flight level (default: `filterCloudfree=true`;
-currently only place holder, still needs to be implemented).
+altitude threshold of the aircraft data (default: `altmin=15_000`).
 """
-function loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree::Bool=true)
+function loadArchive(files::Vector{String}; altmin::Int=15_000)
   # Initialise archive file array
   archive = FlightData[]
   # Loop over database files
@@ -104,58 +92,48 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree:
     flights = CSV.read(file, datarow=2, normalizenames=true, ignoreemptylines=true,
       silencewarnings=true, threaded=parallel, copycols=true, dateformat="m/d/y H:M:S",
       types = Dict(:Altitude_feet_ => Float64, :Groundspeed_knots_ => Float64))
-    # Calculate time from individual columns and add as DateTime to DataFrame
-    flights.Time_UTC_ = ZonedDateTime.(flights.Time_UTC_, tz.tz"UTC")
 
     # Initialise loop over file
     FID = flights.Flight_ID[1]; n = 1
-    lat = Float64[]; lon = Float64[]
-    alt = Float64[]; t = ZonedDateTime[]; speed = Union{Missing,Float64}[]
-    climb = Union{Missing,Int}[]; head = Union{Missing,Int}[]
+    flightdata = DataFrame(time = DateTime[], lat = Float64[]; lon = Float64[],
+      alt = Union{Missing,Float64}[], speed = Union{Missing,Float64}[],
+      climb = Union{Missing,Int}[], heading = Union{Missing,Int}[])
 
-    # Initialise loop over file
     # Loop over all data points
     for i = 1:length(flights.Time_UTC_)
       # Save flight, if flight ID changes
       if flights.Flight_ID[i] ≠ FID || i == length(flights.Time_UTC_)
         # Ignore data with less than 2 data points
-        if length(t) ≤ 1
+        if length(flightdata.time) ≤ 1
           n = i
           FID = flights.Flight_ID[n]
+          # Empty possible entry
+          flightdata = DataFrame(time = DateTime[], lat = Float64[]; lon = Float64[],
+            alt = Union{Missing,Float64}[], speed = Union{Missing,Float64}[],
+            climb = Union{Missing,Int}[], heading = Union{Missing,Int}[])
           continue
         end
-        # calculate area covered by flight
-        lp = any(lon .> 0) ? maximum(lon[lon.≥0]) - minimum(lon[lon.≥0]) : 0
-        ln = any(lon .< 0) ? maximum(lon[lon.<0]) - minimum(lon[lon.<0]) : 0
-        # Determine main direction of flight (N<>S, E<>W) and use it as x values
-        # for flight interpolation (info stored as bool useLON)
-        useLON = maximum(lat) - minimum(lat) ≤ (lp + ln) * cosd(stats.mean(lat)) ?
-          true : false
-        # Remove duplicate points in data
-        x, y, t, alt, speed, head, climb = remdup(x, y, t, alt, speed, head, climb)
-        # find flex points to cut data in segments needed for the interpolation
-        flex = useLON ? findFlex(lon) : findFlex(lat)
+        # Determine predominant flight direction, inflection points, and remove duplicate entries
+        flightdata, flex, useLON = preptrack(flightdata)
         # Save the FlightData in the archive vector
-        push!(archive, FlightData(t, lat, lon, alt, head, climb, speed,
-        FID, flights.Ident[n], flights.Aircraft_Type[n],
-        (orig=flights.Origin[n], dest=flights.Destination[n]), flex, useLON,
-        "FlightAware", file))
+        push!(archive, FlightData(flightdata, FID, flights.Ident[n],
+          flights.Aircraft_Type[n], (orig=flights.Origin[n],
+          dest=flights.Destination[n]), flex, useLON, "FlightAware", file))
 
         # Reset temporary data arrays
-        lat = Float64[]; lon = Float64[]
-        alt = Float64[]; t = ZonedDateTime[]; speed = Union{Missing,Float64}[]
-        climb = Union{Missing,Int}[]; head = Union{Missing,Int}[]
+        flightdata = DataFrame(time = DateTime[], lat = Float64[]; lon = Float64[],
+          alt = Union{Missing,Float64}[], speed = Union{Missing,Float64}[],
+          climb = Union{Missing,Int}[], heading = Union{Missing,Int}[])
         # Set Flight ID and position to next flight
         n = i
         FID = flights.Flight_ID[n]
       end
       # Filter data
       if !ismissing(flights.Latitude[i]) && !ismissing(flights.Longitude[i]) &&
-        !ismissing(flights.Altitude_feet_[i]) && flights.Altitude_feet_[i] ≥ altmin
-        push!(t, flights.Time_UTC_[i])
-        push!(lat, flights.Latitude[i]); push!(lon, flights.Longitude[i])
-        push!(alt, flights.Altitude_feet_[i]); push!(speed, flights.Groundspeed_knots_[i])
-        push!(climb, flights.Rate[i]); push!(head, flights.Course[i])
+        (ismissing(flights.Altitude_feet_[i]) || flights.Altitude_feet_[i] ≥ altmin)
+        push!(flightdata, [flights.Time_UTC_[i], flights.Latitude[i],
+          flights.Longitude[i], flights.Altitude_feet_[i], flights.Groundspeed_knots_[i],
+          flights.Rate[i], flights.Course[i]])
       end
       # Monitor progress for progress bar
       pm.next!(prog, showvalues = [(:file,splitext(basename(file))[1])])
@@ -180,11 +158,9 @@ The delimiter of the data in the input file can be specified by a string or char
 Default is `nothing`, which means auto-detection of the delimiter is used.
 
 When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
-altitude threshold of the aircraft data (default: `altmin=15_000`) and by the
-existance of cirrus clouds at flight level (default: `filterCloudfree=true`;
-currently only place holder, still needs to be implemented).
+altitude threshold of the aircraft data (default: `altmin=15_000`).
 """
-function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfree::Bool=true,
+function loadOnlineData(files::Vector{String}; altmin::Int=15_000,
   delim::Union{Nothing,Char,String}=nothing)
   # Initialise inventory file array
   archive = FlightData[]
@@ -203,6 +179,11 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
       println()
       @warn "Unknown file format in $file.\nTry to specify column delimiter. Data skipped."
       continue
+    else
+      tzone = string(names(flight)[1])
+      df.rename!(flight, 1 => :time)
+      df.rename!(flight, :Latitude => :lat, :Longitude => :lon, :Course => :heading,
+        :kts => :speed, :feet => :alt, :Rate => :climb)
     end
 
     ### Get timezone from input data or use local time for undefined timezones
@@ -211,9 +192,9 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
 
     # Time is the first column and has to be addressed as flight[!,1] in the code
     # due to different column names, in which the timezone is included
-    timezone = if occursin("_CET_", string(names(flight)[1]))
+    timezone = if occursin("_CET_", tzone)
       tz.tz"+0100"
-    elseif occursin("_CEST_", string(names(flight)[1]))
+    elseif occursin("_CEST_", tzone)
       tz.tz"+0200"
     else
       tz.localzone()
@@ -237,43 +218,43 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
     end
     # Set to 2 days prior to allow corrections for timezone diffences in the next step
     date += Dates.Day(2)
-    ### Convert times to datetime and extract heading and climbing rate as Int32
+    ### Convert times to datetime and extract heading and climbing rate as Int
     # Initialise time vector
     flighttime = ZonedDateTime[]
-    # Initialise vectors for altitude, heading and climb to convert from strings to Int32
+    # Initialise vectors for altitude, heading and climb to convert from strings to Int
     altitude = Union{Missing,Float64}[]
     heading = Union{Missing,Int}[]
     climbingrate = Union{Missing,Int}[]
     # Loop over times
     for i=length(flight[!,1]):-1:1
-      alt = try parse(Float64, join([n for n in flight.feet[i]
+      alt = try parse(Float64, join([n for n in flight.alt[i]
         if isnumeric(n) || n == '.']))
       catch; missing;  end
-      climb = try parse(Int, join([n for n in flight.Rate[i]
+      climb = try parse(Int, join([n for n in flight.climb[i]
         if isnumeric(n) || n == '.' || n == '-']))
       catch; missing;  end
-      head = try parse(Int, join([n for n in flight.Course[i]
+      head = try parse(Int, join([n for n in flight.heading[i]
         if isnumeric(n) || n == '.']))
       catch; missing;  end
-      if length(flight[i,1]) ≠ 15 || ismissing(flight.Latitude[i]) ||
-          ismissing(flight.Longitude[i]) || ismissing(alt) || alt < altmin
+      if length(flight.time[i]) ≠ 15 || ismissing(flight.lat[i]) ||
+          ismissing(flight.lon[i]) || (!ismissing(alt) && alt < altmin)
         df.deleterows!(flight, i)
         continue
       end
       # Derive date from day of week and filename
-      while Dates.dayabbr(date) ≠ flight[i,1][1:3]
+      while Dates.dayabbr(date) ≠ flight.time[i][1:3]
         date -= Dates.Day(1)
       end
       # Derive time from time string
       t = if VERSION ≥ v"1.3"
         # Use AM/PM format for Julia > version 1.3
-        Time(flight[i,1][5:end], "I:M:S p")
+        Time(flight.time[i][5:end], "I:M:S p")
       else
         # Calculate time manually otherwise
-        t = Time(flight[i,1][5:12], "H:M:S")
-        if flight[i,1][end-1:end] == "PM" && !(Dates.hour(t)==12)
+        t = Time(flight.time[i][5:12], "H:M:S")
+        if flight.time[i][end-1:end] == "PM" && !(Dates.hour(t)==12)
           t += Dates.Hour(12)
-        elseif flight[i,1][end-1:end] == "AM" && Dates.hour(t)==12
+        elseif flight.time[i][end-1:end] == "AM" && Dates.hour(t)==12
           t -= Dates.Hour(12)
         else
           t
@@ -293,26 +274,18 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfr
     isempty(altitude) && continue
     # Save revised data to DataFrame
     flight.time = flighttime
-    flight.feet = altitude
-    flight.Rate = climbingrate
-    flight.Course = heading
-    # Convert lat/lon from type Union{Missing,Float64} to Float64 to be processed by findFlex
-    flight.Latitude = float.(flight.Latitude); flight.Longitude = float.(flight.Longitude)
+    flight.alt = altitude
+    flight.climb = climbingrate
+    flight.heading = heading
+    # Convert lat/lon from type Union{Missing,Float64} to Float64 to be processed by findflex
+    flight.lat = float.(flight.lat); flight.lon = float.(flight.lon)
 
-    # Determine, whether to use lat or lon as x data and find flex points
-    lp = any(flight.Longitude .> 0) ?
-      maximum(flight.Longitude[flight.Longitude.≥0]) - minimum(flight.Longitude[flight.Longitude.≥0]) : 0
-    ln = any(flight.Longitude .< 0) ?
-      maximum(flight.Longitude[flight.Longitude.<0]) - minimum(flight.Longitude[flight.Longitude.<0]) : 0
-    useLON = maximum(flight.Latitude) - minimum(flight.Latitude) ≤ (lp + ln) *
-      cosd(stats.mean(flight.Latitude)) ? true : false
-    flight = remdup(flight, useLON)
-    flex = useLON ? findFlex(flight.Longitude) : findFlex(flight.Latitude)
+    # Determine predominant flight direction, inflection points, and remove duplicate entries
+    flight, flex, useLON = preptrack(flight)
 
     # Save data as FlightData
-    push!(archive, FlightData(flight.time, flight.Latitude, flight.Longitude,
-      flight.feet, flight.Course, flight.Rate, flight.kts, replace(filename, "_" => "/"),
-      flightID, missing, (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
+    push!(archive, FlightData(flight, replace(filename, "_" => "/"), flightID,
+      missing, (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
     # Monitor progress for progress bar
     pm.next!(prog, showvalues = [(:file,filename)])
   end #loop over files
