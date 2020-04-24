@@ -355,11 +355,11 @@ function get_trackdata(flight::FlightData, sat::SatDB, sattype::Symbol,
         FCF=Union{Missing,UInt16}[], EC532=Union{Missing,Float32}[])
   end
   # Save satellite data in SatDB
-  satdata = sattype == :CPro ? SatDB(CLay(primdata), CPro(secdata), sat.metadata) :
-    SatDB(CLay(secdata), CPro(primdata), sat.metadata)
+  satdata = sattype == :CPro ? SatDB(CLay(primdata), CPro(secdata, sat.CPro.metadata), sat.metadata) :
+    SatDB(CLay(secdata), CPro(primdata, sat.CPro.metadata), sat.metadata)
 
-  # Instatiate new Intersection
-  return flightdata, satdata
+  return flightdata, satdata,
+    argmin(abs.(flightdata.data.time .- tflight)), argmin(abs.(primdata.time .- tsat))
 end
 
 

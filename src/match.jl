@@ -19,7 +19,8 @@ function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB
 
   # Initialise DataFrames for current flight
   idata = DataFrame(id=String[], lat=Float64[], lon=Float64[],
-    tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[], feature = Symbol[])
+    tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[],
+    feature = Union{Missing,Symbol}[])
   track = DataFrame(id=String[], flight=FlightData[], sat=SatDB[])
   accuracy = DataFrame(id=String[], intersection=Float64[], flightcoord=Float64[],
     satcoord=Float64[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
@@ -72,7 +73,10 @@ function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB
         (scoord[m1].lat*scoord[m2].lon - scoord[m1].lon*scoord[m2].lat)) /
         ((fcoord[m1].lat - fcoord[m2].lat)*(scoord[m1].lon - scoord[m2].lon) -
         (fcoord[m1].lon - fcoord[m2].lon)*(scoord[m1].lat - scoord[m2].lat)))
+      # Filter mismatches and unreasonable analytic solutions
       any(isnan.(X)) && continue
+      -90 .≤ X[1] .≤ 90 || continue
+      -180 .≤ X[2] .≤ 180 || continue
       # Determine intersection from flight/satellite point of view and deviation
       Xf = flight.metadata.useLON ? geo.LatLon(ft.track(X[2]), X[2]) : geo.LatLon(X[1], ft.track(X[1]))
       Xs = geo.LatLon(X[1], st.track(X[1]))
@@ -92,23 +96,23 @@ function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB
       # is more accurate or new (not within Xradius)
       if isnothing(dup) || dx < accuracy.intersection[dup]
         # Extract the DataFrame rows of the sat/flight data near the intersection
-        flightdata, satdb = get_trackdata(flight, sat, sattype, tmf, tms,
+        flightdata, satdb, tf, ts = get_trackdata(flight, sat, sattype, tmf, tms,
           flightspan, satspan)
         # Calculate accuracies
-        i = length(flightdata.data.time)÷2+1
-        fxmeas = geo.LatLon(flightdata.data.lat[i], flightdata.data.lon[i])
-        ftmeas = Dates.canonicalize(Dates.CompoundPeriod(tmf - flightdata.data.time[i]))
+        fxmeas = geo.LatLon(flightdata.data.lat[tf], flightdata.data.lon[tf])
+        ftmeas = Dates.canonicalize(Dates.CompoundPeriod(tmf - flightdata.data.time[tf]))
         satdbdata = getfield(satdb,sattype).data
-        i = length(satdbdata.time)÷2+1
-        sxmeas = geo.LatLon(satdbdata.lat[i], satdbdata.lon[i])
-        stmeas = Dates.canonicalize(Dates.CompoundPeriod(tms - satdbdata.time[i]))
+        sxmeas = geo.LatLon(satdbdata.lat[ts], satdbdata.lon[ts])
+        stmeas = Dates.canonicalize(Dates.CompoundPeriod(tms - satdbdata.time[ts]))
+        # Get cloud information
+        feature = atmosphericinfo(satdb, sattype, flightdata, (tf,ts))
         if isnothing(dup) # new data
           # Construct ID of current Intersection
           counter += 1
           id = string(flight.metadata.source,-,flight.metadata.dbID,-,counter)
           # Save intersection data
           push!(idata, (id=id, lat=Xf.lat, lon=Xf.lon, tdiff=dt,
-            tflight = tmf, tsat = tms, feature=:no_signal))
+            tflight = tmf, tsat = tms, feature=feature))
           push!(track, (id=id, flight=flightdata, sat=satdb))
           # Save accuracies
           push!(accuracy, (id=id, intersection=dx, flightcoord=geo.distance(Xf,fxmeas),
@@ -116,7 +120,7 @@ function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB
         else # more exact intersection calculations
           # Save intersection data
           idata[dup,:] = (id=id, lat=Xf.lat, lon=Xf.lon, tdiff=dt,
-            tflight = tmf, tsat = tms, feature=:no_signal)
+            tflight = tmf, tsat = tms, feature=feature)
           track[dup,:] = (id=id, flight=flightdata, sat=satdb)
           # Save accuracies
           accuracy[dup,:] = (id=id, intersection=dx, flightcoord=geo.distance(Xf,fxmeas),

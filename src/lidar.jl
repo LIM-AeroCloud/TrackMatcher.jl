@@ -188,3 +188,26 @@ function feature_classification(ftype::UInt16, fsub::UInt16)::Symbol
     :no_signal
   end
 end
+
+
+function atmosphericinfo(
+  sat::SatDB,
+  sattype::Symbol,
+  flight::FlightData,
+  index::Tuple{Int,Int}
+)::Union{Missing,Symbol}
+  hflight = ft2km(flight.data.alt[index[1]])
+  if sattype == :CPro
+    hlevels = sat.CPro.metadata.lidarlevels.fine
+    ifine = argmin(abs.(hlevels .- hflight))
+    if hlevels[ifine] - hflight > 0.03
+      println(); @warn string("insufficient altitudes for lidar data saved; ",
+        "missing used for feature in intersections of flight $(flight.metadata.dbID)")
+      missing
+    else
+      feature_classification(classification(sat.CPro.data.FCF[index[2]][ifine])...)
+    end
+  else #atmospheric volume information currently available only for CPro data
+    missing
+  end
+end #function atmosphericinfo

@@ -543,7 +543,7 @@ struct CPro
   metadata::SatMetadata
 
   """ Unmodified constructor for `CPro` """
-  function CPro(data::DataFrame)
+  function CPro(data::DataFrame, metadata::SatMetadata)
     standardnames = [:time, :lat, :lon, :FCF, :EC532]
     standardtypes = [Vector{DateTime}, Vector{Float64}, Vector{Float64},
       Vector{Vector{<:Union{Missing,UInt16}}}, Vector{Vector{<:Union{Missing,Float32}}}]
@@ -595,6 +595,7 @@ struct CPro
         t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
         fcf = [[missing for i = 1:length(lidar.fine)] for i in t]
         append!(avd, fcf)
+        @warn "missing Atmosphericc Volume Description for granule", file
       end
       ec532 = try append_lidardata!(ec532, ms, "Extinction_Coefficient_532", lidar,
         true, missingvalues = -9999)
@@ -602,6 +603,7 @@ struct CPro
         t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
         ec = [[missing for i = 1:length(lidar.coarse)] for i in t]
         append!(ec532, ec)
+        @warn "missing Extinction Coefficient 532nm for granule", file
       end
       # Monitor progress for progress bar
       pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
@@ -797,7 +799,7 @@ struct Intersection
     tstart = Dates.now()
     idata = DataFrame(id=String[], lat=Float64[], lon=Float64[],
       tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[],
-      feature = Symbol[])
+      feature = Union{Missing,Symbol}[])
     track = DataFrame(id=String[], flight=FlightData[], sat=SatDB[])
     accuracy = DataFrame(id=String[], intersection=Float64[], flightcoord=Float64[],
       satcoord=Float64[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
