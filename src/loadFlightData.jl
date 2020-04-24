@@ -7,11 +7,9 @@ From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `inventory` field in `FlightDB`.
 
 When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
-altitude threshold of the aircraft data (default: `altmin=15_000`) and by the
-existance of cirrus clouds at flight level (default: `filterCloudfree=true`;
-currently only place holder, still needs to be implemented).
+altitude threshold of the aircraft data (default: `altmin=15_000`).
 """
-function loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::Bool=true)
+function loadInventory(files::Vector{String}; altmin=15_000)
 
   # Initialise inventory file array and start MATLAB for PCHIP fitting
   inventory = FlightData[]
@@ -81,11 +79,9 @@ From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `archive` field in `FlightDB`.
 
 When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
-altitude threshold of the aircraft data (default: `altmin=15_000`) and by the
-existance of cirrus clouds at flight level (default: `filterCloudfree=true`;
-currently only place holder, still needs to be implemented).
+altitude threshold of the aircraft data (default: `altmin=15_000`).
 """
-function loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree::Bool=true)
+function loadArchive(files::Vector{String}; altmin::Int=15_000)
   # Initialise archive file array
   archive = FlightData[]
   # Loop over database files
@@ -162,11 +158,9 @@ The delimiter of the data in the input file can be specified by a string or char
 Default is `nothing`, which means auto-detection of the delimiter is used.
 
 When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
-altitude threshold of the aircraft data (default: `altmin=15_000`) and by the
-existance of cirrus clouds at flight level (default: `filterCloudfree=true`;
-currently only place holder, still needs to be implemented).
+altitude threshold of the aircraft data (default: `altmin=15_000`).
 """
-function loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfree::Bool=true,
+function loadOnlineData(files::Vector{String}; altmin::Int=15_000,
   delim::Union{Nothing,Char,String}=nothing)
   # Initialise inventory file array
   archive = FlightData[]

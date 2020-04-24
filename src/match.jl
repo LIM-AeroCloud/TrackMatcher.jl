@@ -195,12 +195,14 @@ end#function findoverlap
 
 
 """
-    interpolate_satdata(ms::mat.MSession, DB::SatDB, sat)
+interpolate_satdata(ms::mat.MSession, DB::SatDB, overlap::NamedTuple, flight::FlightMetadata)
 
-Using the satellite data in the `DB` database, and the stored `sat` ranges and types,
+Using the satellite data in the `DB` database, and the stored `overlap` ranges and types,
 interpolate the data with the pchip method in the MATLAB session (`ms`).
+Use the metadata in `flight` for error reports.
 """
-function interpolate_satdata(ms::mat.MSession, DB::SatDB, overlap, flight::FlightMetadata)
+function interpolate_satdata(ms::mat.MSession, DB::SatDB, overlap::NamedTuple,
+  flight::FlightMetadata)
 
   # Get the satellite data of the correct type
   satdata = getfield(DB, overlap.type).data

@@ -6,6 +6,8 @@
 Return a `NamedTuple` with the following entries:
 - `coarse`: altitude levels of the CALIOP lidar data as defined in the metadata of the hdf files
 - `fine`: altitude levels of CALIOP lidar data with 30m intervals below 8.3km
+- `itop`: index in the original data array of the first selected top height
+- `ibottom`: index in the original data array of the last selected bottom height
 - `i30`: vector index of the first altitude level with 30m intervals
 """
 function get_lidarheights(lidarrange::Tuple{Real,Real})
@@ -37,7 +39,13 @@ end #function get_lidarheights
       missingvalues = missing
     ) where T
 
-
+Append the vector `vec` with CALIPSO lidar data of the `variable` using the MATLAB
+session `ms` to read the variable from an hdf file already opened in `ms` outside
+of `append_lidardata!`. Information about the lidar heigths used in `vec` are stored
+in `lidar` together with information whether to use `coarse` levels (when set to
+`true`, otherwise fine levels are used).
+`missingvalues` can be set to any value, which will be replace with `missing` values
+in `vec`.
 """
 function append_lidardata!(
   vec::Vector{Vector{<:Union{Missing,T}}},
@@ -190,6 +198,22 @@ function feature_classification(ftype::UInt16, fsub::UInt16)::Symbol
 end
 
 
+"""
+    function atmosphericinfo(
+      sat::SatDB,
+      sattype::Symbol,
+      flight::FlightData,
+      index::Tuple{Int,Int}
+    )::Union{Missing,Symbol}
+
+From the subsets `sat` of `SatDB` data  and `flight` of `FlightData` in `Intersection`,
+return a `Symbol` with a human readable feature classification for the satellite data
+of `sattype`; `index` stores the indices of the data at the time of the intersection
+for the flight (`[1]`) and sat (`[2]`) data.
+
+`atmosphericinfo` returns a `missing` value, if no height level overlap between the
+flight altitude and the lidar levels was found.
+"""
 function atmosphericinfo(
   sat::SatDB,
   sattype::Symbol,

@@ -1,33 +1,6 @@
 ### Helper functions
 
 """
-    checklength(vect, ref) -> vect
-
-Check that length of vector `vect` is the same as reference vector `ref`,
-otherwise warn and either fill missing entries with `missing` at the end or
-delete additional entries at the end of `vect` and return `vect`.
-"""
-function checklength(vect, ref)
-  # Compare lengths of vectors
-  len = length(ref) - length(vect)
-  if len > 0
-    # Warn of vector shorter than reference and fill with missing
-    @warn string("$(len) entries missing in vector compared to reference. ",
-      "Missing entries are filled with `missing` at the end of the vector.")
-    vect = [vect; [missing for i = 1:len]]
-  elseif len < 0
-    # Warn of vector longer than reference and delete additonal entries
-    @warn string("$(-len) additional entries found in vector compared to reference. ",
-      "Additional entries at the end of the vector are ignored.")
-    vect = vect[1:length(ref)]
-  end
-
-  # Return (modified) vector
-  return vect
-end #function checklength
-
-
-"""
     convertUTC(t::Float64) -> DateTime
 
 Convert the CALIOP Profile UTC time (`t`) to a `DateTime`.
@@ -300,7 +273,7 @@ end #function extract_timespan
 
 
 """
-    swap_sattype(sattype::Symbol)::Symbol
+    swap_sattype!(sattype::Symbol)::Symbol
 
 Returns the other Symbol from the options
 
@@ -309,7 +282,7 @@ Returns the other Symbol from the options
 
 when `sattype` is given to switch between `SatDB` datasets.
 """
-function swap_sattype(sattype::Symbol)::Symbol
+function swap_sattype!(sattype::Symbol)::Symbol
   swap = Dict(:CPro => :CLay, :CLay => :CPro)
   swap[sattype]
 end
@@ -343,7 +316,7 @@ function get_trackdata(flight::FlightData, sat::SatDB, sattype::Symbol,
 
   # Switch to other satellite data (CLay/CPro) and check whether data is available
   # at intersection and retrieve ±15 time steps as well
-  sattype = swap_sattype(sattype)
+  swap_sattype!(sattype)
   secdata = try satsec = getfield(sat, sattype).data
     tss = argmin(abs.(satsec.time .- tsat))
     extract_timespan(satsec, tss, satspan)
