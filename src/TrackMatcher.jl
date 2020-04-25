@@ -341,11 +341,11 @@ struct FlightData
     lat = getproperty(flightdata, :lat)
     lon = getproperty(flightdata, :lon)
     alt = getproperty(flightdata, :alt)
-    heading = hasproperty(flightdata, :heading) ? getproperty(flightdata, :heading) :
+    heading = df.hasproperty(flightdata, :heading) ? df.getproperty(flightdata, :heading) :
       [missing for i in t]
-    climb = hasproperty(flightdata, :climb) ? getproperty(flightdata, :climb) :
+    climb = df.hasproperty(flightdata, :climb) ? df.getproperty(flightdata, :climb) :
       [missing for i in t]
-    speed = hasproperty(flightdata, :speed) ? getproperty(flightdata, :speed) :
+    speed = df.hasproperty(flightdata, :speed) ? df.getproperty(flightdata, :speed) :
       [missing for i in t]
     metadata = FlightMetadata(dbID,flightID,route,aircraft,t,lat,lon,useLON,flex,source,file)
 
@@ -522,12 +522,12 @@ struct CLay
   """
   function CLay(ms::mat.MSession, files::Vector{String})
     # Initialise arrays
-    utc = DateTime[]; lon = Float64[]; lat = Float64[]
+    utc = Vector{DateTime}[]; lon = Vector{Float64}[]; lat = Vector{Float64}[]
     # Loop over files
     prog = pm.Progress(length(files), "load CLay data...")
     for file in files
       # Find files with cloud layer data
-      utc, lon, lat = try
+      try
         # Extract time
         mat.put_variable(ms, :file, file)
         mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
@@ -538,14 +538,13 @@ struct CLay
         mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
         latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
         # Save time converted to UTC and lat/lon
-        [utc; convertUTC.(t)],
-        [lon; longitude],
-        [lat; latitude]
+        push!(utc, convertUTC.(t))
+        push!(lon, longitude)
+        push!(lat, latitude)
       catch
         # Skip data on failure and warn
         @warn string("read error in CALIPSO granule ",
           "$(splitext(basename(file))[1])\ndata skipped")
-        utc, lon, lat
       end
       # Monitor progress for progress bar
       pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
@@ -553,7 +552,7 @@ struct CLay
     pm.finish!(prog)
 
     # Save time, lat/lon arrays in CLay struct
-    new(DataFrame(time=utc, lat=lat, lon=lon))
+    new(DataFrame(time=[[]; utc...], lat=[[]; lat...], lon=[[]; lon...]))
   end #constructor 2 CLay
 end #struct CLay
 
@@ -609,15 +608,16 @@ struct CPro
     lidarrange::Tuple{Real,Real})
     # Initialise arrays
     # essential data
-    utc = DateTime[]; lon = Float64[]; lat = Float64[]
+    utc = Vector{DateTime}[]; lon = Vector{Float64}[]; lat = Vector{Float64}[]
     # non-essential data
-    avd = Vector{<:Union{Missing,UInt16}}[]; ec532 = Vector{<:Union{Missing,Float32}}[]
+    avd = Vector{<:Vector{<:Union{Missing,UInt16}}}[]
+    ec532 = Vector{<:Vector{<:Union{Missing,Float32}}}[]
     # Loop over files
     prog = pm.Progress(length(files), "load CPro data...")
     # Loop over files with cloud profile data
     for file in files
       # Retrieve essential data
-      utc, lon, lat = try
+      try
         # Extract time
         mat.put_variable(ms, :file, file)
         mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
@@ -628,30 +628,32 @@ struct CPro
         mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
         latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
         # Save time converted to UTC and lat/lon
-        [utc; convertUTC.(t)],
-        [lon; longitude],
-        [lat; latitude]
+        push!(utc, convertUTC.(t))
+        push!(lon, longitude)
+        push!(lat, latitude)
       catch
-        # Skip data on failure and warn
+        # Warn on failure
         @warn string("read error in CALIPSO granule ",
           "$(splitext(basename(file))[1])\ndata skipped")
+        # Monitor progress and skip to next file
+        pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
         continue
       end
       # Retrieve non-essential data
       # Extract feature classification flags
-      avd = try append_lidardata!(avd, ms, "Atmospheric_Volume_Description", lidar)
+      avd = try pushtolidardata!(avd, ms, "Atmospheric_Volume_Description", lidar)
       catch
         t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
         fcf = [[missing for i = 1:length(lidar.fine)] for i in t]
-        append!(avd, fcf)
+        push!(avd, fcf)
         @warn "missing Atmosphericc Volume Description for granule", file
       end
-      ec532 = try append_lidardata!(ec532, ms, "Extinction_Coefficient_532", lidar,
+      try pushtolidardata!(ec532, ms, "Extinction_Coefficient_532", lidar,
         true, missingvalues = -9999)
       catch
         t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
         ec = [[missing for i = 1:length(lidar.coarse)] for i in t]
-        append!(ec532, ec)
+        push!(ec532, ec)
         @warn "missing Extinction Coefficient 532nm for granule", file
       end
       # Monitor progress for progress bar
@@ -660,8 +662,8 @@ struct CPro
     pm.finish!(prog)
 
     # Save time, lat/lon arrays, and feature classification flags (FCF) in CPro struct
-    new(DataFrame(time=utc, lat=lat, lon=lon, FCF=avd, EC532=ec532),
-      SatMetadata((top=lidarrange[1], bottom=lidarrange[2]), lidar))
+    new(DataFrame(time=[[]; utc...], lat=[[]; lat...], lon=[[]; lon...], FCF=[[]; avd...],
+      EC532=[[]; ec532...]), SatMetadata((top=lidarrange[1], bottom=lidarrange[2]), lidar))
   end #constructor 2 CPro
 end #struct CPro
 

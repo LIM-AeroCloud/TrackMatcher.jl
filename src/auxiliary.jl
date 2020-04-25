@@ -27,8 +27,6 @@ end
 Scan `folder` recursively for files of `filetype` and add to the `inventory`.
 """
 function findfiles!(inventory::Vector{String}, folder::String, filetypes::String...)
-  # Construct Regex of file endings from filetypes
-  fileextensions = Regex(join(filetypes,'|'))
   # Scan directory for files and folders and save directory
   dir = readdir(folder); path = abspath(folder)
   for file in dir
@@ -37,7 +35,7 @@ function findfiles!(inventory::Vector{String}, folder::String, filetypes::String
     if isdir(cwd)
       # Step into subdirectories and scan them, too
       findfiles!(inventory, cwd, filetypes...)
-    elseif endswith(file, fileextensions) && !startswith(file, ".")
+    elseif any(endswith.(file, filetypes)) && !startswith(file, ".")
       # Save files of correct type
       push!(inventory, cwd)
     end

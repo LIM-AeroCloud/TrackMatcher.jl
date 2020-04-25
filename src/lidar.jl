@@ -47,31 +47,47 @@ in `lidar` together with information whether to use `coarse` levels (when set to
 `missingvalues` can be set to any value, which will be replace with `missing` values
 in `vec`.
 """
-function append_lidardata!(
-  vec::Vector{Vector{<:Union{Missing,T}}},
+function pushtolidardata!(
+  vec::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
   ms::mat.MSession,
   variable::String,
   lidar::NamedTuple,
   coarse::Bool = false;
   missingvalues = missing
 ) where T
+  # Read variable from hdf file with MATLAB
 	mat.eval_string(ms, "try\nvar = hdfread(file, '$variable');\nend")
 	var = mat.jarray(mat.get_mvariable(ms, :var))
+  # Initialise vector to store all row vectors and loop over matrix
+  row = Vector{Union{Missing,T}}[]
 	for i = 1:size(var, 1)
     if coarse && ismissing(missingvalues)
-      push!(vec, var[i,lidar.itop:lidar.ibottom])
+      # Save row vector for coarse heights data without transforming missing values
+      push!(row, var[i,lidar.itop:lidar.ibottom])
     elseif coarse
+      # Save row vector for coarse heights data after transforming missing values
       v = convert(Vector{Union{Missing,T}}, var[i,lidar.itop:lidar.ibottom])
       v[v.==missingvalues] .= missing
-      push!(vec, v)
-    else
+      push!(row, v)
+    elseif ismissing(missingvalues)
+      # Save row vector for coarse heights data after transforming missing values
   		v = Vector{T}(undef,length(lidar.fine))
   		v[1:lidar.i30-1] = var[i,lidar.itop:lidar.itop+lidar.i30-2,1]
   		v[lidar.i30:2:end] = var[i,lidar.itop+lidar.i30-1:lidar.ibottom,1]
   		v[lidar.i30+1:2:end] = var[i,lidar.itop+lidar.i30-1:lidar.ibottom,2]
-  		push!(vec, v)
+  		push!(row, v)
+    else
+      # Save row vector for refined heights data after transforming missing values
+      v = convert(Vector{Union{Missing,T}}, var[i,lidar.itop:lidar.ibottom])
+      v[v.==missingvalues] .= missing
+  		v = Vector{T}(undef,length(lidar.fine))
+  		v[1:lidar.i30-1] = var[i,lidar.itop:lidar.itop+lidar.i30-2,1]
+  		v[lidar.i30:2:end] = var[i,lidar.itop+lidar.i30-1:lidar.ibottom,1]
+  		v[lidar.i30+1:2:end] = var[i,lidar.itop+lidar.i30-1:lidar.ibottom,2]
+  		push!(row, v)
     end
 	end
+  push!(vec, row)
 
 	return vec
 end #function append_lidardata!
