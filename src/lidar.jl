@@ -24,7 +24,7 @@ function get_lidarheights(lidarrange::Tuple{Real,Real})
   hfine=[(levels[i] + levels[i+1])/2 for i = h30m:length(levels)-1]
   hfine = sort([levels; hfine; levels[end]-0.03], rev=true)
 
-  # Return original and refined altitude profiles as Vector{AbstractFloat}
+  # Return original and refined altitude profiles and important indices
   return (coarse = levels, fine = hfine, itop=itop, ibottom=ibottom, i30=h30m)
 end #function get_lidarheights
 

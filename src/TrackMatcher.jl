@@ -60,8 +60,8 @@ Immutable struct to hold metadata for `FlightData` of the `FlightDB` with fields
 - `route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}}`
 - `aircraft::Union{Missing,AbstractString}`
 - `date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}`
-- `area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),Tuple{Float64,Float64,Float64,Float64,Float64,Float64}}`
-- `flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}}`
+- `area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,AbstractFloat}}`
+- `flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}}`
 - `useLON::Bool`
 - `source::AbstractString`
 - `file::AbstractString`
@@ -97,8 +97,8 @@ flight.
 ## flex
 `Tuple` of `NamedTuple`s with entries
 - `range` (`UnitRange`): flight segment between inflection points of the current flight track
-- `min` (`Float64`): minimum x value in the flight segment
-- `max` (`Float64`): maximum x value in the flight segment
+- `min` (`AbstractFloat`): minimum x value in the flight segment
+- `max` (`AbstractFloat`): maximum x value in the flight segment
 
 ## useLON
 Flag (`Bool`) whether to use longitude as x data for track interpolation.
@@ -125,10 +125,10 @@ Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
       route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
       aircraft::Union{Missing,AbstractString},
       date::Vector{DateTime},
-      lat::Vector{<:Union{Missing,Float64}},
-      lon::Vector{<:Union{Missing,Float64}},
+      lat::Vector{<:Union{Missing,AbstractFloat}},
+      lon::Vector{<:Union{Missing,AbstractFloat}},
       useLON::Bool,
-      flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
+      flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}},
       source::AbstractString,
       file::AbstractString
     ) -> struct FlightMetadata
@@ -141,8 +141,8 @@ Or construct `FlightMetadata` by directly handing over every field:
       route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
       aircraft::Union{Missing,AbstractString},
       date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
-      area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,Float64}},
-      flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
+      area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,AbstractFloat}},
+      flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}},
       useLON::Bool,
       source::AbstractString,
       file::AbstractString
@@ -154,8 +154,8 @@ struct FlightMetadata
   route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}}
   aircraft::Union{Missing,AbstractString}
   date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
-  area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,Float64}}
-  flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}}
+  area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,AbstractFloat}}
+  flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}}
   useLON::Bool
   source::AbstractString
   file::AbstractString
@@ -167,8 +167,8 @@ struct FlightMetadata
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
     aircraft::Union{Missing,AbstractString},
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
-    area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,Float64}},
-    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
+    area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,AbstractFloat}},
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}},
     useLON::Bool,
     source::AbstractString,
     file::AbstractString
@@ -187,10 +187,10 @@ struct FlightMetadata
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
     aircraft::Union{Missing,AbstractString},
     date::Vector{DateTime},
-    lat::Vector{<:Union{Missing,Float64}},
-    lon::Vector{<:Union{Missing,Float64}},
+    lat::Vector{<:Union{Missing,AbstractFloat}},
+    lon::Vector{<:Union{Missing,AbstractFloat}},
     useLON::Bool,
-    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}},
     source::AbstractString,
     file::AbstractString
   )
@@ -216,7 +216,7 @@ about the height levels of the measurements.
 struct SatMetadata
   lidarrange::NamedTuple{(:top,:bottom), Tuple{Real,Real}}
   lidarlevels::NamedTuple{(:coarse,:fine,:itop,:ibottom,:i30),
-    Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat},Int,Int,Int}}
+    Tuple{Vector{AbstractFloat},Vector{AbstractFloat},Int,Int,Int}}
 end #struct SatMetadata
 
 
@@ -256,7 +256,7 @@ Immutable struct with additional information of intersection data:
 """
 struct XMetadata
   maxtimediff::Int
-  stepwidth::Float64
+  stepwidth::AbstractFloat
   Xradius::Real
   preferred::Symbol
   created::Union{DateTime,ZonedDateTime}
@@ -275,21 +275,21 @@ Aircraft data with fields
 
 The `DataFrame` of `data` has columns in the following order with the respective types:
 
-- `time::Vector{DateTime}`                  (time stamp of measurement)
-- `lat::Vector{<:Union{Missing,Float64}}`   (latitude)
-- `lon::Vector{<:Union{Missing,Float64}}`   (longitude)
-- `alt::Vector{<:Union{Missing,Float64}}`   (altitude)
-- `heading::Vector{<:Union{Missing,Int}}`   (heading/direction of the aircraft)
-- `climb::Vector{<:Union{Missing,Int}}`     (climbing (positive)/sinking (negative values) rate)
-- `speed::Vector{<:Union{Missing,Float64}}` (velocity)
+- `time::Vector{DateTime}`                        (time stamp of measurement)
+- `lat::Vector{<:Union{Missing,AbstractFloat}}`   (latitude)
+- `lon::Vector{<:Union{Missing,AbstractFloat}}`   (longitude)
+- `alt::Vector{<:Union{Missing,AbstractFloat}}`   (altitude)
+- `heading::Vector{<:Union{Missing,Int}}`         (heading/direction of the aircraft)
+- `climb::Vector{<:Union{Missing,Int}}`           (climbing (positive)/sinking (negative values) rate)
+- `speed::Vector{<:Union{Missing,AbstractFloat}}` (velocity)
 
 
 # Instantiation
 
-    FlightData(time::Vector{ZonedDateTime}, lat::Vector{<:Union{Missing,Float64}},
-      lon::Vector{<:Union{Missing,Float64}}, alt::Vector{<:Union{Missing,Float64}},
+    FlightData(time::Vector{ZonedDateTime}, lat::Vector{<:Union{Missing,AbstractFloat}},
+      lon::Vector{<:Union{Missing,AbstractFloat}}, alt::Vector{<:Union{Missing,AbstractFloat}},
       heading::Vector{<:Union{Missing,Int}}, climb::Vector{<:Union{Missing,Int}},
-      speed::Vector{<:Union{Missing,Float64}}, dbID::Union{Int,AbstractString},
+      speed::Vector{<:Union{Missing,AbstractFloat}}, dbID::Union{Int,AbstractString},
       flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
       route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
       file::AbstractString) -> struct FlightData
@@ -301,10 +301,10 @@ will be converted to `UTC` standard time.
 
 Or construct by directly handing over every field:
 
-    FlightData(time::Vector{DateTime}, lat::Vector{<:Union{Missing,Float64}},
-      lon::Vector{<:Union{Missing,Float64}}, alt::Vector{<:Union{Missing,Float64}},
+    FlightData(time::Vector{DateTime}, lat::Vector{<:Union{Missing,AbstractFloat}},
+      lon::Vector{<:Union{Missing,AbstractFloat}}, alt::Vector{<:Union{Missing,AbstractFloat}},
       heading::Vector{<:Union{Missing,Int}}, climb::Vector{<:Union{Missing,Int}},
-      speed::Vector{<:Union{Missing,Float64}}, metadata::FlightMetadata)
+      speed::Vector{<:Union{Missing,AbstractFloat}}, metadata::FlightMetadata)
 
 Checks exist that the order, names, and types of the `data` `DataFrame` are correct.
 """
@@ -317,11 +317,13 @@ struct FlightData
 
     # Column checks and warnings
     standardnames = [:time, :lat, :lon, :alt, :heading, :climb, :speed]
-    standardtypes = [Union{DateTime,Vector{DateTime}}, Union{Float64,Vector{Float64}},
-      Union{Float64,Vector{Float64}}, Union{Missing,Float64,Vector{<:Union{Missing,Float64}}},
+    standardtypes = [Union{DateTime,Vector{DateTime}},
+      Union{AbstractFloat,Vector{<:AbstractFloat}},
+      Union{AbstractFloat,Vector{<:AbstractFloat}},
+      Union{Missing,AbstractFloat,Vector{<:Union{Missing,AbstractFloat}}},
       Union{Missing,Int,Vector{<:Union{Missing,Int}}},
       Union{Missing,Int,Vector{<:Union{Missing,Int}}},
-      Union{Missing,Float64,Vector{<:Union{Missing,Float64}}}]
+      Union{Missing,AbstractFloat,Vector{<:Union{Missing,AbstractFloat}}}]
     bounds = [(0,Inf), (0, 360), (-Inf, Inf), (0, Inf)]
     data = checkcols(data, standardnames, standardtypes, bounds,
       metadata.source, metadata.dbID)
@@ -329,11 +331,17 @@ struct FlightData
   end #constructor 1 FlightData
 
   """ Modified constructor with variable checks and some automated calculation of fields """
-  function FlightData(flightdata::DataFrame, dbID::Union{Int,AbstractString},
-    flightID::Union{Missing,AbstractString}, aircraft::Union{Missing,AbstractString},
+  function FlightData(
+    flightdata::DataFrame,
+    dbID::Union{Int,AbstractString},
+    flightID::Union{Missing,AbstractString},
+    aircraft::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
-    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,Float64,Float64}}}},
-    useLON::Bool, source::String, file::AbstractString)
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}},
+    useLON::Bool,
+    source::String,
+    file::AbstractString
+  )
 
     # Check dataframe columns of flight data; fill missing columns with missing values
     t = getproperty(flightdata, :time)
@@ -489,8 +497,8 @@ end #struct FlightDB
 
 CALIOP cloud layer `data` stored in a `DataFrame` with columns:
 - `time::Vector{DateTime}`
-- `lat::Vector{Float64}`
-- `lon::Vector{Float64}`
+- `lat::Vector{AbstractFloat}`
+- `lon::Vector{AbstractFloat}`
 
 # Instantiation
 
@@ -510,7 +518,7 @@ struct CLay
   """ Unmodified constructor for `CLay` """
   function CLay(data::DataFrame)
     standardnames = [:time, :lat, :lon]
-    standardtypes = [Vector{DateTime}, Vector{Float64}, Vector{Float64}]
+    standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat}]
     bounds = Tuple{Real,Real}[]
     data = checkcols(data, standardnames, standardtypes, bounds, "CLay", nothing)
     new(data)
@@ -522,7 +530,7 @@ struct CLay
   """
   function CLay(ms::mat.MSession, files::Vector{String})
     # Initialise arrays
-    utc = Vector{DateTime}[]; lon = Vector{Float64}[]; lat = Vector{Float64}[]
+    utc = Vector{DateTime}[]; lon = Vector{AbstractFloat}[]; lat = Vector{AbstractFloat}[]
     # Loop over files
     prog = pm.Progress(length(files), "load CLay data...")
     for file in files
@@ -552,7 +560,8 @@ struct CLay
     pm.finish!(prog)
 
     # Save time, lat/lon arrays in CLay struct
-    new(DataFrame(time=[[]; utc...], lat=[[]; lat...], lon=[[]; lon...]))
+    new(DataFrame(time=[DateTime[]; utc...], lat=[AbstractFloat[]; lat...],
+      lon=[AbstractFloat[]; lon...]))
   end #constructor 2 CLay
 end #struct CLay
 
@@ -562,8 +571,8 @@ end #struct CLay
 
 CALIOP cloud profile `data` stored in a `DataFrame` with columns:
 - `time::Vector{DateTime}`
-- `lat::Vector{Float64}`
-- `lon::Vector{Float64}`
+- `lat::Vector{AbstractFloat}`
+- `lon::Vector{AbstractFloat}`
 - `FCF::Vector{UInt16}`
 - `EC532::Vector{<:Union{Missing,Symbol}}`
 
@@ -593,8 +602,8 @@ struct CPro
   """ Unmodified constructor for `CPro` """
   function CPro(data::DataFrame, metadata::SatMetadata)
     standardnames = [:time, :lat, :lon, :FCF, :EC532]
-    standardtypes = [Vector{DateTime}, Vector{Float64}, Vector{Float64},
-      Vector{Vector{<:Union{Missing,UInt16}}}, Vector{Vector{<:Union{Missing,Float32}}}]
+    standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
+      Vector{<:Vector{<:Union{Missing,UInt16}}}, Vector{<:Vector{<:Union{Missing,AbstractFloat}}}]
     bounds = Tuple{Real,Real}[]
     data = checkcols(data, standardnames, standardtypes, bounds, "CPro", nothing)
     new(data, metadata)
@@ -608,10 +617,10 @@ struct CPro
     lidarrange::Tuple{Real,Real})
     # Initialise arrays
     # essential data
-    utc = Vector{DateTime}[]; lon = Vector{Float64}[]; lat = Vector{Float64}[]
+    utc = Vector{DateTime}[]; lon = Vector{AbstractFloat}[]; lat = Vector{AbstractFloat}[]
     # non-essential data
     avd = Vector{<:Vector{<:Union{Missing,UInt16}}}[]
-    ec532 = Vector{<:Vector{<:Union{Missing,Float32}}}[]
+    ec532 = Vector{<:Vector{<:Union{Missing,AbstractFloat}}}[]
     # Loop over files
     prog = pm.Progress(length(files), "load CPro data...")
     # Loop over files with cloud profile data
@@ -662,8 +671,8 @@ struct CPro
     pm.finish!(prog)
 
     # Save time, lat/lon arrays, and feature classification flags (FCF) in CPro struct
-    new(DataFrame(time=[DateTime[]; utc...], lat=[Float64[]; lat...], lon=[Float64[]; lon...],
-      FCF=[Vector{<:Union{Missing,UInt16}}[]; avd...], EC532=[Vector{<:Union{Missing,Float32}}[]; ec532...]),
+    new(DataFrame(time=[DateTime[]; utc...], lat=[AbstractFloat[]; lat...], lon=[AbstractFloat[]; lon...],
+      FCF=[Vector{<:Union{Missing,UInt16}}[]; avd...], EC532=[Vector{<:Union{Missing,AbstractFloat}}[]; ec532...]),
       SatMetadata((top=lidarrange[1], bottom=lidarrange[2]), lidar))
   end #constructor 2 CPro
 end #struct CPro
@@ -684,7 +693,7 @@ Immutable struct with fields
 CALIOP satellite data currently holding time as `DateTime` in `UTC`
 and position (`lat`/`lon`) of cloud layer and profile data in a `DataFrame`.
 Additionally, `CPro` currently holds feature classification flags `FCF` as `UInt16`
-and exticintion coefficients at 532 nm `EC532` as `Union{Missing,Float32}`.
+and exticintion coefficients at 532 nm `EC532` as `Union{Missing,AbstractFloat}`.
 
 ## metadata
 
@@ -775,8 +784,8 @@ calcalated intersections and the atmospheric condition at the intersection
 in the current dataset in columns:
 
 - `id::Vector{String}`
-- `lat::Vector{Float64}`
-- `lon::Vector{Float64}`
+- `lat::Vector{AbstractFloat}`
+- `lon::Vector{AbstractFloat}`
 - `tdiff::Vector{Dates.CompoundPeriod}`
 - `tflight::Vector{DateTime}`
 - `tsat::Vector{DateTime}`
@@ -800,7 +809,7 @@ DataFrame `accuracy` list the accuracy achived during the calculation of the
 intersections in columns:
 
 - `id::Vector{String}`
-- `intersection::Vector{Float64}`: distance between calculated intersection using
+- `intersection::Vector{AbstractFloat}`: distance between calculated intersection using
   either sat or flight data
 - `flightcoord`:: distance between calculated intersection and closest flight measurement
 - `satcoord`:: distance between calculated intersection and closest satellite measurement
@@ -819,7 +828,7 @@ for reproducable results.
 # Instatiation
 
     Intersection(flights::FlightDB, sat::SatDB, sattype::Symbol=:CLay;
-      maxtimediff::Int=30, flightspan::Int=0, satspan::Int=15, stepwidth::Float64=0.01,
+      maxtimediff::Int=30, flightspan::Int=0, satspan::Int=15, stepwidth::AbstractFloat=0.01,
       Xradius::Real=5000, remarks=nothing)
 
 Instantiate with the `flights` and `sat` database and the `sattype` of the sat data
@@ -845,24 +854,24 @@ struct Intersection
 
   #=
   """ Unmodified constructor for `Intersection` """
-  function Intersection(lat::Float64, lon::Float64, tdiff::Dates.CompoundPeriod,
-    accuracy::Float64, cirrus::Bool, sat::SatDB, flight::FlightData)
+  function Intersection(lat::AbstractFloat, lon::AbstractFloat, tdiff::Dates.CompoundPeriod,
+    accuracy::AbstractFloat, cirrus::Bool, sat::SatDB, flight::FlightData)
     new(lat, lon, tdiff, accuracy, cirrus, sat, flight)
   end #constructor 1 Intersection
   =#
 
   """ Modified constructor with some automated calculations of the intersection data. """
   function Intersection(flights::FlightDB, sat::SatDB, sattype::Symbol=:CLay;
-    maxtimediff::Int=30, flightspan::Int=0, satspan::Int=15, stepwidth::Float64=0.01,
+    maxtimediff::Int=30, flightspan::Int=0, satspan::Int=15, stepwidth::AbstractFloat=0.01,
     Xradius::Real=5000, remarks=nothing)
     # Initialise DataFrames with Intersection data and monitor start time
     tstart = Dates.now()
-    idata = DataFrame(id=String[], lat=Float64[], lon=Float64[],
+    idata = DataFrame(id=String[], lat=AbstractFloat[], lon=AbstractFloat[],
       tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[],
       feature = Union{Missing,Symbol}[])
     track = DataFrame(id=String[], flight=FlightData[], sat=SatDB[])
-    accuracy = DataFrame(id=String[], intersection=Float64[], flightcoord=Float64[],
-      satcoord=Float64[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
+    accuracy = DataFrame(id=String[], intersection=AbstractFloat[], flightcoord=AbstractFloat[],
+      satcoord=AbstractFloat[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
     # New MATLAB session
     ms = mat.MSession()
     # Loop over data and interpolate track data and time, throw error on failure
