@@ -662,8 +662,9 @@ struct CPro
     pm.finish!(prog)
 
     # Save time, lat/lon arrays, and feature classification flags (FCF) in CPro struct
-    new(DataFrame(time=[[]; utc...], lat=[[]; lat...], lon=[[]; lon...], FCF=[[]; avd...],
-      EC532=[[]; ec532...]), SatMetadata((top=lidarrange[1], bottom=lidarrange[2]), lidar))
+    new(DataFrame(time=[DateTime[]; utc...], lat=[Float64[]; lat...], lon=[Float64[]; lon...],
+      FCF=[Vector{<:Union{Missing,UInt16}}[]; avd...], EC532=[Vector{<:Union{Missing,Float32}}[]; ec532...]),
+      SatMetadata((top=lidarrange[1], bottom=lidarrange[2]), lidar))
   end #constructor 2 CPro
 end #struct CPro
 
@@ -683,7 +684,7 @@ Immutable struct with fields
 CALIOP satellite data currently holding time as `DateTime` in `UTC`
 and position (`lat`/`lon`) of cloud layer and profile data in a `DataFrame`.
 Additionally, `CPro` currently holds feature classification flags `FCF` as `UInt16`
-and exticintion coefficients at 532 nm `EC532` as `Union{Missing,AbstractFloat}`.
+and exticintion coefficients at 532 nm `EC532` as `Union{Missing,Float32}`.
 
 ## metadata
 

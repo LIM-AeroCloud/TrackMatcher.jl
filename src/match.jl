@@ -43,7 +43,7 @@ function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB
         push!(fcoord, geo.LatLon(lat, lon))
       end
       scoord = geo.LatLon[]
-      for (lat, lon) in zip(ilat, st.track(ilat))
+      for (lat, lon) in zip(ilat, slon)
         push!(scoord, geo.LatLon(lat, lon))
       end
 
