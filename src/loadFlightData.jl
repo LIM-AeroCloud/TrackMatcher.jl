@@ -31,8 +31,8 @@ function loadInventory(files::Vector{String}; altmin=15_000)
       flights.SEGMENT_SEC[i]) for i = 1:length(flights.FLIGHT_ID)]
 
     # Initialise loop over file
-    flightdata = DataFrame(time = DateTime[], lat = Float64[], lon = Float64[],
-      alt = Float64[], speed = Float64[])
+    flightdata = DataFrame(time = DateTime[], lat = AbstractFloat[], lon = AbstractFloat[],
+      alt = AbstractFloat[], speed = AbstractFloat[])
     FID = flights.FLIGHT_ID[1]
 
     # Loop over all data points
@@ -43,8 +43,8 @@ function loadInventory(files::Vector{String}; altmin=15_000)
         if length(flightdata.time) ≤ 1
           FID = flights.FLIGHT_ID[i]
           # Empty possible entry
-          flightdata = DataFrame(time = DateTime[], lat = Float64[], lon = Float64[],
-            alt = Float64[], speed = Float64[])
+          flightdata = DataFrame(time = DateTime[], lat = AbstractFloat[], lon = AbstractFloat[],
+            alt = AbstractFloat[], speed = AbstractFloat[])
           continue
         end
         # Determine predominant flight direction, inflection points, and remove duplicate entries
@@ -53,8 +53,8 @@ function loadInventory(files::Vector{String}; altmin=15_000)
         push!(inventory, FlightData(flightdata, FID,
           missing, missing, missing, flex, useLON, "VOLPE AEDT", file))
         # Empty data vectors
-        flightdata = DataFrame(time = DateTime[], lat = Float64[], lon = Float64[],
-          alt = Float64[], speed = Float64[])
+        flightdata = DataFrame(time = DateTime[], lat = AbstractFloat[], lon = AbstractFloat[],
+          alt = AbstractFloat[], speed = AbstractFloat[])
         FID = flights.FLIGHT_ID[i]
       end # saving FlightData
       # Filter altitude threshold
@@ -91,12 +91,12 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000)
     parallel = VERSION ≥ v"1.3" ? true : false
     flights = CSV.read(file, datarow=2, normalizenames=true, ignoreemptylines=true,
       silencewarnings=true, threaded=parallel, copycols=true, dateformat="m/d/y H:M:S",
-      types = Dict(:Altitude_feet_ => Float64, :Groundspeed_knots_ => Float64))
+      types = Dict(:Altitude_feet_ => Float32, :Groundspeed_knots_ => Float32))
 
     # Initialise loop over file
     FID = flights.Flight_ID[1]; n = 1
-    flightdata = DataFrame(time = DateTime[], lat = Float64[]; lon = Float64[],
-      alt = Union{Missing,Float64}[], speed = Union{Missing,Float64}[],
+    flightdata = DataFrame(time = DateTime[], lat = AbstractFloat[]; lon = AbstractFloat[],
+      alt = Union{Missing,AbstractFloat}[], speed = Union{Missing,AbstractFloat}[],
       climb = Union{Missing,Int}[], heading = Union{Missing,Int}[])
 
     # Loop over all data points
@@ -108,8 +108,8 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000)
           n = i
           FID = flights.Flight_ID[n]
           # Empty possible entry
-          flightdata = DataFrame(time = DateTime[], lat = Float64[]; lon = Float64[],
-            alt = Union{Missing,Float64}[], speed = Union{Missing,Float64}[],
+          flightdata = DataFrame(time = DateTime[], lat = AbstractFloat[]; lon = AbstractFloat[],
+            alt = Union{Missing,AbstractFloat}[], speed = Union{Missing,AbstractFloat}[],
             climb = Union{Missing,Int}[], heading = Union{Missing,Int}[])
           continue
         end
@@ -121,8 +121,8 @@ function loadArchive(files::Vector{String}; altmin::Int=15_000)
           dest=flights.Destination[n]), flex, useLON, "FlightAware", file))
 
         # Reset temporary data arrays
-        flightdata = DataFrame(time = DateTime[], lat = Float64[]; lon = Float64[],
-          alt = Union{Missing,Float64}[], speed = Union{Missing,Float64}[],
+        flightdata = DataFrame(time = DateTime[], lat = AbstractFloat[]; lon = AbstractFloat[],
+          alt = Union{Missing,AbstractFloat}[], speed = Union{Missing,AbstractFloat}[],
           climb = Union{Missing,Int}[], heading = Union{Missing,Int}[])
         # Set Flight ID and position to next flight
         n = i
@@ -170,8 +170,8 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000,
     # Read flight data
     parallel = VERSION ≥ v"1.3" ? true : false
     flight = CSV.read(file, delim=delim, ignoreemptylines=true, normalizenames=true, copycols=true,
-      silencewarnings=true, threaded=parallel, types=Dict(:Latitude => Float64,
-      :Longitude => Float64, :feet => String, :kts => Float64, :Course => String,
+      silencewarnings=true, threaded=parallel, types=Dict(:Latitude => Float32,
+      :Longitude => Float32, :feet => String, :kts => Float32, :Course => String,
       :Rate => String))
     if length(df.names(flight)) ≠ 9 || df.names(flight)[2:9] ≠
       [:Latitude, :Longitude, :Course, :kts, :mph, :feet, :Rate, :Reporting_Facility]
@@ -222,12 +222,12 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000,
     # Initialise time vector
     flighttime = ZonedDateTime[]
     # Initialise vectors for altitude, heading and climb to convert from strings to Int
-    altitude = Union{Missing,Float64}[]
+    altitude = Union{Missing,AbstractFloat}[]
     heading = Union{Missing,Int}[]
     climbingrate = Union{Missing,Int}[]
     # Loop over times
     for i=length(flight[!,1]):-1:1
-      alt = try parse(Float64, join([n for n in flight.alt[i]
+      alt = try parse(Float32, join([n for n in flight.alt[i]
         if isnumeric(n) || n == '.']))
       catch; missing;  end
       climb = try parse(Int, join([n for n in flight.climb[i]

@@ -1,11 +1,11 @@
 ### Helper functions
 
 """
-    convertUTC(t::Float64) -> DateTime
+    convertUTC(t::AbstractFloat) -> DateTime
 
 Convert the CALIOP Profile UTC time (`t`) to a `DateTime`.
 """
-function convertUTC(t::Float64)
+function convertUTC(t::AbstractFloat)
   # Extract date from Float before decimal point and convert to Date
   date = floor(Int, t)
   d = Date("20"*string(date), "yyyymmdd")
@@ -86,7 +86,7 @@ end #function remdup!
 
 
 """
-    findflex(x::Vector{<:Real}) -> Vector{ NamedTuple{(:range, :min, :max), Tuple{UnitRange, Float64, Float64}}}
+    findflex(x::Vector{<:Real}) -> Vector{ NamedTuple{(:range, :min, :max), Tuple{UnitRange, AbstractFloat, AbstractFloat}}}
 
 Find inflection points in `x` and return a vector of named tuples with index ranges
 between inflection points and corresponding extrema.
@@ -104,7 +104,7 @@ function findflex(x::Vector{<:Real})
   # Save end index
   push!(flex, length(x))
   # Initialise a vector for ranges between flex points, and min/max values
-  ranges = NamedTuple{(:range, :min, :max), Tuple{UnitRange, Float64, Float64}}[]
+  ranges = NamedTuple{(:range, :min, :max), Tuple{UnitRange, AbstractFloat, AbstractFloat}}[]
   # Loop over saved inflection points
   for i = 2:length(flex)
     # Evaluate ascending/descending order of data and save extrema and range,
@@ -120,15 +120,15 @@ end #function findflex
 
 
 """
-    Minterpolate(ms::mat.MSession, p::mat.MxArray) -> λ(i::Union{Real,Vector{<:Float64},StepRangeLen})
+    Minterpolate(ms::mat.MSession, p::mat.MxArray) -> λ(i::Union{Real,Vector{AbstractFloat},StepRangeLen})
 
 From a MATLAB piecewise polynomial structure `p` and the corresponding MATLAB
-session `ms` return a λ function taking a Union{Real,Vector{<:Float64},StepRangeLen}
+session `ms` return a λ function taking a Union{Real,Vector{AbstractFloat},StepRangeLen}
 as input to return the interpolated data of `p`.
 """
 function Minterpolate(ms::mat.MSession, p::mat.MxArray)
   """ Return the interpolated data of `i` using MATLAB's pchip algorithm"""
-  function (i::Union{Real,Vector{<:Float64},StepRangeLen})
+  function (i::Union{Real,Vector{<:AbstractFloat},StepRangeLen})
     # Send data to MATLAB
     mat.put_variable(ms, :i, mat.mxarray(i)); mat.put_variable(ms, :p, p)
     # Interpolate data with MATLAB
@@ -150,7 +150,7 @@ together with correct `bounds` of each column. Issue warnings on mismatches for
 data giving the `dataset` and `id` for clarification.
 """
 function checkcols(data::DataFrame, standardnames::Vector{Symbol},
-  standardtypes::Vector{<:Union{Union,DataType}}, bounds::Vector{Tuple{Real,Real}},
+  standardtypes::Vector{<:Type}}, bounds::Vector{Tuple{Real,Real}},
   dataset::T where T<:AbstractString, id::Union{Nothing,Int,AbstractString})
 
   # Warn of non-standardised data
@@ -232,7 +232,7 @@ end #function checkcols
 
 
 """ Check the type of a `DataFrame` column, throw AssertionError on failure """
-checktype(df::DataFrame, col::Union{Symbol,Int}, coltype::Union{Union,DataType}) =
+checktype(df::DataFrame, col::Union{Symbol,Int}, coltype::Type) =
   @assert typeof(df[!,col]) <: coltype "column $col is not of type $coltype"
 
 
@@ -321,9 +321,9 @@ function get_trackdata(flight::FlightData, sat::SatDB, sattype::Symbol,
   catch
     # Return an empty DataFrame, if no data is available
     sattype == :CLay ?
-      DataFrame(time=DateTime[], lat=Float64[], lon=Float64[]) :
-      DataFrame(time=DateTime[], lat=Float64[], lon=Float64[],
-        FCF=Union{Missing,UInt16}[], EC532=Union{Missing,Float32}[])
+      DataFrame(time=DateTime[], lat=AbstractFloat[], lon=AbstractFloat[]) :
+      DataFrame(time=DateTime[], lat=AbstractFloat[], lon=AbstractFloat[],
+        FCF=Union{Missing,UInt16}[], EC532=Union{Missing,AbstractFloat}[])
   end
   # Save satellite data in SatDB
   satdata = sattype == :CPro ? SatDB(CLay(primdata), CPro(secdata, sat.CPro.metadata), sat.metadata) :

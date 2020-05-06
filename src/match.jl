@@ -1,6 +1,6 @@
 """
     find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB,
-      sattype::Symbol, sattracks::Vector, maxtimediff::Int, stepwidth::Float64, Xradius::Real,
+      sattype::Symbol, sattracks::Vector, maxtimediff::Int, stepwidth::AbstractFloat, Xradius::Real,
       flightspan::Int, satspan::Int) -> idata::DataFrame, track::DataFrame, accuracy::DataFrame
 
 Using interpolated `flighttracks` and `sattracks`, add new spatial and temporal
@@ -14,16 +14,16 @@ between the aircraft and satellite overpass. Intersections within `Xradius` in m
 are viewed as duplicates and only the one with the highest stepwidth is stored.
 """
 function find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB,
-  sattype::Symbol, sattracks::Vector, maxtimediff::Int, stepwidth::Float64, Xradius::Real,
+  sattype::Symbol, sattracks::Vector, maxtimediff::Int, stepwidth::AbstractFloat, Xradius::Real,
   flightspan::Int, satspan::Int)
 
   # Initialise DataFrames for current flight
-  idata = DataFrame(id=String[], lat=Float64[], lon=Float64[],
+  idata = DataFrame(id=String[], lat=AbstractFloat[], lon=AbstractFloat[],
     tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[],
     feature = Union{Missing,Symbol}[])
   track = DataFrame(id=String[], flight=FlightData[], sat=SatDB[])
-  accuracy = DataFrame(id=String[], intersection=Float64[], flightcoord=Float64[],
-    satcoord=Float64[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
+  accuracy = DataFrame(id=String[], intersection=AbstractFloat[], flightcoord=AbstractFloat[],
+    satcoord=AbstractFloat[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
   counter = 0 # for intersections within the same flight used in the id
   # Get satellite data of the preferred type
   satdata = getfield(sat, sattype).data
@@ -218,8 +218,8 @@ function interpolate_satdata(ms::mat.MSession, DB::SatDB, overlap::NamedTuple,
     for seg in satsegments
       length(seg.range) > 1 || continue #ignore points or empty data in segments
       # Pass variables to MATLAB
-      mat.put_variable(ms, :x, satdata.lat[r][seg.range])
-      mat.put_variable(ms, :y, satdata.lon[r][seg.range])
+      mat.put_variable(ms, :x, float.(satdata.lat[r][seg.range]))
+      mat.put_variable(ms, :y, float.(satdata.lon[r][seg.range]))
       mat.put_variable(ms, :meta, flight)
       # Convert times to UNIX times for interpolation
       mat.put_variable(ms, :t, Dates.datetime2unix.(satdata.time[r][seg.range]))
@@ -259,8 +259,8 @@ function interpolate_flightdata(ms::mat.MSession, flight::FlightData, stepwidth:
   flightdata = []
   for f in flight.metadata.flex
     # Hand over variables to MATLAB
-    mat.put_variable(ms, :x, x[f.range])
-    mat.put_variable(ms, :y, y[f.range])
+    mat.put_variable(ms, :x, float.(x[f.range]))
+    mat.put_variable(ms, :y, float.(y[f.range]))
     mat.put_variable(ms, :meta, flight.metadata)
     # Convert times to UNIX times for interpolation
     mat.put_variable(ms, :t, Dates.datetime2unix.(flight.data.time[f.range]))
@@ -270,7 +270,7 @@ function interpolate_flightdata(ms::mat.MSession, flight::FlightData, stepwidth:
       "disp(['database/ID: ', string(meta.source), '/', string(meta.dbID)])\nend"))
     # Retrieve variables from MATLAB
     pf = mat.get_mvariable(ms, :pf)
-    xr = interpolatedtrack(x[f.range], stepwidth)
+    xr = float.(interpolatedtrack(x[f.range], stepwidth))
     # Consider only data segments with more than one data point
     length(xr) > 1 || continue
     mat.eval_string(ms, string("try\npt = pchip(x, t);\ncatch\n",
@@ -292,11 +292,11 @@ end #function interpolate_flightdata
 
 
 """
-    interpolatedtrack(xdata::Vector{Float64}, stepwidth::Real)
+    interpolatedtrack(xdata::Vector{AbstractFloat}, stepwidth::Real)
 
 Return an interpolated vector of `xdata` with a step width of `stepwidth`.
 Data are ascending or descending depending on the first and last data point of
 `xdata`.
 """
-interpolatedtrack(xdata::Vector{Float64}, stepwidth::Real) = xdata[1] < xdata[end] ?
-  collect(Float64, xdata[1]:stepwidth:xdata[end]) : collect(Float64, xdata[1]:-stepwidth:xdata[end])
+interpolatedtrack(xdata::Vector{AbstractFloat}, stepwidth::Real) = xdata[1] < xdata[end] ?
+  collect(AbstractFloat, xdata[1]:stepwidth:xdata[end]) : collect(AbstractFloat, xdata[1]:-stepwidth:xdata[end])
