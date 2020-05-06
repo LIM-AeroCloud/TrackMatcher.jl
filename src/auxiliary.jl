@@ -150,7 +150,7 @@ together with correct `bounds` of each column. Issue warnings on mismatches for
 data giving the `dataset` and `id` for clarification.
 """
 function checkcols(data::DataFrame, standardnames::Vector{Symbol},
-  standardtypes::Vector{<:Type}}, bounds::Vector{Tuple{Real,Real}},
+  standardtypes::Vector{<:Type}, bounds::Vector{Tuple{Real,Real}},
   dataset::T where T<:AbstractString, id::Union{Nothing,Int,AbstractString})
 
   # Warn of non-standardised data
