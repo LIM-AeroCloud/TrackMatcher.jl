@@ -221,7 +221,7 @@ struct SatMetadata
     remarks=nothing
   )
     # Find type of satellite data based on first 50 files (~2 days)
-    type = count(occursin.("CLay", files[1:min(length(files), 50)])) ≥
+    type = occursin("CLay", files[1])) ≥
       count(occursin.("CPro", files[1:min(length(files), 50)])) ? :Clay : :CPro
     # Create a new instance of SatMetadata
     new(Dict(enumerate(files)), type, date, tz.now(tz.localzone()), loadtime, remarks)
@@ -525,8 +525,18 @@ struct SatData
     # Scan folders for HDF4 files
     files = String[];
     for folder in folders
-      findfiles!(files, folder, ".hdf")
+      try findfiles!(files, folder, ".hdf")
+      catch
+        @warn "Read error in $folder.\nData skipped"
+      end
     end
+    # Create empty struct, if no data files were found
+    isempty(files) && return new(DataFrame(time=DateTime[], lat=AbstractFloat[],
+      lon=AbstractFloat[], fileindex=Int[]), SatMetadata(files, (start=tstart, stop=tstart),
+      Dates.canonicalize(Dates.CompoundPeriod()), remarks=remarks))
+    # Find type of satellite data based on first 50 files (~2 days)
+    type = count(occursin.("CLay", files[1:min(length(files), 50)])) ≥
+      count(occursin.("CPro", files[1:min(length(files), 50)])) ? "Clay" : "CPro"
     # Start MATLAB session
     ms = mat.MSession()
     # Initialise arrays
@@ -537,6 +547,13 @@ struct SatData
     # Loop over files
     prog = pm.Progress(length(files), "load sat data...")
     for (i, file) in enumerate(files)
+      if !occursin(type, basename(file))
+        @warn string("Wrong satellite type.\n",
+          "Data must be of type $type with indication in the file name. Data skipped.")
+        utc[i], lat[i], lon[i], fileindex[i] =
+          DateTime[], AbstractFloat[], AbstractFloat[], Int[]
+        continue
+      end
       # Find files with cloud layer data
       try
         # Extract time
@@ -555,8 +572,9 @@ struct SatData
         fileindex[i] = [i for index in t]
       catch
         # Skip data on failure and warn
-        @warn string("read error in CALIPSO granule ",
-          "$(splitext(basename(file))[1])\ndata skipped")
+        @warn "read error in CALIPSO granule $(splitext(basename(file))[1])\ndata skipped"
+        utc[i], lat[i], lon[i], fileindex[i] =
+          DateTime[], AbstractFloat[], AbstractFloat[], Int[]
       end
       # Monitor progress for progress bar
       pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
