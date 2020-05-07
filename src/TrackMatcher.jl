@@ -206,7 +206,30 @@ struct FlightMetadata
   end #constructor 2 FlightMetadata
 end #struct FlightMetadata
 
+struct SatMetadata
+  fileindex
+  type::Symbol
+  date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
+  created::Union{DateTime,ZonedDateTime}
+  loadtime::Dates.CompoundPeriod
+  remarks
 
+  function SatMetadata(
+    files::Vector{String},
+    date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+    loadtime::Dates.CompoundPeriod=Dates.canonicalize(Dates.CompoundPeriod());
+    remarks=nothing
+  )
+    # Find type of satellite data based on first 50 files (~2 days)
+    type = count(occursin.("CLay", files[1:min(length(files), 50)])) ≥
+      count(occursin.("CPro", files[1:min(length(files), 50)])) ? :Clay : :CPro
+    # Create a new instance of SatMetadata
+    new(Dict(enumerate(files)), type, date, tz.now(tz.localzone()), loadtime, remarks)
+  end #constructor 2 SatMetadata
+end #struct SatMetadata
+
+
+#=
 """
 # struct SatMetadata
 
@@ -218,7 +241,7 @@ struct SatMetadata
   lidarlevels::NamedTuple{(:coarse,:fine,:itop,:ibottom,:i30),
     Tuple{Vector{AbstractFloat},Vector{AbstractFloat},Int,Int,Int}}
 end #struct SatMetadata
-
+=#
 
 """
 # struct DBMetadata
@@ -492,6 +515,78 @@ end #struct FlightDB
 
 
 ## Define structs related to sat data
+
+struct SatData
+  data::DataFrame
+  metadata::SatMetadata
+
+  function SatData(folders::String...; remarks=nothing)
+    tstart = Dates.now()
+    # Scan folders for HDF4 files
+    files = String[];
+    for folder in folders
+      findfiles!(files, folder, ".hdf")
+    end
+    # Start MATLAB session
+    ms = mat.MSession()
+    # Initialise arrays
+    utc = Vector{Vector{DateTime}}(undef, length(files))
+    lat = Vector{Vector{AbstractFloat}}(undef, length(files))
+    lon = Vector{Vector{AbstractFloat}}(undef, length(files))
+    fileindex = Vector{Vector{Int}}(undef, length(files))
+    # Loop over files
+    prog = pm.Progress(length(files), "load sat data...")
+    for (i, file) in enumerate(files)
+      # Find files with cloud layer data
+      try
+        # Extract time
+        mat.put_variable(ms, :file, file)
+        mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
+        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
+        # Extract lat/lon
+        mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
+        longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
+        mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
+        latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
+        # Save time converted to UTC and lat/lon
+        utc[i] = convertUTC.(t)
+        lon[i] = longitude
+        lat[i] = latitude
+        fileindex[i] = [i for index in t]
+      catch
+        # Skip data on failure and warn
+        @warn string("read error in CALIPSO granule ",
+          "$(splitext(basename(file))[1])\ndata skipped")
+      end
+      # Monitor progress for progress bar
+      pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
+    end #loop over files
+    pm.finish!(prog)
+
+    # Close MATLAB session
+    mat.close(ms)
+    # Calculate time span of satellite data
+    sattime = [DateTime[]; utc...]
+    tmin = minimum(sattime)
+    tmax = maximum(sattime)
+    tend = Dates.now()
+    # Save computing times
+    loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
+
+    # Instantiate new struct
+    @info string("SatDB data loaded to properties in ",
+      "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", "))",
+      "\n▪ CLay\n▪ CPro\n▪ metadata")
+    new(DataFrame(time=sattime, lat=[AbstractFloat[]; lat...],
+      lon=[AbstractFloat[]; lon...], fileindex=[Int[]; fileindex...]),
+      SatMetadata(files, (start=tmin, stop=tmax), loadtime, remarks=remarks))
+  end #constructor 2 SatData
+end #struct SatData
+
+
+
+
+
 """
 # struct CLay
 
