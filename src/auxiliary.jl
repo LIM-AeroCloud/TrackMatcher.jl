@@ -15,9 +15,10 @@ function convertUTC(t::AbstractFloat)
   h = floor(Int, utc/3600)
   m = floor(Int, utc - 3600h)÷60
   s = floor(Int, utc - 3600h - 60m)
+  ms = round(Int, 1000(utc - 3600h - 60m - s))
 
   # Return a DateTime from date and time (h/m/s) with timezone UTC
-  return DateTime(Dates.yearmonthday(d)..., h, m, s)
+  return DateTime(Dates.yearmonthday(d)..., h, m, s, ms)
 end
 
 
@@ -257,81 +258,95 @@ end #function checkDBtype
 
 
 """
-    extract_timespan(data::DataFrame, t::Int, timespan::Int=15) -> DataFrame
+    find_timespan(data::DataFrame, t::Int, timespan::Int=15) -> DataFrame
 
 From the `data` in a `DataFrame`, extract a subset at index (row) `t` ± `timespan`
 (rows).
 """
-function extract_timespan(data::DataFrame, t::Int, timespan::Int=15)
-  t1 = max(1, min(t-timespan, length(data[:,1])))
-  t2 = min(length(data[:,1]), t+timespan)
-  t2 = t-timespan > length(data[:,1]) ? 0 : t2
-  return data[t1:t2,:]
+function find_timespan(sat::DataFrame, t::Int, timespan::Int=15)
+  t1 = max(1, min(t-timespan, length(sat.time)))
+  t2 = min(length(sat.time), t+timespan)
+  # t2 = t-timespan > length(data[:,1]) ? 0 : t2
+  return sat.time[t1:t2], unique(sat.fileindex[t1:t2])
 end #function extract_timespan
 
 
+function extract_timespan(sat::Union{CLay,CPro}, timespan::Vector{DateTime})
+  timeindex = [findfirst(sat.data.time .== t) for t in timespan
+    if findfirst(sat.data.time .== t) ≠ nothing]
+  satdata = sat.data[timeindex,:]
+  typeof(sat) == CPro ? CPro(satdata, sat.metadata) : CLay(satdata)
+end
+
+
 """
-    swap_sattype!(sattype::Symbol)::Symbol
+    swap_sattype(sattype::Symbol)::Symbol
 
 Returns the other Symbol from the options
 
 - `:CLay`
 - `:CPro`
-
-when `sattype` is given to switch between `SatDB` datasets.
 """
-function swap_sattype!(sattype::Symbol)::Symbol
-  swap = Dict(:CPro => :CLay, :CLay => :CPro)
+function swap_sattype(sattype::Symbol)::Symbol
+  swap = Dict{Symbol,Symbol}(:CPro => :CLay, :CLay => :CPro)
   swap[sattype]
 end
 
 
 """
-    get_trackdata(flight::FlightData, sat::SatDB, sattype::Symbol,
-      tflight::DateTime, tsat::DateTime, flightspan::Int, satspan::Int)
-      -> flightdata::FlightData, satdata::SatDB
+    get_trackdata(flight::FlightData, tflight::DateTime, flightspan::Int)
+      -> flightdata::FlightData
 
-From the measured `flight` and `sat` data and the times of the aircraf (`tflight`)
-and the satellite (`tsat`) at the intersection, save the closest measured value
-to the interpolated intersection of each dataset ±`flightspan`/`satspan` data points
-to `flightdata` and `satdata`, respectively, and return the datasets.
+From the measured `flight` data and the time of the aircrafat the intersection (`tflight`),
+save the closest measured value to the interpolated intersection ±`flightspan` data points
+to `flightdata`.
 """
-function get_trackdata(flight::FlightData, sat::SatDB, sattype::Symbol,
-  tflight::DateTime, tsat::DateTime, flightspan::Int, satspan::Int)
-
+function get_flightdata(flight::FlightData, tflight::DateTime, flightspan::Int)
   # Find the index (DataFrame row) of the intersection in the flight data
   tf = argmin(abs.(flight.data.time .- tflight))
-
   # Construct FlightData at Intersection
-  flightdata =
-    FlightData(extract_timespan(flight.data, tf, flightspan), flight.metadata)
+  t1 = max(1, min(tf-flightspan, length(flight.data.time)))
+  t2 = min(length(flight.data.time), tf+flightspan)
+  # t2 = t-timespan > length(data[:,1]) ? 0 : t2
+  flightdata = FlightData(flight.data[t1:t2,:], flight.metadata)
 
-  # Get satellite data used to find the intersection and find DataFrame row of intersection
-  satprim = getfield(sat, sattype).data
-  tsp = argmin(abs.(satprim.time .- tsat))
-  # Retrieve DataFrame at Intersection ± 15 time steps
-  primdata = extract_timespan(satprim, tsp, satspan)
-
-  # Switch to other satellite data (CLay/CPro) and check whether data is available
-  # at intersection and retrieve ±15 time steps as well
-  swap_sattype!(sattype)
-  secdata = try satsec = getfield(sat, sattype).data
-    tss = argmin(abs.(satsec.time .- tsat))
-    extract_timespan(satsec, tss, satspan)
-  catch
-    # Return an empty DataFrame, if no data is available
-    sattype == :CLay ?
-      DataFrame(time=DateTime[], lat=AbstractFloat[], lon=AbstractFloat[]) :
-      DataFrame(time=DateTime[], lat=AbstractFloat[], lon=AbstractFloat[],
-        FCF=Union{Missing,UInt16}[], EC532=Union{Missing,AbstractFloat}[])
-  end
-  # Save satellite data in SatDB
-  satdata = sattype == :CPro ? SatDB(CLay(primdata), CPro(secdata, sat.CPro.metadata), sat.metadata) :
-    SatDB(CLay(secdata), CPro(primdata, sat.CPro.metadata), sat.metadata)
-
-  return flightdata, satdata,
-    argmin(abs.(flightdata.data.time .- tflight)), argmin(abs.(primdata.time .- tsat))
+  return flightdata, argmin(abs.(flightdata.data.time .- tflight))
 end
+
+
+function get_satdata(ms::mat.MSession, sat::SatData, tsat::DateTime, satspan::Int,
+  flightalt::AbstractFloat, lidar::NamedTuple, lidarrange::Tuple{Real,Real},
+  savesecondtype::Bool)
+  # Get satellite data used to find the intersection and find DataFrame row of intersection
+  ts = argmin(abs.(sat.data.time .- tsat))
+  sattype = sat.metadata.type
+  # Retrieve DataFrame at Intersection ± 15 time steps
+  timespan, fileindex = find_timespan(sat.data, ts, satspan)
+  primfiles = map(f -> get(sat.metadata.files, f, 0), fileindex)
+  secfiles = if sattype == :CPro && savesecondtype
+    replace.(primfiles, "CPro" => "CLay")
+  elseif sattype == :CLay && savesecondtype
+    replace.(primfiles, "CLay" => "CPro")
+  else
+    String[]
+  end
+
+  # Get CPro/CLay data from near the intersection
+  clay = sattype == :CLay ? CLay(ms, primfiles) : CLay(ms, secfiles)
+  cpro = sattype == :CPro ? CPro(ms, primfiles, timespan, lidar, lidarrange) :
+    CPro(ms, secfiles, timespan, lidar, lidarrange)
+  clay = extract_timespan(clay, timespan)
+  cpro = extract_timespan(cpro, timespan)
+
+  # Define primary data and index of intersection in primary data
+  primdata = sattype == :CPro ? cpro : clay
+  ts = argmin(abs.(primdata.data.time .- tsat))
+
+  # Get feature classification
+  feature = atmosphericinfo(primdata, flightalt, ts)
+
+  return cpro, clay, feature, ts
+end #function get_satdata
 
 
 """
