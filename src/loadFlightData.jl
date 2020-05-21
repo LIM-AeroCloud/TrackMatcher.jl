@@ -177,7 +177,7 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000,
       [:Latitude, :Longitude, :Course, :kts, :mph, :feet, :Rate, :Reporting_Facility]
       println()
       println()
-      @warn "Unknown file format in $file.\nTry to specify column delimiter. Data skipped."
+      @warn "Unknown file format.\nTry to specify column delimiter. Data skipped." file
       continue
     else
       tzone = string(names(flight)[1])
@@ -205,7 +205,7 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000,
     catch
       println()
       println()
-      @warn "Flight ID, date, and course not found in $file. Data skipped."
+      @warn "Flight ID, date, and course not found. Data skipped." file
       continue
     end
     orig, dest = match(r"(.*)[-|_](.*)", course).captures
@@ -213,7 +213,7 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000,
     catch
       println()
       println()
-      @warn "Unable to parse date in $file. Data skipped."
+      @warn "Unable to parse date. Data skipped." file
       continue
     end
     # Set to 2 days prior to allow corrections for timezone diffences in the next step

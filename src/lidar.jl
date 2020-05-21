@@ -239,12 +239,12 @@ flight altitude and the lidar levels was found.
 """
 function atmosphericinfo(
   sat::Union{CLay,CPro},
+  hlevels::Vector{<:AbstractFloat},
   alt::AbstractFloat,
   isat::Int
 )::Union{Missing,Symbol}
   alt = ft2km(alt)
   if typeof(sat) == CPro
-    hlevels = sat.metadata.lidarlevels.fine
     ifine = argmin(abs.(hlevels .- alt))
     if abs(hlevels[ifine] - alt) > 0.06
       println(); @warn string("insufficient altitudes for lidar data saved; ",

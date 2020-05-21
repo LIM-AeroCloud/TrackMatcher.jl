@@ -109,12 +109,12 @@ function find_intersections(
         Xflight, ift = get_flightdata(flight, tmf, flightspan)
         cpro, clay, feature, ist = get_satdata(ms, sat, tms, satspan,
           flight.data.alt[ift], lidar, lidarrange, savesecondsattype)
-        Xsat = sat.metadata.type == :CPro ? cpro : clay
+        Xsat = sat.metadata.type == :CPro ? cpro.data : clay.data
         # Calculate accuracies
         fxmeas = geo.LatLon(Xflight.data.lat[ift], Xflight.data.lon[ift])
         ftmeas = Dates.canonicalize(Dates.CompoundPeriod(tmf - Xflight.data.time[ift]))
-        sxmeas = geo.LatLon(Xsat.data.lat[ist], Xsat.data.lon[ist])
-        stmeas = Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.data.time[ist]))
+        sxmeas = geo.LatLon(Xsat.lat[ist], Xsat.lon[ist])
+        stmeas = Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.time[ist]))
 
         if isnothing(dup) # new data
           # Construct ID of current Intersection
