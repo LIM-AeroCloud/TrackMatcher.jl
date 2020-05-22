@@ -1,7 +1,7 @@
 ### Routines related to loading FlightData
 
 """
-    loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::Bool=true) -> Vector{FlightData}
+    loadInventory(files::Vector{String}; altmin=15_000) -> Vector{FlightData}
 
 From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `inventory` field in `FlightDB`.
@@ -73,7 +73,8 @@ end #function loadInventory
 
 
 """
-    loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree::Bool=true) -> Vector{FlightData}
+    loadArchive(files::Vector{String}; altmin::Int=15_000)
+      -> Vector{FlightData}
 
 From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `archive` field in `FlightDB`.
@@ -148,13 +149,13 @@ end #function loadArchive
 
 
 """
-    loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfree::Bool=true,
+    loadOnlineData(files::Vector{String}; altmin::Int=15_000,
       delim::Union{Nothing,Char,String}=nothing) -> Vector{FlightData}
 
 From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `onlineData` field in `FlightDB`.
 
-The delimiter of the data in the input file can be specified by a string or character.
+The `delim`iter of the data in the input file can be specified by a string or character.
 Default is `nothing`, which means auto-detection of the delimiter is used.
 
 When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
@@ -177,7 +178,7 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000,
       [:Latitude, :Longitude, :Course, :kts, :mph, :feet, :Rate, :Reporting_Facility]
       println()
       println()
-      @warn "Unknown file format in $file.\nTry to specify column delimiter. Data skipped."
+      @warn "Unknown file format.\nTry to specify column delimiter. Data skipped." file
       continue
     else
       tzone = string(names(flight)[1])
@@ -205,7 +206,7 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000,
     catch
       println()
       println()
-      @warn "Flight ID, date, and course not found in $file. Data skipped."
+      @warn "Flight ID, date, and course not found. Data skipped." file
       continue
     end
     orig, dest = match(r"(.*)[-|_](.*)", course).captures
@@ -213,7 +214,7 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000,
     catch
       println()
       println()
-      @warn "Unable to parse date in $file. Data skipped."
+      @warn "Unable to parse date. Data skipped." file
       continue
     end
     # Set to 2 days prior to allow corrections for timezone diffences in the next step

@@ -15,16 +15,17 @@ function convertUTC(t::AbstractFloat)
   h = floor(Int, utc/3600)
   m = floor(Int, utc - 3600h)÷60
   s = floor(Int, utc - 3600h - 60m)
+  ms = round(Int, 1000(utc - 3600h - 60m - s))
 
   # Return a DateTime from date and time (h/m/s) with timezone UTC
-  return DateTime(Dates.yearmonthday(d)..., h, m, s)
+  return DateTime(Dates.yearmonthday(d)..., h, m, s, ms)
 end
 
 
 """
     findfiles!(inventory::Vector{String}, folder::String, filetypes::String...) -> inventory
 
-Scan `folder` recursively for files of `filetype` and add to the `inventory`.
+Scan `folder` recursively for files of `filetypes` and add to the `inventory`.
 """
 function findfiles!(inventory::Vector{String}, folder::String, filetypes::String...)
   # Scan directory for files and folders and save directory
@@ -120,10 +121,10 @@ end #function findflex
 
 
 """
-    Minterpolate(ms::mat.MSession, p::mat.MxArray) -> λ(i::Union{Real,Vector{AbstractFloat},StepRangeLen})
+    Minterpolate(ms::mat.MSession, p::mat.MxArray) -> λ(i::Union{Real,Vector{<:AbstractFloat},StepRangeLen})
 
 From a MATLAB piecewise polynomial structure `p` and the corresponding MATLAB
-session `ms` return a λ function taking a Union{Real,Vector{AbstractFloat},StepRangeLen}
+session `ms` return a λ function taking a Union{Real,Vector<:{AbstractFloat},StepRangeLen}
 as input to return the interpolated data of `p`.
 """
 function Minterpolate(ms::mat.MSession, p::mat.MxArray)
@@ -140,106 +141,252 @@ end
 
 
 """
-    checkcols(data::DataFrame, standardnames::Vector{Symbol},
-      standardtypes::Vector{<:Union{Union,DataType}}, bounds::Vector{Tuple{Real,Real}},
-      dataset::T where T<:AbstractString, id::Union{Nothing,Int,AbstractString})
-      -> DataFrame
+    function checkcols!(
+      data::DataFrame,
+      standardnames::Vector{Symbol},
+      standardtypes::Vector{<:Type},
+      bounds::Tuple{Vararg{Pair{<:Union{Int,Symbol},<:Tuple}}},
+      dataset::T where T<:Union{Nothing,<:AbstractString}=nothing,
+      id::Union{Nothing,Int,AbstractString}=nothing;
+      essentialcols::Vector{Int}=[1,2,3]
+    ) -> data::DataFrame
 
-Check `DataFrame` `data` for correct `standardnames`, order, and `standardtypes`
-together with correct `bounds` of each column. Issue warnings on mismatches for
-data giving the `dataset` and `id` for clarification.
+Check the columns of the `data` `DataFrame` for the use of correct `standardnames`,
+`standardtypes`, and `bounds`. Throw an error for deviations in `essentialcols`,
+otherwise issue a warning stating the `dataset` and `id` and try to correct the `data`.
 """
-function checkcols(data::DataFrame, standardnames::Vector{Symbol},
-  standardtypes::Vector{<:Type}, bounds::Vector{Tuple{Real,Real}},
-  dataset::T where T<:AbstractString, id::Union{Nothing,Int,AbstractString})
-
+function checkcols!(
+  data::DataFrame,
+  standardnames::Vector{Symbol},
+  standardtypes::Vector{<:Type},
+  bounds::Tuple{Vararg{Pair{<:Union{Int,Symbol},<:Tuple}}},
+  dataset::T where T<:Union{Nothing,<:AbstractString}=nothing,
+  id::Union{Nothing,Int,AbstractString}=nothing;
+  essentialcols::Vector{Int}=[1,2,3]
+)
   # Warn of non-standardised data
-  if df.names(data) ≠ standardnames
-    @warn "Non-standard names and/or order used for data columns. Trying to correct..."
+  check = (names(data) == standardnames && all([typeof(d) <: t for (d, t) in zip(eachcol(data), standardtypes)])) ||
+    @warn "Non-standard names and/or order used for data columns. Trying to correct..." dataset id
+
+  # Bring column bounds into the right format
+  colbounds = definebounds(bounds, standardnames)
+  # Setup vector holding checked and correct data column indices
+  correctcols = zeros(Int, length(standardnames))
+  # Find columns by name
+  findbyname!(correctcols, data, standardnames, standardtypes, colbounds, check)
+  # Find unchecked columns
+  opencols = setdiff(collect(1:min(length(names(data)), length(standardnames))),
+    filter(x -> x .≠ 0, correctcols))
+  # Find columns by position
+  findbyposition!(correctcols, opencols, data, standardtypes, colbounds)
+  # Find columns in data not associated with a correct column
+  remainingcols = setdiff(collect(1:length(names(data))),
+    filter(x -> x .≠ 0, correctcols))
+  # Find unchecked columns
+  opencols = findall(isequal(0), correctcols)
+  # Find columns by type and bounds
+  findbytype!(correctcols, opencols, remainingcols, standardtypes, colbounds)
+  # Correct DataFrame to the right format
+  correctDF!(data, correctcols, standardnames, essentialcols)
+  return data
+end #function checkcols!
+
+
+"""
+    function definebounds(
+      bounds::Tuple{Vararg{Pair{<:Union{Int,Symbol},<:Tuple}}},
+      colnames::Vector{Symbol}
+    ) -> bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
+
+From a Tuple of Pairs with column names or indices pointing to tuples with min/max
+bounds, return a vector `bounds` of tuples with the min/max bounds corresponding
+to each of the `colnames`. If `bounds` are not defined, they are set to `-Inf`/`Inf`
+in the output vector.
+"""
+function definebounds(
+  bounds::Tuple{Vararg{Pair{<:Union{Int,Symbol},<:Tuple}}},
+  colnames::Vector{Symbol}
+)
+  colbounds = Dict(bounds)
+  bounds = Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}(undef,length(colnames))
+  for (i, name) in enumerate(colnames)
+    lower, upper = if haskey(colbounds, name)
+      colbounds[name]
+    elseif haskey(colbounds, i)
+      colbounds[i]
+    else
+      (-Inf, Inf)
+    end
+    bounds[i] = (lower, upper)
   end
 
-  ### Check column types, for correctly ordered DataFrames
-  drev = DataFrame() # init DataFrame for revised data
-  # Sample column numbers or return an empty DataFrame with the correct structure
-  # for empty input data
-  unchecked = try collect(1:length(data[1,:]))
-  catch
-    d=DataFrame()
-    for (n, t) in zip(standardnames, standardtypes)
-      d[!,n] = t[]
-    end
-    return d
+  return bounds
+end #function definebounds!
+
+
+"""
+    function checkbounds!(
+      correctcols::Vector{Int},
+      bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
+      data::DataFrame,
+      col::T where T <: Union{Int,Symbol},
+      pos::Int,
+      val::Int
+    )
+Check the `bounds` of a `col`umn in `data` and add the index `val`, if correct,
+to `correctcols`. The index is added in `correctcols` at the `pos`ition, the column
+will have in the final corrected DataFrame.
+"""
+function checkbounds!(
+  correctcols::Vector{Int},
+  bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
+  data::DataFrame,
+  col::T where T <: Union{Int,Symbol},
+  pos::Int,
+  val::Int
+)
+  if typeof(bounds[pos]) .== Tuple{DateTime,DateTime} &&
+    all(bounds[pos][1] .< skipmissing(data[!,col]) .< bounds[pos][2])
+    correctcols[pos] = val
+  elseif typeof(bounds[pos]) .== Tuple{DateTime,DateTime}
+    return
+  elseif all(isinf.(bounds[pos])) ||
+    all(bounds[pos][1] .< skipmissing(data[!,col]) .< bounds[pos][2])
+    correctcols[pos] = val
   end
-   # init vector with column numbers to check
-  for i = 1:length(standardnames)
-    try checktype(data, standardnames[i], standardtypes[i])
-      # Remove column from unchecked list, if column was identified by name and
-      # tests passed. Save data to revised data and remove column from unchecked list.
-      drev[!,standardnames[i]] = data[!, standardnames[i]]
-      unchecked = unchecked[unchecked.≠i]
+end
+
+
+"""
+    function findbyname!(
+      correctcols::Vector{Int},
+      data::DataFrame,
+      standardnames::Vector{Symbol},
+      standardtypes::Vector{<:Type},
+      bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
+      check::T where T<:Union{Nothing,Bool}
+    )
+
+Find columns by `standardnames` in `data` and add the current position as `Int`
+at the correct position in `correctcols`, if the type corresponds to the
+`standardtypes` and `bounds` are correct. Issue a warning, if the previous `check`
+found a mismatch of the column order, but all `data` columns could be identified by
+`standardnames`.
+"""
+function findbyname!(
+  correctcols::Vector{Int},
+  data::DataFrame,
+  standardnames::Vector{Symbol},
+  standardtypes::Vector{<:Type},
+  bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
+  check::T where T<:Union{Nothing,Bool}
+)
+  for (i, name) in enumerate(standardnames)
+    col = findfirst(isequal(name), names(data))
+    col ≠ nothing && typeof(data[!,name]) <: standardtypes[i] &&
+      checkbounds!(correctcols, bounds, data, name, i, col)
+  end
+  isempty(findall(isequal(0), correctcols)) && check == nothing &&
+    @warn "all columns corrected based on column names"
+end #function findbyname!
+
+
+"""
+    function findbyposition!(
+      correctcols::Vector{Int},
+      opencols::Vector{Int},
+      data::DataFrame,
+      standardtypes::Vector{<:Type},
+      bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
+    )
+
+Find columns by the `standardtypes` and `bounds` at each column index in `data`
+and add the current in `correctcols` for positive matches. Issue a warning,
+if all data could be corrected by type (and previously name).
+"""
+function findbyposition!(
+  correctcols::Vector{Int},
+  opencols::Vector{Int},
+  data::DataFrame,
+  standardtypes::Vector{<:Type},
+  bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
+)
+  isempty(findall(isequal(0), correctcols)) && return
+  for pos in opencols
+    try typeof(data[!,pos]) <: standardtypes[pos] &&
+      checkbounds!(correctcols, bounds, data, pos, pos, pos)
     catch
-      # If column couldn't be identified by name, take the first column not yet checked
-      # and run tests.
-      try checktype(data, unchecked[1], standardtypes[i])
-        # If tests pass, save revised data and remove column from unchecked list.
-        drev[!,standardnames[i]] = data[!, unchecked[1]]
-        unchecked = unchecked[unchecked.≠i]
-      catch e
-        # If tests fail throw error for essential time, lat/lon columns
-        if i ≤ 3
-          rethrow(e)
-        elseif !isempty(unchecked)
-          # or return column with missing values for non-essential data
-          # and issue warnings for wrong data types
-          @warn string("Mismatch in column type for column $(standardnames[i]). ",
-            "Column filled with `missing` in: "), dataset, id
-          drev[!,standardnames[i]] = [missing for j = 1:length(drev[!,1])]
-        else
-          # or warn of missing columns
-          @warn string("Missing data for column $(standardnames[i]). ",
-            "Column filled with `missing`: "), dataset, id
-          drev[!,standardnames[i]] = [missing for j = 1:length(drev[!,1])]
-        end
-        # Remove column from unchecked list
-        unchecked = unchecked[unchecked.≠i]
-      end
+      continue
     end
   end
+  isempty(findall(isequal(0), correctcols)) &&
+    @warn "all columns corrected based on\n- column names\n- column positions"
+end #function findbyposition!
 
-  ### Check data bounds in various columns
-  # Throw error for lat/lon (essential)
-  checkrange(drev.lat, (-90, 90))
-  checkrange(drev.lon, (-180, 180))
 
-  # Replace column with missing column for non-essential data
-  for (i, r) in enumerate(bounds)
-    try checkrange(drev[!,i+3], r)
+"""
+    function findbytype!(
+      correctcols::Vector{Int},
+      opencols::Vector{Int},
+      remianingcols::Vector{Int},
+      standardtypes::Vector{<:Type},
+      bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
+    )
+
+Find the missing columns `opencols` in `data` using the `remainingcols` in `data`
+which have not yet been assigned and add the current position as `Int`
+at the correct position in `correctcols`, if `standardtypes` and `bounds` are
+correct in a column. Issue a warning, if all data could be corrected by type
+(and previously name and position).
+"""
+function findbytype!(
+  correctcols::Vector{Int},
+  opencols::Vector{Int},
+  remianingcols::Vector{Int},
+  standardtypes::Vector{<:Type},
+  bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
+)
+  isempty(findall(isequal(0), correctcols)) && return
+  for i in opencols, j in remianingcols
+    try typeof(data[!,j]) <: standardtypes[i] && correctcols[i] == 0 &&
+      checkbounds!(correctcols, bounds, data, j, i, j)
     catch
-      @warn string("Mismatch in data range for column $(standardnames[i+3]) ",
-        "in flight $id of $dataset dataset. Column filled with `missing`.")
-      drev[!,i+3] = [missing for j = 1:length(drev[!,1])]
+      continue
     end
   end
 
-  # Warn of additonal columns
-  if length(unchecked) > 0
-    @warn "More columns than expected in data. Extra columns ignored."
+  isempty(findall(isequal(0), correctcols)) &&
+    @warn "all columns corrected based on\n- column names\n- column positions\n- column types and bounds"
+end #function findbytype!
+
+
+"""
+    function correctDF!(
+      data::DataFrame,
+      correctcols::Vector{Int},
+      standardnames::Vector{Symbol},
+      essentialcols::Vector{Int}
+    )
+
+Correct the column order and/or names in `data` based on the order of indices in
+`correctcols` and the `standardnames`. Throw an error for missing columns in
+`essentialcols` otherwise issue warnings for missing columns filled with `missing`
+values or additional columns being deleted.
+"""
+function correctDF!(data::DataFrame, correctcols::Vector{Int},
+  standardnames::Vector{Symbol}, essentialcols::Vector{Int})
+  for (i, col) in enumerate(findall(isequal(0), correctcols))
+    data[!,Symbol("missing$i")] = [missing for i = 1:length(data[!,1])]
+    correctcols[col] = length(names(data))
+    col in essentialcols ? throw(@error "column $(standardnames[col]) not found in data") :
+      @warn("column $(standardnames[col]) not found in data; filled with `missing`")
   end
-
-  # Return revised data
-  return drev
-end #function checkcols
-
-
-""" Check the type of a `DataFrame` column, throw AssertionError on failure """
-checktype(df::DataFrame, col::Union{Symbol,Int}, coltype::Type) =
-  @assert typeof(df[!,col]) <: coltype "column $col is not of type $coltype"
-
-
-""" Check the data range of all values in a `DataFrame` column, throw AssertionError on failure """
-checkrange(v::Vector, bounds::Tuple{Real,Real}=(-Inf,Inf)) =
-  @assert(all(bounds[1] .≤ v[.!ismissing.(v)] .≤ bounds[2]),
-    "Vector out of range. Expected [$(bounds[1])...$(bounds[2])], got [$(minimum(v))...$(maximum(v))].")
+  additionalcols = setdiff(collect(1:length(names(data))), correctcols)
+  !isempty(additionalcols) &&
+    @warn "additional columns $(join(additionalcols, ", ", " and ")) deleted in data"
+  df.select!(data, correctcols)
+  df.rename!(data, standardnames)
+end #function correctDF!
 
 
 """
@@ -257,81 +404,111 @@ end #function checkDBtype
 
 
 """
-    extract_timespan(data::DataFrame, t::Int, timespan::Int=15) -> DataFrame
+    find_timespan(data::DataFrame, t::Int, timespan::Int=15) -> DataFrame
 
-From the `data` in a `DataFrame`, extract a subset at index (row) `t` ± `timespan`
-(rows).
+From the `data` in a `DataFrame`, find the time indices `t` ± `timespan`
+and return the `Vector{DateTime}` together with a `Vector{Int}` holding the
+file indices. The time index vector considers possible missing points at the edges
+of the `DataFrame`.
 """
-function extract_timespan(data::DataFrame, t::Int, timespan::Int=15)
-  t1 = max(1, min(t-timespan, length(data[:,1])))
-  t2 = min(length(data[:,1]), t+timespan)
-  t2 = t-timespan > length(data[:,1]) ? 0 : t2
-  return data[t1:t2,:]
+function find_timespan(sat::DataFrame, t::Int, timespan::Int=15)
+  t1 = max(1, min(t-timespan, length(sat.time)))
+  t2 = min(length(sat.time), t+timespan)
+  # t2 = t-timespan > length(data[:,1]) ? 0 : t2
+  return sat.time[t1:t2], unique(sat.fileindex[t1:t2])
+end #function find_timespan
+
+
+"""
+    extract_timespan(sat::Union{CLay,CPro}, timespan::Vector{DateTime}) -> T where T<:Union{CLay,CPro}
+
+From the `sat` data of type `CLay` or `CPro`, extract a subset within `timespan`
+and return the reduced struct.
+"""
+function extract_timespan(sat::Union{CLay,CPro}, timespan::Vector{DateTime})
+  timeindex = [findfirst(sat.data.time .== t) for t in timespan
+    if findfirst(sat.data.time .== t) ≠ nothing]
+  satdata = sat.data[timeindex,:]
+  typeof(sat) == CPro ? CPro(satdata) : CLay(satdata)
 end #function extract_timespan
 
 
 """
-    swap_sattype!(sattype::Symbol)::Symbol
+    get_trackdata(flight::FlightData, tflight::DateTime, flightspan::Int)
+      -> flightdata::FlightData
 
-Returns the other Symbol from the options
-
-- `:CLay`
-- `:CPro`
-
-when `sattype` is given to switch between `SatDB` datasets.
+From the measured `flight` data and the time of the aircrafat the intersection (`tflight`),
+save the closest measured value to the interpolated intersection ±`flightspan` data points
+to `flightdata`.
 """
-function swap_sattype!(sattype::Symbol)::Symbol
-  swap = Dict(:CPro => :CLay, :CLay => :CPro)
-  swap[sattype]
-end
-
-
-"""
-    get_trackdata(flight::FlightData, sat::SatDB, sattype::Symbol,
-      tflight::DateTime, tsat::DateTime, flightspan::Int, satspan::Int)
-      -> flightdata::FlightData, satdata::SatDB
-
-From the measured `flight` and `sat` data and the times of the aircraf (`tflight`)
-and the satellite (`tsat`) at the intersection, save the closest measured value
-to the interpolated intersection of each dataset ±`flightspan`/`satspan` data points
-to `flightdata` and `satdata`, respectively, and return the datasets.
-"""
-function get_trackdata(flight::FlightData, sat::SatDB, sattype::Symbol,
-  tflight::DateTime, tsat::DateTime, flightspan::Int, satspan::Int)
-
+function get_flightdata(flight::FlightData, tflight::DateTime, flightspan::Int)
   # Find the index (DataFrame row) of the intersection in the flight data
   tf = argmin(abs.(flight.data.time .- tflight))
-
   # Construct FlightData at Intersection
-  flightdata =
-    FlightData(extract_timespan(flight.data, tf, flightspan), flight.metadata)
+  t1 = max(1, min(tf-flightspan, length(flight.data.time)))
+  t2 = min(length(flight.data.time), tf+flightspan)
+  # t2 = t-timespan > length(data[:,1]) ? 0 : t2
+  flightdata = FlightData(flight.data[t1:t2,:], flight.metadata)
 
-  # Get satellite data used to find the intersection and find DataFrame row of intersection
-  satprim = getfield(sat, sattype).data
-  tsp = argmin(abs.(satprim.time .- tsat))
-  # Retrieve DataFrame at Intersection ± 15 time steps
-  primdata = extract_timespan(satprim, tsp, satspan)
-
-  # Switch to other satellite data (CLay/CPro) and check whether data is available
-  # at intersection and retrieve ±15 time steps as well
-  swap_sattype!(sattype)
-  secdata = try satsec = getfield(sat, sattype).data
-    tss = argmin(abs.(satsec.time .- tsat))
-    extract_timespan(satsec, tss, satspan)
-  catch
-    # Return an empty DataFrame, if no data is available
-    sattype == :CLay ?
-      DataFrame(time=DateTime[], lat=AbstractFloat[], lon=AbstractFloat[]) :
-      DataFrame(time=DateTime[], lat=AbstractFloat[], lon=AbstractFloat[],
-        FCF=Union{Missing,UInt16}[], EC532=Union{Missing,AbstractFloat}[])
-  end
-  # Save satellite data in SatDB
-  satdata = sattype == :CPro ? SatDB(CLay(primdata), CPro(secdata, sat.CPro.metadata), sat.metadata) :
-    SatDB(CLay(secdata), CPro(primdata, sat.CPro.metadata), sat.metadata)
-
-  return flightdata, satdata,
-    argmin(abs.(flightdata.data.time .- tflight)), argmin(abs.(primdata.time .- tsat))
+  return flightdata, argmin(abs.(flightdata.data.time .- tflight))
 end
+
+
+"""
+    get_satdata(
+      ms::mat.MSession,
+      sat::SatData,
+      tsat::DateTime,
+      satspan::Int,
+      flightalt::AbstractFloat,
+      lidar::NamedTuple,
+      lidarrange::Tuple{Real,Real},
+      savesecondtype::Bool
+    ) -> cpro::CPro, clay::CLay, feature::Symbol, ts::Int
+
+Using the `sat` data measurements and the MATLAB session `ms`, extract CALIOP
+cloud profile (`cpro`) and/or layer data (`clay`) together with the atmospheric
+`feature` at flight level (`flightalt`) at the intersection for time step `tsat`
+± `satspan` timesteps. In addition, return the index `ts` of `tsat` within `clay`
+and `cpro` data.
+When `savesecondtype` is set to `false`, only the data type (`CLay`/`CPro`) in `sat`
+is saved; if set to `true`, the corresponding data type is save if available.
+The lidar column data is saved for the height levels givin in the `lidar` data
+and defined by the `lidarrange`.
+"""
+function get_satdata(ms::mat.MSession, sat::SatData, tsat::DateTime, satspan::Int,
+  flightalt::AbstractFloat, lidar::NamedTuple, lidarrange::Tuple{Real,Real},
+  savesecondtype::Bool)
+  # Get satellite data used to find the intersection and find DataFrame row of intersection
+  ts = argmin(abs.(sat.data.time .- tsat))
+  sattype = sat.metadata.type
+  # Retrieve DataFrame at Intersection ± 15 time steps
+  timespan, fileindex = find_timespan(sat.data, ts, satspan)
+  primfiles = map(f -> get(sat.metadata.files, f, 0), fileindex)
+  secfiles = if sattype == :CPro && savesecondtype
+    replace.(primfiles, "CPro" => "CLay")
+  elseif sattype == :CLay && savesecondtype
+    replace.(primfiles, "CLay" => "CPro")
+  else
+    String[]
+  end
+
+  # Get CPro/CLay data from near the intersection
+  clay = sattype == :CLay ? CLay(ms, primfiles) : CLay(ms, secfiles)
+  cpro = sattype == :CPro ? CPro(ms, primfiles, timespan, lidar) :
+    CPro(ms, secfiles, timespan, lidar)
+  clay = extract_timespan(clay, timespan)
+  cpro = extract_timespan(cpro, timespan)
+
+  # Define primary data and index of intersection in primary data
+  primdata = sattype == :CPro ? cpro : clay
+  ts = argmin(abs.(primdata.data.time .- tsat))
+
+  # Get feature classification
+  feature = atmosphericinfo(primdata, lidar.fine, flightalt, ts)
+
+  return cpro, clay, feature, ts
+end #function get_satdata
 
 
 """
