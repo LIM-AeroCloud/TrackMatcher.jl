@@ -2,8 +2,8 @@
 # Module TrackMatcher
 
 To find intersection between different trajectories. The module is aimed to find
-intersections between aircraft and satellite tracks, but can be used for ship
-or cloud tracks as well.
+intersections between aircraft and satellite tracks, but can be modified for use
+with ship or cloud tracks.
 
 ## Exported structs
 
@@ -12,17 +12,17 @@ or cloud tracks as well.
   - `inventory`: VOLPE AEDT inventory
   - `archive`: commercially available database by FlightAware
   - `onlineData`: free online data by FlightAware
+- `DBMetadata` stores metadata for the flight database (`FLightDB`)
 - `FlightData` stores data of a single flight in `FlightDB`
 - `FlightMetadata` holds metadata to every flight
-- `SatData` stores CALIPSO cloud layer and profile data from the CALIOP satellite
+- `SatData` stores CALIPSO position and time and a file index for the granule of each data line
 - `CLay` CALIPSO cloud layer data
 - `CPro` CALIPSO cloud profile data
-- `SatMetadata` with metadata of the CALIPSO cloud profile data
-- `DBMetadata` with metadata of the databases for satellite and flight data
+- `SatMetadata` stores metadata of the CALIPS data
 - `Intersection`: position of intersection between aircraft and satellite trajectory,
   together with time difference between crossing; and `FlightData` and `SatData` in the
   vicinity of the intersection as well as information about the accuracy of the data
-- `XMetadata` with metadata for the `Intersection` data
+- `XMetadata` stores metadata for the `Intersection` data
 """
 module TrackMatcher
 
@@ -208,8 +208,49 @@ end #struct FlightMetadata
 
 
 """
+# struct SatMetadata
+
+Immutable struct to hold metadata for `SatData` with fields
+
+- `files::Dict{Int,String}`
+- `type::Symbol`
+- `date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}`
+- `created::Union{DateTime,ZonedDateTime}`
+- `loadtime::Dates.CompoundPeriod`
+- `remarks`
+
+## files
+Dictionary with indices of `fileindex` column in `SatData.data` pointing to the
+full file names.
+
+## type
+Symbol indicating, whether profile or layer data is stored.
+
+## date
+`NamedTuple` with fields `start` and `stop` for start and end time of the monitored
+satellite period.
+
+## created
+time of creation of database
+
+## loadtime
+time it took to read data files and load it to the struct
+
+##remarks
+any additional data or comments that can be attached to the database
 
 
+# Instantiation
+
+`SatMetadata` is constructed automatically, when `SatData` is instatiated using
+a modified constructor and `files`, `date`, `loadtime`, and `remarks`.
+
+    function SatMetadata(
+      files::Vector{String},
+      date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+      loadtime::Dates.CompoundPeriod=Dates.canonicalize(Dates.CompoundPeriod());
+      remarks=nothing
+    ) -> struct SattMetadata
 """
 struct SatMetadata
   files::Dict{Int,String}
@@ -538,8 +579,29 @@ end #struct FlightDB
 ## Define structs related to sat data
 
 """
+# struct SatData
+
+Satellite data with fields
+- `data::DataFrame`
+- `metadata::SatMetadata`
+
+The `DataFrame` of `data` has columns for the satellite time and position and indices
+for data files with additional information:
+
+- `time::Vector{DateTime}`                        (time stamp of measurement)
+- `lat::Vector{<:Union{Missing,AbstractFloat}}`   (latitude)
+- `lon::Vector{<:Union{Missing,AbstractFloat}}`   (longitude)
+- `fileindex::Vector{Int}`                        (index for filenames in `SatMetadata`)
 
 
+# Instantiation
+
+    SatData(folders::String...; remarks=nothing) -> struct SatData
+
+Construct `SatData` from any number of absolute or relative folder paths given as string.
+SatData searches for hdf files in all folders recursively and determines the data type
+(`CLay` or `CPro`) from the file names of the first 50 files. Only one type of satellite
+data can be stored in `SatD`ata`.
 """
 struct SatData
   data::DataFrame
@@ -715,27 +777,22 @@ CALIOP cloud profile `data` stored in a `DataFrame` with columns:
 - `time::Vector{DateTime}`
 - `lat::Vector{AbstractFloat}`
 - `lon::Vector{AbstractFloat}`
-- `FCF::Vector{UInt16}`
-- `EC532::Vector{<:Union{Missing,Symbol}}`
-
-Additional `SatMetadata` are stored in a immutable struct with fields:
-- `lidarrange::NamedTuple{(:top,:bottom), Tuple{Real,Real}}`
-- `lidarlevels::NamedTuple{(:coarse,:fine,:itop,:ibottom,:i30),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat},Int,Int,Int}}`
+- `FCF::Vector{<:Vector{<:Union{Missing,UInt16}}}`
+- `EC532::Vector{<:Vector{<:Union{Missing,AbstractFloat}}}`
 
 # Instantiation
 
-    CPro(ms::mat.MSession, files::Vector{String}, lidar::NamedTuple, lidarrange::Tuple{Real,Real})
+    CPro(ms::mat.MSession, files::Vector{String}, sattime::Vector{DateTime}, lidar::NamedTuple)
       -> struct CPro
 
 Construct `CPro` from a list of file names (including directories) and a running
-MATLAB session. Furthermore, provide a `NamedTuple` `lidar` with information about
-the heights of the lidar levels and indices of important height levels in the
-vectorized data.
+MATLAB session `ms`. CPro data is only stored in the vicinity of intersections for
+the designated `sattime`. Column data is stored as defined by `lidar`.
 
 Or construct `CPro` by directly handing over the `DataFrame` where the names, order,
 and types of each columns are checked and attempted to correct:
 
-    CPro(data::DataFrame, metadata::SatMetadata) -> struct CPro
+    CPro(data::DataFrame) -> struct CPro
 """
 struct CPro
   data::DataFrame
@@ -827,8 +884,104 @@ CPro() = CPro(DataFrame(time = DateTime[], lat = AbstractFloat[], lon = Abstract
 ## Define structs related to intersection data
 
 """
+# struct Intersection
+
+Intersection-related data with fields
+- `data::DataFrame`
+- `tracked::DataFrame`
+- `accuracy::DataFrame`
+- `metadata::XMetadata`
 
 
+## data
+
+Data related to spatial and temporal coordinates of intersections between satellite
+and flight tracks and the meteorological conditions at the intersections.
+
+`DataFrame` columns are:
+- `id::Vector{String}`: unique intersection identifier
+- `lat::Vector{<:AbstractFloat}`: latitude of intersection
+- `lon::Vector{<:AbstractFloat}`: longitude of intersection
+- `tdiff::Vector{Dates.CompoundPeriod}`: time difference between flight and satellite overpass
+- `tflight::Vector{DateTime}`: time of aircraft at intersection
+- `tsat::Vector{DateTime}`: time of satellite at intersection
+- `feature::Vector{<:Union{Missing,Symbol}}`: atmospheric conditions at intersection
+
+
+## tracked
+
+Original track data in the vicinity of the intersection.
+
+`DataFrame` columns are:
+- `id: Vector{String}`: unique intersection identifier
+- `flight::Vector{FlightData}`: `FlightData` in the vicinity of the intersection
+- `CPro::Vector{CPro}`: `CPro` CALIOP profile data in the vicinity of the intersection
+- `CLay::Vector{CLay}`: `CLay` CALIOP layer data in the vicinity of the intersection
+
+
+## accuracy
+
+Measures about the accuracy of the intersection calculations and the quality of the track data.
+
+`DataFrame` columns are:
+- `id: Vector{String}`: unique intersection identifier
+- `intersection::Vector{<:AbstractFloat}`: accuracy of the intersection calculation in meters
+- `flightcoord::Vector{<:AbstractFloat}`: distance of nearest tracked flight data
+  to calculated intersection in meters
+- `satcoord::Vector{<:AbstractFloat}`: distance of nearest tracked sat data
+  to calculated intersection in meters
+- `flighttime::Vector{Dates.CompoundPeriod}`: time difference between measurement
+  of nearest tracked flight data and calculated time of aircraft at intersection
+- `sattime::Vector{Dates.CompoundPeriod}`: time difference between measurement
+  of nearest tracked sat data and calculated time of satellite at intersection
+
+
+# Instantiation
+
+function Intersection(
+  flights::FlightDB,
+  sat::SatData,
+  savesecondsattype::Bool=false;
+  maxtimediff::Int=30,
+  flightspan::Int=0,
+  satspan::Int=15,
+  lidarrange::Tuple{Real,Real}=(15,-Inf),
+  stepwidth::AbstractFloat=0.01,
+  Xradius::Real=5000,
+  remarks=nothing
+) -> struct Intersection
+
+Construct `Intersection` from the preloaded `FlightDB` and `SatData` with the option
+to save the other satellite data type (either `CLay` or `CPro`), when `savesecondtype`
+is set to `true`. Folder structure and file names must be identical only with `CLay`/`CPro`
+interchanged.
+
+The following parameters can be set to influence intersection calculations or
+data saved to the struct:
+- `maxtimediff::Int=30`: maximum time difference allowed between aircraft passage
+  and satellite overpass at intersection
+- `flightspan::Int=0`: Number of additional data points of original track data
+  saved in the vicinity of the intersection and stored in `Intersection.tracked.flight`
+- `satspan::Int=15`: Number of additional data points of original track data
+  saved in the vicinity of the intersection and stored in `Intersection.tracked.CPro`
+  and `Intersection.tracked.CLay`
+- `lidarrange::Tuple{Real,Real}=(15,-Inf)`: lidar measurements saved for column heights
+  between `(max, min)` (set to `Inf`/`-Inf` to store all values up to top/bottom)
+- `stepwidth::AbstractFloat=0.01`: step width of interpolation in flight and sat tracks
+  in degrees (at equator)
+- `Xradius::Real=5000`: radius in which multiple finds of an intersection are disregarded
+  and only the most accurate is counted
+- `remarks=nothing`: any data or remarks attached to the metadata
+
+Or construct `Intersection` by directly handing over the different `DataFrame`s where the names, order,
+and types of each columns are checked and attempted to correct, together with the metadata:
+
+    function Intersection(
+      data::DataFrame,
+      tracked::DataFrame,
+      accuracy::DataFrame,
+      metadata::XMetadata
+    ) -> struct Intersection
 """
 struct Intersection
   data::DataFrame
@@ -847,12 +1000,12 @@ struct Intersection
     # Check data
     standardnames = [:id, :lat, :lon, :tdiff, :tflight, :tsat, :feature]
     standardtypes = [Vector{String}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
-      Vector{CompoundPeriod}, Vector{DateTime}, Vector{DateTime}, Vector{<:Union{Missing,Symbol}}]
+      Vector{Dates.CompoundPeriod}, Vector{DateTime}, Vector{DateTime}, Vector{<:Union{Missing,Symbol}}]
     bounds = (:lat => (-90,90), :lon => (-180,180))
     checkcols!(data, standardnames, standardtypes, bounds, "Intersection.data")
     # Check tracked (measured data)
     standardnames = [:id, :flight, :CPro, :CLay]
-    standardtypes = [Vector{DateTime}, Vector{FlightData}, Vector{CPro}, Vector{CLay}]
+    standardtypes = [Vector{String}, Vector{FlightData}, Vector{CPro}, Vector{CLay}]
     bounds = ()
     checkcols!(tracked, standardnames, standardtypes, bounds, "Intersection.tracked",
       essentialcols = [1])
@@ -861,7 +1014,7 @@ struct Intersection
     standardtypes = [Vector{String}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
       Vector{<:AbstractFloat}, Vector{Dates.CompoundPeriod}, Vector{Dates.CompoundPeriod}]
     bounds = ()
-    checkcols!(data, standardnames, standardtypes, bounds, "Intersection.accuracy",
+    checkcols!(accuracy, standardnames, standardtypes, bounds, "Intersection.accuracy",
       essentialcols = [1])
     new(data, tracked, accuracy, metadata)
   end #constructor 1 Intersection
@@ -869,8 +1022,7 @@ struct Intersection
 
   """ Modified constructor with some automated calculations of the intersection data. """
   function Intersection(flights::FlightDB, sat::SatData, savesecondsattype::Bool=false;
-    maxtimediff::Int=30, flightspan::Int=0, satspan::Int=15,
-    lidarrange::Tuple{Real,Real}=(15,-Inf),
+    maxtimediff::Int=30, flightspan::Int=0, satspan::Int=15, lidarrange::Tuple{Real,Real}=(15,-Inf),
     stepwidth::AbstractFloat=0.01, Xradius::Real=5000, remarks=nothing)
 
     # Initialise DataFrames with Intersection data and monitor start time

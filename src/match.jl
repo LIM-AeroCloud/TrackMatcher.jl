@@ -1,17 +1,34 @@
 """
-    find_intersections(flight::FlightData, flighttracks::Vector, sat::SatDB,
-      sattype::Symbol, sattracks::Vector, maxtimediff::Int, stepwidth::AbstractFloat, Xradius::Real,
-      flightspan::Int, satspan::Int) -> Xdata::DataFrame, track::DataFrame, accuracy::DataFrame
+function find_intersections(
+  ms::mat.MSession,
+  flight::FlightData,
+  flighttracks::Vector,
+  sat::SatData,
+  sattracks::Vector,
+  maxtimediff::Int,
+  stepwidth::AbstractFloat,
+  Xradius::Real,
+  lidar::NamedTuple,
+  lidarrange::Tuple{Real,Real},
+  flightspan::Int,
+  satspan::Int,
+  savesecondsattype::Bool
+) -> Xdata::DataFrame, track::DataFrame, accuracy::DataFrame
 
-Using interpolated `flighttracks` and `sattracks`, add new spatial and temporal
-coordinates of the current flight along with the measured `flight` and `sat` `track`
-near the intersection (±`flightspan`/±`satspan` datapoints of the intersection).
+Using interpolated `flighttracks` and `sattracks` and the MATLAB session `ms`,
+add new spatial and temporal coordinates of the current flight along with the
+measured `flight` and `sat` track near the intersection (±`flightspan`/±`satspan`
+datapoints of the intersection).
 
-For the calculation of the satellite data, prefer data of `sattype` (`CLay` by default,
-otherwise `CPro`) and find intersections using the `stepwidth` for the step width
-of the interpolated data to find intersections with a maximum time delay `maxtimediff`
-between the aircraft and satellite overpass. Intersections within `Xradius` in meters
-are viewed as duplicates and only the one with the highest stepwidth is stored.
+When `savesecondsattype` is set to true, the additional satellite data type not
+used to derive the intersections from the `SatData` is stored as well in `Intersection`.
+Satellite column data is stored over the range as defined by `lidarrange` and
+given in `lidar`.
+
+Find intersections within a maximum time delay `maxtimediff between the aircraft
+and satellite overpass using the `stepwidth` for the interpolation of the data.
+Intersections within `Xradius` in meters are viewed as duplicates and only the
+one with the minimum time delay between aircraft and satellite overpass is considered.
 """
 function find_intersections(
   ms::mat.MSession,
@@ -146,13 +163,12 @@ end #function find_intersections
 
 
 """
-    findoverlap(flight::FlightData, sat::SatDB, sattype::Symbol, maxtimediff::Int)
+    findoverlap(flight::FlightData, sat::SatDB, maxtimediff::Int) -> Vector{UnitRange}
 
 From the data of the current `flight` and the `sat` data, calculate the data ranges
 in the sat data that are in the vicinity of the flight track (min/max of lat/lon).
-Prefer `sat` data of `sattype` (`:CLay`/`:CPro`) for the calculations and consider
-only satellite data of ± `maxtimediff` minutes before the start and after the end of the
-flight.
+Consider only satellite data of ± `maxtimediff` minutes before the start and after
+the end of the flight.
 """
 function findoverlap(flight::FlightData, sat::SatData, maxtimediff::Int)
 
@@ -197,11 +213,12 @@ end#function findoverlap
 
 
 """
-interpolate_satdata(ms::mat.MSession, DB::SatDB, overlap::NamedTuple, flight::FlightMetadata)
+    interpolate_satdata(ms::mat.MSession, DB::SatData, overlap::NamedTuple, flight::FlightMetadata)
+      -> Vector{Any}
 
-Using the satellite data in the `DB` database, and the stored `overlap` ranges and types,
-interpolate the data with the pchip method in the MATLAB session (`ms`).
-Use the metadata in `flight` for error reports.
+Using the `SatData` in `DB`, and the stored `overlap` ranges, interpolate the data
+with the pchip method in the MATLAB session (`ms`). Use the metadata in `flight`
+for error reports.
 """
 function interpolate_satdata(ms::mat.MSession, sat::SatData, overlap::Vector{UnitRange},
   flight::FlightMetadata)
@@ -247,7 +264,7 @@ end #function interpolate_satdata
     interpolate_flightdata(ms::mat.MSession, flight::FlightData, stepwidth::Real)
 
 Using the `flight` data, interpolate the data with the pchip method in the MATLAB
-session (`ms`) with a `precission` in degrees.
+session (`ms`) using the defined `stepwidth` for interpolation.
 """
 function interpolate_flightdata(ms::mat.MSession, flight::FlightData, stepwidth::Real)
 
@@ -291,11 +308,11 @@ end #function interpolate_flightdata
 
 
 """
-    interpolatedtrack(xdata::Vector{AbstractFloat}, stepwidth::Real)
+    interpolatedtrack(xdata::Vector{<:AbstractFloat}, stepwidth::Real)
 
-Return an interpolated vector of `xdata` with a step width of `stepwidth`.
+Return an interpolated vector of `xdata` with the defined `stepwidth`.
 Data are ascending or descending depending on the first and last data point of
 `xdata`.
 """
-interpolatedtrack(xdata::Vector{AbstractFloat}, stepwidth::Real) = xdata[1] < xdata[end] ?
+interpolatedtrack(xdata::Vector{<:AbstractFloat}, stepwidth::Real) = xdata[1] < xdata[end] ?
   collect(AbstractFloat, xdata[1]:stepwidth:xdata[end]) : collect(AbstractFloat, xdata[1]:-stepwidth:xdata[end])

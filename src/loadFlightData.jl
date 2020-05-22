@@ -1,7 +1,7 @@
 ### Routines related to loading FlightData
 
 """
-    loadInventory(files::Vector{String}; altmin=15_000, filterCloudfree::Bool=true) -> Vector{FlightData}
+    loadInventory(files::Vector{String}; altmin=15_000) -> Vector{FlightData}
 
 From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `inventory` field in `FlightDB`.
@@ -73,7 +73,8 @@ end #function loadInventory
 
 
 """
-    loadArchive(files::Vector{String}; altmin::Int=15_000, filterCloudfree::Bool=true) -> Vector{FlightData}
+    loadArchive(files::Vector{String}; altmin::Int=15_000)
+      -> Vector{FlightData}
 
 From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `archive` field in `FlightDB`.
@@ -148,13 +149,13 @@ end #function loadArchive
 
 
 """
-    loadOnlineData(files::Vector{String}; altmin::Int=15_000, filterCloudfree::Bool=true,
+    loadOnlineData(files::Vector{String}; altmin::Int=15_000,
       delim::Union{Nothing,Char,String}=nothing) -> Vector{FlightData}
 
 From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `onlineData` field in `FlightDB`.
 
-The delimiter of the data in the input file can be specified by a string or character.
+The `delim`iter of the data in the input file can be specified by a string or character.
 Default is `nothing`, which means auto-detection of the delimiter is used.
 
 When the `Vector{FlightData}` is constructed, data can be filtered by a minimum

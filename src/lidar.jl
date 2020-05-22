@@ -38,7 +38,7 @@ end #function get_lidarheights
 
 """
     function append_lidardata!(
-      vec::Vector{Vector{<:Union{Missing,T}}},
+      vec::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
       ms::mat.MSession,
       variable::String,
       lidar::NamedTuple,
@@ -51,13 +51,12 @@ session `ms` to read the variable from an hdf file already opened in `ms` outsid
 of `append_lidardata!`. Information about the lidar heigths used in `vec` are stored
 in `lidar` together with information whether to use `coarse` levels (when set to
 `true`, otherwise fine levels are used).
-`missingvalues` can be set to any value, which will be replace with `missing` values
+`missingvalues` can be set to any value, which will be replaced with `missing`
 in `vec`.
 """
 function get_lidarcolumn(
   vec::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
   ms::mat.MSession,
-	idx::Int,
   variable::String,
   lidar::NamedTuple,
   coarse::Bool = false;
@@ -106,7 +105,8 @@ classification(FCF::UInt16) -> UInt16, UInt16
 From the CALIPSO feature classification flag (`FCF`), return the `type` and `subtype`.
 
 
-# Detailed CALIPSO description
+# Extended help
+## Detailed CALIPSO description
 
 This function accepts an array a feature classification flag (FCF) and
 returns the feature type and feature subtype. Feature and subtype are
@@ -222,17 +222,19 @@ end
 
 
 """
-    function atmosphericinfo(
-      sat::SatDB,
-      sattype::Symbol,
-      flight::FlightData,
-      index::Tuple{Int,Int}
+    atmosphericinfo(
+      sat::Union{CLay,CPro},
+      hlevels::Vector{<:AbstractFloat},
+      alt::AbstractFloat,
+      isat::Int
     )::Union{Missing,Symbol}
 
-From the subsets `sat` of `SatDB` data  and `flight` of `FlightData` in `Intersection`,
-return a `Symbol` with a human readable feature classification for the satellite data
-of `sattype`; `index` stores the indices of the data at the time of the intersection
-for the flight (`[1]`) and sat (`[2]`) data.
+From the `sat` data of type `CLay` or `CPro` at data point `isat` in `Intersection`
+(index in the `DataFrame` of the intersection), return a `Symbol` with a human-readable
+feature classification.
+
+Use the `hlevels` in the lidar column data and the flight `alt`itude to determine
+the atmospheric conditions (`feature`) at flight level at the intersecgtion.
 
 `atmosphericinfo` returns a `missing` value, if no height level overlap between the
 flight altitude and the lidar levels was found.
