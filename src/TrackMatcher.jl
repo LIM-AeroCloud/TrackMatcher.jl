@@ -607,6 +607,16 @@ struct SatData
   data::DataFrame
   metadata::SatMetadata
 
+  function SatData(data::DataFrame, metadata::SatMetadata)
+    standardnames = ["time", "lat", "lon", "fileindex"]
+    standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat},
+      Vector{<:AbstractFloat}, Vector{Int}]
+    bounds = (:time => (DateTime(2006), Dates.now()), :lat => (-90,90),
+      :lon => (-180,180), :fileindex => (1, Inf))
+    checkcols!(data, standardnames, standardtypes, bounds, "CLay")
+    new(data, metadata)
+  end #constructor 1 SatData
+
   function SatData(folders::String...; remarks=nothing)
     tstart = Dates.now()
     # Scan folders for HDF4 files
