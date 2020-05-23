@@ -261,6 +261,17 @@ struct SatMetadata
   remarks
 
   function SatMetadata(
+    files::Dict{Int,String},
+    type::Symbol,
+    date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+    created::Union{DateTime,ZonedDateTime},
+    loadtime::Dates.CompoundPeriod,
+    remarks=nothing
+  )
+    new(files, type, date, created, loadtime, remarks)
+  end #constructor 1 SatMetadata
+
+  function SatMetadata(
     files::Vector{String},
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
     loadtime::Dates.CompoundPeriod=Dates.canonicalize(Dates.CompoundPeriod());
