@@ -121,7 +121,7 @@ function find_intersections(
       # Only save the most accurate intersection calculation within an Xradius
       # of the current intersection, i.e. only continue, if current intersection
       # is more accurate or new (not within Xradius)
-      if isnothing(dup) || dx < accuracy.intersection[dup]
+      if dup == nothing || dx < accuracy.intersection[dup]
         # Extract the DataFrame rows of the sat/flight data near the intersection
         Xflight, ift = get_flightdata(flight, tmf, flightspan)
         cpro, clay, feature, ist = get_satdata(ms, sat, tms, satspan,
@@ -133,7 +133,7 @@ function find_intersections(
         sxmeas = geo.LatLon(Xsat.lat[ist], Xsat.lon[ist])
         stmeas = Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.time[ist]))
 
-        if isnothing(dup) # new data
+        if dup == nothing # new data
           # Construct ID of current Intersection
           counter += 1
           id = string(flight.metadata.source,-,flight.metadata.dbID,-,counter)

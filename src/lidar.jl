@@ -96,7 +96,7 @@ function get_lidarcolumn(
 	end
 
 	return row
-end #function append_lidardata!
+end #function get_lidarcolumn
 
 
 """

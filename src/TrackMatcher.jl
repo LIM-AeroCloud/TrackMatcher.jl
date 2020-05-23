@@ -27,8 +27,8 @@ with ship or cloud tracks.
 module TrackMatcher
 
 ## Import Julia packages
-import CSV
 import DataFrames; const df = DataFrames
+import CSV
 import Dates
 import TimeZones; const tz = TimeZones
 import Geodesy; const geo = Geodesy
@@ -399,7 +399,7 @@ struct FlightData
   function FlightData(data::DataFrame, metadata::FlightMetadata)
 
     # Column checks and warnings
-    standardnames = [:time, :lat, :lon, :alt, :heading, :climb, :speed]
+    standardnames = ["time", "lat", "lon", "alt", "heading", "climb", "speed"]
     standardtypes = [Union{DateTime,Vector{DateTime}},
       Union{AbstractFloat,Vector{<:AbstractFloat}},
       Union{AbstractFloat,Vector{<:AbstractFloat}},
@@ -717,7 +717,7 @@ struct CLay
 
   """ Unmodified constructor for `CLay` """
   function CLay(data::DataFrame)
-    standardnames = [:time, :lat, :lon]
+    standardnames = ["time", "lat", "lon"]
     standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat}]
     bounds = (:lat => (-90,90), :lon => (-180,180))
     checkcols!(data, standardnames, standardtypes, bounds, "CLay")
@@ -799,7 +799,7 @@ struct CPro
 
   """ unmodified constructor """
   function CPro(data::DataFrame)
-    standardnames = [:time, :lat, :lon, :FCF, :EC532]
+    standardnames = ["time", "lat", "lon", "FCF", "EC532"]
     standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
       Vector{<:Vector{<:Union{Missing,UInt16}}}, Vector{<:Vector{<:Union{Missing,AbstractFloat}}}]
     bounds = (:lat => (-90,90), :lon => (-180,180))
@@ -846,14 +846,14 @@ struct CPro
       end
       # Retrieve non-essential data
       # Extract feature classification flags
-      avd[i] = try get_lidarcolumn(avd, ms, i, "Atmospheric_Volume_Description", lidar)
-      catch
+      avd[i] = try get_lidarcolumn(avd, ms, "Atmospheric_Volume_Description", lidar)
+      catch err
         @debug rethrow(err)
         @warn "missing Atmosphericc Volume Description"  granule = splitext(basename(file))[1]
         t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
         [[missing for i = 1:length(lidar.fine)] for i in t]
       end
-      ec532[i] = try get_lidarcolumn(ec532, ms, i, "Extinction_Coefficient_532", lidar,
+      ec532[i] = try get_lidarcolumn(ec532, ms, "Extinction_Coefficient_532", lidar,
         true, missingvalues = -9999)
       catch err
         rethrow(err)
@@ -998,19 +998,19 @@ struct Intersection
     metadata::XMetadata
   )
     # Check data
-    standardnames = [:id, :lat, :lon, :tdiff, :tflight, :tsat, :feature]
+    standardnames = ["id", "lat", "lon", "tdiff", "tflight", "tsat", "feature"]
     standardtypes = [Vector{String}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
       Vector{Dates.CompoundPeriod}, Vector{DateTime}, Vector{DateTime}, Vector{<:Union{Missing,Symbol}}]
     bounds = (:lat => (-90,90), :lon => (-180,180))
     checkcols!(data, standardnames, standardtypes, bounds, "Intersection.data")
     # Check tracked (measured data)
-    standardnames = [:id, :flight, :CPro, :CLay]
+    standardnames = ["id", "flight", "CPro", "CLay"]
     standardtypes = [Vector{String}, Vector{FlightData}, Vector{CPro}, Vector{CLay}]
     bounds = ()
     checkcols!(tracked, standardnames, standardtypes, bounds, "Intersection.tracked",
       essentialcols = [1])
     # Check accuracy
-    standardnames = [:id, :intersection, :flightcoord, :satcoord, :flighttime, :sattime]
+    standardnames = ["id", "intersection", "flightcoord", "satcoord", "flighttime", "sattime"]
     standardtypes = [Vector{String}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
       Vector{<:AbstractFloat}, Vector{Dates.CompoundPeriod}, Vector{Dates.CompoundPeriod}]
     bounds = ()

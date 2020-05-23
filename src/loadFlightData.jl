@@ -174,8 +174,8 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000,
       silencewarnings=true, threaded=parallel, types=Dict(:Latitude => Float32,
       :Longitude => Float32, :feet => String, :kts => Float32, :Course => String,
       :Rate => String))
-    if length(df.names(flight)) ≠ 9 || df.names(flight)[2:9] ≠
-      [:Latitude, :Longitude, :Course, :kts, :mph, :feet, :Rate, :Reporting_Facility]
+    if length(names(flight)) ≠ 9 || names(flight)[2:9] ≠
+      ["Latitude", "Longitude", "Course", "kts", "mph", "feet", "Rate", "Reporting_Facility"]
       println()
       println()
       @warn "Unknown file format.\nTry to specify column delimiter. Data skipped." file
@@ -239,7 +239,7 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000,
       catch; missing;  end
       if length(flight.time[i]) ≠ 15 || ismissing(flight.lat[i]) ||
           ismissing(flight.lon[i]) || (!ismissing(alt) && alt < altmin)
-        df.deleterows!(flight, i)
+        delete!(flight, i)
         continue
       end
       # Derive date from day of week and filename
@@ -288,7 +288,7 @@ function loadOnlineData(files::Vector{String}; altmin::Int=15_000,
     push!(archive, FlightData(flight, replace(filename, "_" => "/"), flightID,
       missing, (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
     # Monitor progress for progress bar
-    pm.next!(prog, showvalues = [(:file,filename)])
+    pm.next!(prog)
   end #loop over files
   pm.finish!(prog)
 

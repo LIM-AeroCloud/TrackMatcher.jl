@@ -67,7 +67,7 @@ function remdup!(data::DataFrame, useLON::Bool)
       δ = eps(data[i, x]); Δ = 0
       if data[i, y] == data[j, y]
         # Delete entries from all arrays with equal x and y data
-        df.deleterows!(data, i)
+        delete!(data, i)
         # Decrease the counter for the end of the arrays
         iEnd -= 1
       else
@@ -143,7 +143,7 @@ end
 """
     function checkcols!(
       data::DataFrame,
-      standardnames::Vector{Symbol},
+      standardnames::Vector{String},
       standardtypes::Vector{<:Type},
       bounds::Tuple{Vararg{Pair{<:Union{Int,Symbol},<:Tuple}}},
       dataset::T where T<:Union{Nothing,<:AbstractString}=nothing,
@@ -157,7 +157,7 @@ otherwise issue a warning stating the `dataset` and `id` and try to correct the 
 """
 function checkcols!(
   data::DataFrame,
-  standardnames::Vector{Symbol},
+  standardnames::Vector{String},
   standardtypes::Vector{<:Type},
   bounds::Tuple{Vararg{Pair{<:Union{Int,Symbol},<:Tuple}}},
   dataset::T where T<:Union{Nothing,<:AbstractString}=nothing,
@@ -165,7 +165,7 @@ function checkcols!(
   essentialcols::Vector{Int}=[1,2,3]
 )
   # Warn of non-standardised data
-  check = (names(data) == standardnames && all([typeof(d) <: t for (d, t) in zip(eachcol(data), standardtypes)])) ||
+  check = (names(data) == standardnames && all([typeof(d) <: t for (d, t) in zip(df.eachcol(data), standardtypes)])) ||
     @warn "Non-standard names and/or order used for data columns. Trying to correct..." dataset id
 
   # Bring column bounds into the right format
@@ -205,7 +205,7 @@ in the output vector.
 """
 function definebounds(
   bounds::Tuple{Vararg{Pair{<:Union{Int,Symbol},<:Tuple}}},
-  colnames::Vector{Symbol}
+  colnames::Vector{String}
 )
   colbounds = Dict(bounds)
   bounds = Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}(undef,length(colnames))
@@ -241,7 +241,7 @@ function checkbounds!(
   correctcols::Vector{Int},
   bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
   data::DataFrame,
-  col::T where T <: Union{Int,Symbol},
+  col::T where T <: Union{Int,String},
   pos::Int,
   val::Int
 )
@@ -261,7 +261,7 @@ end
     function findbyname!(
       correctcols::Vector{Int},
       data::DataFrame,
-      standardnames::Vector{Symbol},
+      standardnames::Vector{String},
       standardtypes::Vector{<:Type},
       bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
       check::T where T<:Union{Nothing,Bool}
@@ -276,7 +276,7 @@ found a mismatch of the column order, but all `data` columns could be identified
 function findbyname!(
   correctcols::Vector{Int},
   data::DataFrame,
-  standardnames::Vector{Symbol},
+  standardnames::Vector{String},
   standardtypes::Vector{<:Type},
   bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
   check::T where T<:Union{Nothing,Bool}
@@ -364,7 +364,7 @@ end #function findbytype!
     function correctDF!(
       data::DataFrame,
       correctcols::Vector{Int},
-      standardnames::Vector{Symbol},
+      standardnames::Vector{String},
       essentialcols::Vector{Int}
     )
 
@@ -374,7 +374,7 @@ Correct the column order and/or names in `data` based on the order of indices in
 values or additional columns being deleted.
 """
 function correctDF!(data::DataFrame, correctcols::Vector{Int},
-  standardnames::Vector{Symbol}, essentialcols::Vector{Int})
+  standardnames::Vector{String}, essentialcols::Vector{Int})
   for (i, col) in enumerate(findall(isequal(0), correctcols))
     data[!,Symbol("missing$i")] = [missing for i = 1:length(data[!,1])]
     correctcols[col] = length(names(data))
