@@ -261,6 +261,17 @@ struct SatMetadata
   remarks
 
   function SatMetadata(
+    files::Dict{Int,String},
+    type::Symbol,
+    date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+    created::Union{DateTime,ZonedDateTime},
+    loadtime::Dates.CompoundPeriod,
+    remarks=nothing
+  )
+    new(files, type, date, created, loadtime, remarks)
+  end #constructor 1 SatMetadata
+
+  function SatMetadata(
     files::Vector{String},
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
     loadtime::Dates.CompoundPeriod=Dates.canonicalize(Dates.CompoundPeriod());
@@ -268,7 +279,7 @@ struct SatMetadata
   )
     # Find type of satellite data based on first 50 files (~2 days)
     type = occursin("CLay", files[1]) ≥
-      count(occursin.("CPro", files[1:min(length(files), 50)])) ? :Clay : :CPro
+      count(occursin.("CPro", files[1:min(length(files), 50)])) ? :CLay : :CPro
     # Create a new instance of SatMetadata
     new(Dict(enumerate(files)), type, date, tz.now(tz.localzone()), loadtime, remarks)
   end #constructor 2 SatMetadata
@@ -607,40 +618,47 @@ struct SatData
   data::DataFrame
   metadata::SatMetadata
 
-  function SatData(folders::String...; remarks=nothing)
+  function SatData(data::DataFrame, metadata::SatMetadata)
+    standardnames = ["time", "lat", "lon", "fileindex"]
+    standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat},
+      Vector{<:AbstractFloat}, Vector{Int}]
+    bounds = (:time => (DateTime(2006), Dates.now()), :lat => (-90,90),
+      :lon => (-180,180), :fileindex => (1, Inf))
+    checkcols!(data, standardnames, standardtypes, bounds, "CLay")
+    new(data, metadata)
+  end #constructor 1 SatData
+
+  function SatData(folders::String...; type::Symbol=:undef, remarks=nothing)
     tstart = Dates.now()
     # Scan folders for HDF4 files
-    files = String[];
+    files = String[]
     for folder in folders
       try findfiles!(files, folder, ".hdf")
       catch
         @warn "read error; data skipped" folder
       end
     end
+    # If type of satellite data is not defined, find it based on first 50 file names (~2 days)
+    type = type == :CLay || type == :CPro ? string(type) :
+      count(occursin.("CLay", files[1:min(length(files), 50)])) ≥
+      count(occursin.("CPro", files[1:min(length(files), 50)])) ? "CLay" : "CPro"
+    # Select files of type based on file name
+    satfiles = files[occursin.(type, basename.(files))]
+    wrongtype = length(files) - length(satfiles)
+    wrongtype > 0 &&
+      @warn "$wrongtype files with wrong satellite type detected; data skipped"
     # Create empty struct, if no data files were found
-    isempty(files) && return new(DataFrame(time=DateTime[], lat=AbstractFloat[],
-      lon=AbstractFloat[], fileindex=Int[]), SatMetadata(files, (start=tstart, stop=tstart),
-      Dates.canonicalize(Dates.CompoundPeriod()), remarks=remarks))
-    # Find type of satellite data based on first 50 files (~2 days)
-    type = count(occursin.("CLay", files[1:min(length(files), 50)])) ≥
-      count(occursin.("CPro", files[1:min(length(files), 50)])) ? "Clay" : "CPro"
+    isempty(satfiles) && return SatData()
     # Start MATLAB session
     ms = mat.MSession()
     # Initialise arrays
-    utc = Vector{Vector{DateTime}}(undef, length(files))
-    lat = Vector{Vector{AbstractFloat}}(undef, length(files))
-    lon = Vector{Vector{AbstractFloat}}(undef, length(files))
-    fileindex = Vector{Vector{Int}}(undef, length(files))
+    utc = Vector{Vector{DateTime}}(undef, length(satfiles))
+    lat = Vector{Vector{AbstractFloat}}(undef, length(satfiles))
+    lon = Vector{Vector{AbstractFloat}}(undef, length(satfiles))
+    fileindex = Vector{Vector{Int}}(undef, length(satfiles))
     # Loop over files
-    prog = pm.Progress(length(files), "load sat data...")
-    for (i, file) in enumerate(files)
-      if !occursin(type, basename(file))
-        @warn string("Wrong satellite type.\n",
-          "Data must be of type $type with indication in the file name. Data skipped.")
-        utc[i], lat[i], lon[i], fileindex[i] =
-          DateTime[], AbstractFloat[], AbstractFloat[], Int[]
-        continue
-      end
+    prog = pm.Progress(length(satfiles), "load sat data...")
+    for (i, file) in enumerate(satfiles)
       # Find files with cloud layer data
       try
         # Extract time
@@ -672,24 +690,30 @@ struct SatData
     mat.close(ms)
     # Calculate time span of satellite data
     sattime = [DateTime[]; utc...]
+    # Find data range
     tmin = minimum(sattime)
     tmax = maximum(sattime)
-    tend = Dates.now()
     # Save computing times
+    tend = Dates.now()
     loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
 
     # Instantiate new struct
     @info string("SatData data loaded in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
-      "\n▪ data ($(length(sattime)) data rows)\n  – time\n  – lat\n  – lon\n  – fileindex\n▪ metadata")
+      "\n▪ data ($(length(sattime)) data rows)\n  – time\n  – lat\n  – lon",
+      "\n  – fileindex\n▪ metadata")
     new(DataFrame(time=sattime, lat=[AbstractFloat[]; lat...],
       lon=[AbstractFloat[]; lon...], fileindex=[Int[]; fileindex...]),
-      SatMetadata(files, (start=tmin, stop=tmax), loadtime, remarks=remarks))
+      SatMetadata(satfiles, (start=tmin, stop=tmax), loadtime, remarks=remarks))
   end #constructor 2 SatData
 end #struct SatData
 
 
-
+""" External constructor for emtpy SatData struct """
+SatData() = SatData(DataFrame(time=DateTime[], lat=AbstractFloat[],
+  lon=AbstractFloat[], fileindex=Int[]), SatMetadata(Dict{Int,String}(), :undef,
+  (start=Dates.now(), stop=Dates.now()), Dates.now(),
+  Dates.canonicalize(Dates.CompoundPeriod())))
 
 
 """
