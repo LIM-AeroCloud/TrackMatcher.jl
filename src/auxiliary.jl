@@ -62,27 +62,21 @@ function remdup!(data::DataFrame, useLON::Bool)
   # Loop over entries in vector
   while i < iEnd
     j = i + 1 # index for next consecutive line
-    while j ≤ iEnd && data[i, x] == data[j, x]
-      # Define a infinitessimal small value δ which can be repeatedly applied via Δ
-      δ = eps(data[i, x]); Δ = 0
-      if data[i, y] == data[j, y]
-        # Delete entries from all arrays with equal x and y data
-        delete!(data, i)
+    while j ≤ iEnd && data[i, x] ≈ data[j, x]
+      if data[j-1, y] ≈ data[j, y]
+        # Delete datarow, if x and y are identical
+        delete!(data, j-1)
         # Decrease the counter for the end of the arrays
         iEnd -= 1
       else
-        # If x values are equal, but y values differ add multiples of δ repeatedly
-        # by adding δ to Δ, and Δ to x.
-        Δ += δ
-        data[j, x] += Δ
+        # If x values are equal but y values differ,
+        # add infinitessimal small increment to x value
+        data[j, x] = nextfloat(data[j-1, x])
         j += 1 # set to next index
       end
     end
     i += 1 # increase line counter
   end
-
-  # Return revised data
-  return data
 end #function remdup!
 
 
