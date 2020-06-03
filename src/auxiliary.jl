@@ -471,7 +471,7 @@ The lidar column data is saved for the height levels givin in the `lidar` data
 and defined by the `lidarrange`.
 """
 function get_satdata(ms::mat.MSession, sat::SatData, tsat::DateTime, satspan::Int,
-  flightalt::AbstractFloat, lidar::NamedTuple, lidarrange::Tuple{Real,Real},
+  flightalt::Real, lidar::NamedTuple, lidarrange::Tuple{Real,Real},
   savesecondtype::Bool)
   # Get satellite data used to find the intersection and find DataFrame row of intersection
   ts = argmin(abs.(sat.data.time .- tsat))
@@ -488,7 +488,8 @@ function get_satdata(ms::mat.MSession, sat::SatData, tsat::DateTime, satspan::In
   end
 
   # Get CPro/CLay data from near the intersection
-  clay = sattype == :CLay ? CLay(ms, primfiles) : CLay(ms, secfiles)
+  clay = sattype == :CLay ? CLay(ms, primfiles, lidarrange, flightalt) :
+    CLay(ms, secfiles, lidarrange, flightalt)
   cpro = sattype == :CPro ? CPro(ms, primfiles, timespan, lidar) :
     CPro(ms, secfiles, timespan, lidar)
   clay = extract_timespan(clay, timespan)
