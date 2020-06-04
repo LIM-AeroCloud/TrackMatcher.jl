@@ -500,7 +500,8 @@ function get_satdata(ms::mat.MSession, sat::SatData, tsat::DateTime, satspan::In
   ts = argmin(abs.(primdata.data.time .- tsat))
 
   # Get feature classification
-  feature = atmosphericinfo(primdata, lidar.fine, flightalt, ts)
+  feature = sattype == :CPro ? atmosphericinfo(primdata, lidar.fine, flightalt, ts) :
+    atmosphericinfo(primdata, flightalt, ts)
 
   return cpro, clay, feature, ts
 end #function get_satdata

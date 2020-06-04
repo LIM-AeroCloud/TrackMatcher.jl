@@ -223,42 +223,69 @@ end
 
 """
     atmosphericinfo(
-      sat::Union{CLay,CPro},
+      sat::CPro,
       hlevels::Vector{<:AbstractFloat},
       alt::AbstractFloat,
       isat::Int
     )::Union{Missing,Symbol}
 
-From the `sat` data of type `CLay` or `CPro` at data point `isat` in `Intersection`
+From the `CPro` cloud profile data at data point `isat` in `Intersection`
 (index in the `DataFrame` of the intersection), return a `Symbol` with a human-readable
 feature classification.
 
 Use the `hlevels` in the lidar column data and the flight `alt`itude to determine
-the atmospheric conditions (`feature`) at flight level at the intersecgtion.
+the atmospheric conditions (`feature`) at flight level at the intersection.
 
 `atmosphericinfo` returns a `missing` value, if no height level overlap between the
-flight altitude and the lidar levels was found.
+flight altitude and the lidar levels was found or the feature array couldn't be accessed.
 """
 function atmosphericinfo(
-  sat::Union{CLay,CPro},
+  sat::CPro,
   hlevels::Vector{<:AbstractFloat},
   alt::AbstractFloat,
   isat::Int
 )::Union{Missing,Symbol}
   alt = ft2km(alt)
-  if typeof(sat) == CPro
-    ifine = argmin(abs.(hlevels .- alt))
-    if abs(hlevels[ifine] - alt) > 0.06
-      println(); @warn string("insufficient altitudes for lidar data saved; ",
-        "missing used for feature in intersections of flight $(flight.metadata.dbID)")
+  ifine = argmin(abs.(hlevels .- alt))
+  if abs(hlevels[ifine] - alt) > 0.06
+    println(); @warn string("insufficient altitudes for lidar data saved; ",
+      "missing used for feature in intersections of flight $(flight.metadata.dbID)")
+    missing
+  else
+    try sat.data.feature[isat][ifine]
+    catch
       missing
-    else
-      try feature_classification(classification(sat.data.FCF[isat][ifine])...)
-      catch
-        missing
+    end
+  end
+end #function atmosphericinfo
+
+
+"""
+    atmosphericinfo(
+      sat::CLay,
+      alt::AbstractFloat,
+      isat::Int
+    )::Union{Missing,Symbol}
+
+From the `CLay` cloud layer data at data point `isat` in `Intersection`
+(index in the `DataFrame` of the intersection), return a `Symbol` with a human-readable
+feature classification at flight `alt`itude.
+
+`atmosphericinfo` returns a `missing` value, if no feature was found at flight level.
+"""
+function atmosphericinfo(
+  sat::CLay,
+  alt::AbstractFloat,
+  isat::Int
+)::Union{Missing,Symbol}
+  alt = ft2km(alt)
+  try
+    for (i, (top, base)) in enumerate(sat.data.layer[isat])
+      if base ≤ alt ≤ top
+        return sat.data.feature[isat][i]
       end
     end
-  else #atmospheric volume information currently available only for CPro data
-    missing
+  catch
+    return missing
   end
 end #function atmosphericinfo

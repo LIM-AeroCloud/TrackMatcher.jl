@@ -817,8 +817,9 @@ end #struct CLay
 
 
 """ External constructor for emtpy CLay struct """
-CLay() = CLay(DataFrame(time = DateTime[], lat = Vector{<:AbstractFloat}[],
-  lon = Vector{<:AbstractFloat}[]))
+CLay() = CLay(DataFrame(time = DateTime[], lat = Vector{<:AbstractFloat}[], lon = Vector{<:AbstractFloat}[],
+  layers = Vector{NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}}[],
+  feature = Vector{Vector{Symbol}}[], OD = Vector{Vector{<:AbstractFloat}}[]))
 
 
 """
@@ -850,9 +851,9 @@ struct CPro
 
   """ unmodified constructor """
   function CPro(data::DataFrame)
-    standardnames = ["time", "lat", "lon", "FCF", "EC532"]
+    standardnames = ["time", "lat", "lon", "feature", "EC532"]
     standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
-      Vector{<:Vector{<:Union{Missing,UInt16}}}, Vector{<:Vector{<:Union{Missing,AbstractFloat}}}]
+      Vector{<:Vector{<:Union{Missing,Symbol}}}, Vector{<:Vector{<:Union{Missing,AbstractFloat}}}]
     bounds = (:lat => (-90,90), :lon => (-180,180))
     checkcols!(data, standardnames, standardtypes, bounds, "CPro")
     new(data)
@@ -866,7 +867,7 @@ struct CPro
     lat = Vector{Vector{AbstractFloat}}(undef, length(files))
     lon = Vector{Vector{AbstractFloat}}(undef, length(files))
     # non-essential data
-    avd = Vector{Vector{Vector{<:Union{Missing,UInt16}}}}(undef, length(files))
+    fcf = Vector{Vector{Vector{<:Union{Missing,UInt16}}}}(undef, length(files))
     ec532 = Vector{Vector{Vector{<:Union{Missing,Float32}}}}(undef, length(files))
     # Loop over files with cloud profile data
     for (i, file) in enumerate(files)
@@ -885,17 +886,28 @@ struct CPro
       lon[i] = longitude
       lat[i] = latitude
       # Extract feature classification flags
-      avd[i] = get_lidarcolumn(avd, ms, "Atmospheric_Volume_Description", lidar)
+      fcf[i] = get_lidarcolumn(fcf, ms, "Atmospheric_Volume_Description", lidar)
       ec532[i] = get_lidarcolumn(ec532, ms, "Extinction_Coefficient_532", lidar,
         true, missingvalues = -9999)
     end #loop over files
 
+    # Rearrange time vector and get time range
     utc = [DateTime[]; utc...]
     idx = [findfirst(utc .== t) for t in sattime]
+    # Rearrange FCF vector and convert to symbols
+    fcf = [Vector{<:Union{Missing,UInt16}}[]; fcf...]
+    avd =  Vector{Vector{Union{Missing,Symbol}}}(undef, length(fcf))
+    for i = 1:length(fcf)
+      vect = Vector{Union{Missing,Symbol}}(undef, length(fcf[i]))
+      for j = 1:length(fcf[i])
+        vect[j] = ismissing(fcf[i][j]) ? missing :
+          feature_classification(classification(fcf[i][j])...)
+      end
+      avd[i] = vect
+    end
     # Save time, lat/lon arrays, and feature classification flags (FCF) in CPro struct
     new(DataFrame(time=utc[idx], lat=[AbstractFloat[]; lat...][idx], lon=[AbstractFloat[]; lon...][idx],
-      FCF=[Vector{<:Union{Missing,UInt16}}[]; avd...][idx],
-      EC532=[Vector{<:Union{Missing,AbstractFloat}}[]; ec532...][idx]))
+      feature=avd[idx], EC532=[Vector{<:Union{Missing,AbstractFloat}}[]; ec532...][idx]))
   end #constructor 2 CPro
 end #struct CPro
 
