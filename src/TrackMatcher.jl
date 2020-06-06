@@ -737,21 +737,26 @@ struct CLay
 
   """ Unmodified constructor for `CLay` """
   function CLay(data::DataFrame)
-    standardnames = ["time", "lat", "lon", "layer", "feature", "OD"]
+    standardnames = ["time", "lat", "lon",
+      "layer", "feature", "OD", "IWP", "Ttop", "Htropo", "night", "averaging"]
     standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
       Vector{NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}},
-      Vector{Vector{Symbol}}, Vector{<:Vector{<:AbstractFloat}}]
+      Vector{Vector{Symbol}}, Vector{<:Vector{<:AbstractFloat}},
+      Vector{<:Vector{<:Union{Missing,<:AbstractFloat}}}, Vector{<:Vector{<:AbstractFloat}},
+      Vector{<:AbstractFloat}, BitVector, Vector{<:Vector{Int}}]
     bounds = (:lat => (-90,90), :lon => (-180,180))
     checkcols!(data, standardnames, standardtypes, bounds, "CLay")
     new(data)
   end #constructor 1 CLay
 
   """
-  Modified constructor of `CLay` reading data from hdf files given in `folders...`
-  using MATLAB session `ms`.
+  Modified constructor of `CLay` reading data from hdf `files` using MATLAB session `ms`
+  in the `lidarrange` (top to bottom), if data is above `altmin`.
   """
   function CLay(ms::mat.MSession, files::Vector{String},
     lidarrange::Tuple{Real,Real}=(15,-Inf), altmin::Real=15_000)
+    # Return default empty struct if files are empty
+    isempty(files) && return CLay()
     # Initialise arrays
     # essential data
     utc = Vector{Vector{DateTime}}(undef, length(files))
@@ -761,6 +766,11 @@ struct CLay
     layers = Vector{Vector{NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}}}(undef, length(files))
     feature = Vector{Vector{Vector{Symbol}}}(undef,length(files))
     OD = Vector{Vector{Vector{<:AbstractFloat}}}(undef,length(files))
+    IWP = Vector{Vector{Vector{Union{Missing,<:AbstractFloat}}}}(undef,length(files))
+    Ttop = Vector{Vector{Vector{<:AbstractFloat}}}(undef,length(files))
+    Htropo = Vector{Vector{AbstractFloat}}(undef, length(files))
+    night = Vector{BitVector}(undef, length(files))
+    averaging = Vector{Vector{Vector{Int}}}(undef,length(files))
     # Convert mininmum flight altitude to meters
     altmin = ft2km(altmin)
     # Loop over files
@@ -769,14 +779,14 @@ struct CLay
       # Extract time
       mat.put_variable(ms, :file, file)
       mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-      t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
+      utc[i] = convertUTC.(mat.jarray(mat.get_mvariable(ms, :t))[:,2])
       # Extract lat/lon
       mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-      longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
+      lon[i] = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
       mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-      latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
+      lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
       # Save time converted to UTC and lat/lon
-      utc[i], lon[i], lat[i] = convertUTC.(t), longitude, latitude
+      # utc[i], lon[i], lat[i] = convertUTC.(t), longitude, latitude
 
       ## Extract layer top/base, layer features and optical depth from hdf files
       mat.eval_string(ms, "clear basealt\ntry\nbasealt = hdfread(file, 'Layer_Base_Altitude');\nend")
@@ -787,39 +797,61 @@ struct CLay
       FCF = mat.jarray(mat.get_mvariable(ms, :FCF))
       mat.eval_string(ms, "clear FOD\ntry\nFOD = hdfread(file, 'Feature_Optical_Depth_532');\nend")
       FOD = mat.jarray(mat.get_mvariable(ms, :FOD))
+      mat.eval_string(ms, "clear IWPath\ntry\nIWPath = hdfread(file, 'Ice_Water_Path');\nend")
+      IWPath = mat.jarray(mat.get_mvariable(ms, :IWPath))
+      mat.eval_string(ms, "clear LTT\ntry\nLTT = hdfread(file, 'Layer_Top_Temperature');\nend")
+      LTT = mat.jarray(mat.get_mvariable(ms, :LTT))
+      mat.eval_string(ms, "clear Htropo\ntry\nHtropo = hdfread(file, 'Tropopause_Height');\nend")
+      Htropo[i] = vec(mat.jarray(mat.get_mvariable(ms, :Htropo)))
+      mat.eval_string(ms, "clear daynight\ntry\ndaynight = hdfread(file, 'Day_Night_Flag');\nend")
+      night[i] = Bool.(vec(mat.jarray(mat.get_mvariable(ms, :daynight))))
+      mat.eval_string(ms, "clear average\ntry\naverage = hdfread(file, 'Horizontal_Averaging');\nend")
+      horav = mat.jarray(mat.get_mvariable(ms, :average))
       # Loop over data and convert to TrackMatcher format
       layer = Vector{NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}}(undef,length(utc[i]))
       feat = Vector{Vector{Symbol}}(undef,length(utc[i]))
       optdepth = Vector{Vector{<:AbstractFloat}}(undef,length(utc[i]))
+      icewater = Vector{Vector{Union{Missing,<:AbstractFloat}}}(undef,length(utc[i]))
+      toptemp = Vector{Vector{<:AbstractFloat}}(undef,length(utc[i]))
+      average = Vector{Vector{Int}}(undef,length(utc[i]))
       for n = 1:length(utc[i])
         l = findall((basealt[n,:] .> 0) .& (topalt[n,:] .> 0) .& (basealt[n,:] .< lidarrange[1]) .&
           (topalt[n,:] .> lidarrange[2]) .& (topalt[n,:] .> altmin))
-        layer[n], feat[n], optdepth[n] = if isempty(l)
-          (top = AbstractFloat[], base = AbstractFloat[]), Symbol[], AbstractFloat[]
-            # AbstractFloat[]), Symbol[], AbstractFloat[]
+        layer[n], feat[n], optdepth[n], toptemp[n], icewater[n], average[n] = if isempty(l)
+          (top = AbstractFloat[], base = AbstractFloat[]), Symbol[],
+          AbstractFloat[], AbstractFloat[], AbstractFloat[], Int[]
         else
           l = findall((basealt[n,:] .> 0) .& (topalt[n,:] .> 0) .& (basealt[n,:] .< lidarrange[1]) .&
             (topalt[n,:] .> lidarrange[2]))
-          (top = [topalt[n, m] for m in l] , base = [basealt[n, m] for m in l] ),
+          (top = [topalt[n, m] for m in l] , base = [basealt[n, m] for m in l]),
           [feature_classification(classification(FCF[n,m])...) for m in l],
-          [FOD[n,m] for m in l]
+          [FOD[n,m] for m in l],
+          [LTT[n,m] for m in l],
+          [IWPath[n,m] == -9999 ? missing : IWPath[n,m] for m in l],
+          [horav[n,m] for m in l]
         end
       end # loop over time steps in current file
-      layers[i], feature[i], OD[i] = layer, feat, optdepth
+      layers[i], feature[i], OD[i], IWP[i], Ttop[i], averaging[i] =
+        layer, feat, optdepth, icewater, toptemp, average
     end #loop over files
 
     # Save time, lat/lon arrays in CLay struct
     new(DataFrame(time=[DateTime[]; utc...], lat=[AbstractFloat[]; lat...], lon=[AbstractFloat[]; lon...],
       layer=[NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}[]; layers...],
-      feature=[Vector{Symbol}[]; feature...], OD=[Vector{AbstractFloat}[]; OD...]))
+      feature=[Vector{Symbol}[]; feature...], OD=[Vector{AbstractFloat}[]; OD...],
+      IWP=[Vector{<:Union{Missing,<:AbstractFloat}}[]; IWP...], Ttop=[Vector{AbstractFloat}[]; Ttop...],
+      Htropo = [AbstractFloat[]; Htropo...], night = [BitArray(undef,0); night...],
+      averaging = [Vector{Int}[]; averaging...]))
   end #constructor 2 CLay
 end #struct CLay
 
 
 """ External constructor for emtpy CLay struct """
-CLay() = CLay(DataFrame(time = DateTime[], lat = Vector{<:AbstractFloat}[], lon = Vector{<:AbstractFloat}[],
-  layers = Vector{NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}}[],
-  feature = Vector{Vector{Symbol}}[], OD = Vector{Vector{<:AbstractFloat}}[]))
+CLay() = CLay(DataFrame(time = DateTime[], lat = AbstractFloat[], lon = AbstractFloat[],
+  layer = NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}[],
+  feature = Vector{Symbol}[], OD = Vector{<:AbstractFloat}[], IWP = Vector{<:AbstractFloat}[],
+  Ttop = Vector{<:AbstractFloat}[], Htropo = AbstractFloat[], night = BitVector(),
+  averaging = Vector{Int}[]))
 
 
 """
@@ -859,8 +891,14 @@ struct CPro
     new(data)
   end #constructor 1 CPro
 
+  """
+  Modified constructor of `CPro` reading data from hdf `files` for all given `sattime` indices
+  using MATLAB session `ms` and `lidar` profile data, if data is above `altmin`.
+  """
   function CPro(ms::mat.MSession, files::Vector{String}, sattime::Vector{DateTime},
     lidar::NamedTuple)
+    # Return default empty struct if files are empty
+    isempty(files) && return CPro()
     # Initialise arrays
     # essential data
     utc = Vector{Vector{DateTime}}(undef, length(files))
@@ -875,16 +913,12 @@ struct CPro
       # Extract time
       mat.put_variable(ms, :file, file)
       mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-      t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
+      utc[i] = convertUTC.(mat.jarray(mat.get_mvariable(ms, :t))[:,2])
       # Extract lat/lon
       mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-      longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
+      lon[i] = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
       mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-      latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
-      # Save time converted to UTC and lat/lon
-      utc[i] = convertUTC.(t)
-      lon[i] = longitude
-      lat[i] = latitude
+      lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
       # Extract feature classification flags
       fcf[i] = get_lidarcolumn(fcf, ms, "Atmospheric_Volume_Description", lidar)
       ec532[i] = get_lidarcolumn(ec532, ms, "Extinction_Coefficient_532", lidar,
@@ -914,7 +948,7 @@ end #struct CPro
 
 """ External constructor for emtpy CPro struct """
 CPro() = CPro(DataFrame(time = DateTime[], lat = AbstractFloat[], lon = AbstractFloat[],
-	FCF = UInt16[], EC532 = AbstractFloat[]))
+	feature = Vector{Symbol}[], EC532 = Vector{<:AbstractFloat}[]))
 
 
 ## Define structs related to intersection data
