@@ -552,5 +552,14 @@ function preptrack(flight::DataFrame)
 end #function preptrack
 
 
-"""Convert feet to kilomenters"""
-ft2km(ft::Real) = 0.0003048ft
+"""Convert feet to kilometers"""
+ft2km(ft::Union{Missing,Real}) = 0.0003048ft
+
+"""Convert feet to meters"""
+ft2m(ft::Union{Missing,Real}) = 0.3048ft
+
+"""Convert feet/min to m/s"""
+ftpmin2mps(ftpmin::Union{Missing,Real}) = 0.00508ftpmin
+
+"""Convert knots to m/s"""
+knot2mps(knot::Union{Missing,Real}) = 1.852knot/3.6

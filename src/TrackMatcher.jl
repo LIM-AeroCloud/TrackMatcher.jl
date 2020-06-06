@@ -494,7 +494,7 @@ online data with the keyword `odelim`. Use any character or string as delimiter.
 By default (`odelim=nothing`), auto-detection is used.
 
     FlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
-      altmin::Real=15_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
+      altmin::Real=5_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
 
 `DBtype` can be identified with:
 - `1` or `i`: VOLPE AEDT inventory
@@ -529,7 +529,7 @@ struct FlightDB
   database type and the respective folder path for that database.
   """
   function FlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
-    altmin::Real=15_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
+    altmin::Real=5_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
 
     # Save time of database creation
     tstart = Dates.now()
@@ -548,23 +548,18 @@ struct FlightDB
     for i in i1
       findfiles!(ifiles, folder[i], ".csv")
     end
-    inventory = loadInventory(ifiles, altmin=altmin)
+    inventory = loadInventory(ifiles..., altmin=altmin)
     # FlightAware commercial archive
     ifiles = String[]
     for i in i2
       findfiles!(ifiles, folder[i], ".csv")
     end
-    archive = loadArchive(ifiles, altmin=altmin)
+    archive = loadArchive(ifiles..., altmin=altmin)
     ifiles = String[]
     for i in i3
-      if VERSION ≥ v"1.2"
-        findfiles!(ifiles, folder[i], ".txt", ".dat")
-      else
-        findfiles!(ifiles, folder[i], ".txt")
-        findfiles!(ifiles, folder[i], ".dat")
-      end
+      findfiles!(ifiles, folder[i], ".txt", ".dat")
     end
-    onlineData = loadOnlineData(ifiles, altmin=altmin, delim=odelim)
+    onlineData = loadOnlineData(ifiles..., altmin=altmin, delim=odelim)
     tmin = minimum([[f.metadata.date.start for f in inventory];
       [f.metadata.date.start for f in archive];
       [f.metadata.date.start for f in onlineData]])
