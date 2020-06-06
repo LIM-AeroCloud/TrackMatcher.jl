@@ -494,7 +494,7 @@ online data with the keyword `odelim`. Use any character or string as delimiter.
 By default (`odelim=nothing`), auto-detection is used.
 
     FlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
-      altmin::Int=15_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
+      altmin::Real=15_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
 
 `DBtype` can be identified with:
 - `1` or `i`: VOLPE AEDT inventory
@@ -529,7 +529,7 @@ struct FlightDB
   database type and the respective folder path for that database.
   """
   function FlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
-    altmin::Int=15_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
+    altmin::Real=15_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
 
     # Save time of database creation
     tstart = Dates.now()
@@ -660,7 +660,7 @@ struct SatData
     prog = pm.Progress(length(satfiles), "load sat data...")
     for (i, file) in enumerate(satfiles)
       # Find files with cloud layer data
-      try
+      utc[i], lat[i], lon[i], fileindex[i] = try
         # Extract time
         mat.put_variable(ms, :file, file)
         mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
@@ -671,15 +671,11 @@ struct SatData
         mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
         latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
         # Save time converted to UTC and lat/lon
-        utc[i] = convertUTC.(t)
-        lon[i] = longitude
-        lat[i] = latitude
-        fileindex[i] = [i for index in t]
+        convertUTC.(t), latitude, longitude, [i for index in t]
       catch
         # Skip data on failure and warn
         @warn "read error in CALIPSO granule; data skipped"  granule = splitext(basename(file))[1]
-        utc[i], lat[i], lon[i], fileindex[i] =
-          DateTime[], AbstractFloat[], AbstractFloat[], Int[]
+        DateTime[], AbstractFloat[], AbstractFloat[], Int[]
       end
       # Monitor progress for progress bar
       pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
@@ -741,57 +737,121 @@ struct CLay
 
   """ Unmodified constructor for `CLay` """
   function CLay(data::DataFrame)
-    standardnames = ["time", "lat", "lon"]
-    standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat}]
+    standardnames = ["time", "lat", "lon",
+      "layer", "feature", "OD", "IWP", "Ttop", "Htropo", "night", "averaging"]
+    standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
+      Vector{NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}},
+      Vector{Vector{Symbol}}, Vector{<:Vector{<:AbstractFloat}},
+      Vector{<:Vector{<:Union{Missing,<:AbstractFloat}}}, Vector{<:Vector{<:AbstractFloat}},
+      Vector{<:AbstractFloat}, BitVector, Vector{<:Vector{Int}}]
     bounds = (:lat => (-90,90), :lon => (-180,180))
     checkcols!(data, standardnames, standardtypes, bounds, "CLay")
     new(data)
   end #constructor 1 CLay
 
   """
-  Modified constructor of `CLay` reading data from hdf files given in `folders...`
-  using MATLAB session `ms`.
+  Modified constructor of `CLay` reading data from hdf `files` using MATLAB session `ms`
+  in the `lidarrange` (top to bottom), if data is above `altmin`.
   """
-  function CLay(ms::mat.MSession, files::Vector{String})
+  function CLay(ms::mat.MSession, files::Vector{String},
+    lidarrange::Tuple{Real,Real}=(15,-Inf), altmin::Real=15_000)
+    # Return default empty struct if files are empty
+    isempty(files) && return CLay()
     # Initialise arrays
-    utc = Vector{DateTime}[]; lon = Vector{AbstractFloat}[]; lat = Vector{AbstractFloat}[]
+    # essential data
+    utc = Vector{Vector{DateTime}}(undef, length(files))
+    lat = Vector{Vector{AbstractFloat}}(undef, length(files))
+    lon = Vector{Vector{AbstractFloat}}(undef, length(files))
+    # non-essential data
+    layers = Vector{Vector{NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}}}(undef, length(files))
+    feature = Vector{Vector{Vector{Symbol}}}(undef,length(files))
+    OD = Vector{Vector{Vector{<:AbstractFloat}}}(undef,length(files))
+    IWP = Vector{Vector{Vector{Union{Missing,<:AbstractFloat}}}}(undef,length(files))
+    Ttop = Vector{Vector{Vector{<:AbstractFloat}}}(undef,length(files))
+    Htropo = Vector{Vector{AbstractFloat}}(undef, length(files))
+    night = Vector{BitVector}(undef, length(files))
+    averaging = Vector{Vector{Vector{Int}}}(undef,length(files))
+    # Convert mininmum flight altitude to meters
+    altmin = ft2km(altmin)
     # Loop over files
-    prog = pm.Progress(length(files), "load CLay data...")
-    for file in files
-      # Find files with cloud layer data
-      try
-        # Extract time
-        mat.put_variable(ms, :file, file)
-        mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
-        # Extract lat/lon
-        mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-        longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
-        mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-        latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
-        # Save time converted to UTC and lat/lon
-        push!(utc, convertUTC.(t))
-        push!(lon, longitude)
-        push!(lat, latitude)
-      catch
-        # Skip data on failure and warn
-        @warn("read error in CALIPSO granule; data skipped",
-          granule = splitext(basename(file))[1])
-      end
-      # Monitor progress for progress bar
-      pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
+    for (i, file) in enumerate(files)
+      ## Retrieve cloud layer data; assumes faulty files are filtered by SatData
+      # Extract time
+      mat.put_variable(ms, :file, file)
+      mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
+      utc[i] = convertUTC.(mat.jarray(mat.get_mvariable(ms, :t))[:,2])
+      # Extract lat/lon
+      mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
+      lon[i] = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
+      mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
+      lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
+      # Save time converted to UTC and lat/lon
+      # utc[i], lon[i], lat[i] = convertUTC.(t), longitude, latitude
+
+      ## Extract layer top/base, layer features and optical depth from hdf files
+      mat.eval_string(ms, "clear basealt\ntry\nbasealt = hdfread(file, 'Layer_Base_Altitude');\nend")
+      mat.eval_string(ms, "clear topalt\ntry\ntopalt = hdfread(file, 'Layer_Top_Altitude');\nend")
+      basealt = mat.jarray(mat.get_mvariable(ms, :basealt))
+      topalt = mat.jarray(mat.get_mvariable(ms, :topalt))
+      mat.eval_string(ms, "clear FCF\ntry\nFCF = hdfread(file, 'Feature_Classification_Flags');\nend")
+      FCF = mat.jarray(mat.get_mvariable(ms, :FCF))
+      mat.eval_string(ms, "clear FOD\ntry\nFOD = hdfread(file, 'Feature_Optical_Depth_532');\nend")
+      FOD = mat.jarray(mat.get_mvariable(ms, :FOD))
+      mat.eval_string(ms, "clear IWPath\ntry\nIWPath = hdfread(file, 'Ice_Water_Path');\nend")
+      IWPath = mat.jarray(mat.get_mvariable(ms, :IWPath))
+      mat.eval_string(ms, "clear LTT\ntry\nLTT = hdfread(file, 'Layer_Top_Temperature');\nend")
+      LTT = mat.jarray(mat.get_mvariable(ms, :LTT))
+      mat.eval_string(ms, "clear Htropo\ntry\nHtropo = hdfread(file, 'Tropopause_Height');\nend")
+      Htropo[i] = vec(mat.jarray(mat.get_mvariable(ms, :Htropo)))
+      mat.eval_string(ms, "clear daynight\ntry\ndaynight = hdfread(file, 'Day_Night_Flag');\nend")
+      night[i] = Bool.(vec(mat.jarray(mat.get_mvariable(ms, :daynight))))
+      mat.eval_string(ms, "clear average\ntry\naverage = hdfread(file, 'Horizontal_Averaging');\nend")
+      horav = mat.jarray(mat.get_mvariable(ms, :average))
+      # Loop over data and convert to TrackMatcher format
+      layer = Vector{NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}}(undef,length(utc[i]))
+      feat = Vector{Vector{Symbol}}(undef,length(utc[i]))
+      optdepth = Vector{Vector{<:AbstractFloat}}(undef,length(utc[i]))
+      icewater = Vector{Vector{Union{Missing,<:AbstractFloat}}}(undef,length(utc[i]))
+      toptemp = Vector{Vector{<:AbstractFloat}}(undef,length(utc[i]))
+      average = Vector{Vector{Int}}(undef,length(utc[i]))
+      for n = 1:length(utc[i])
+        l = findall((basealt[n,:] .> 0) .& (topalt[n,:] .> 0) .& (basealt[n,:] .< lidarrange[1]) .&
+          (topalt[n,:] .> lidarrange[2]) .& (topalt[n,:] .> altmin))
+        layer[n], feat[n], optdepth[n], toptemp[n], icewater[n], average[n] = if isempty(l)
+          (top = AbstractFloat[], base = AbstractFloat[]), Symbol[],
+          AbstractFloat[], AbstractFloat[], AbstractFloat[], Int[]
+        else
+          l = findall((basealt[n,:] .> 0) .& (topalt[n,:] .> 0) .& (basealt[n,:] .< lidarrange[1]) .&
+            (topalt[n,:] .> lidarrange[2]))
+          (top = [topalt[n, m] for m in l] , base = [basealt[n, m] for m in l]),
+          [feature_classification(classification(FCF[n,m])...) for m in l],
+          [FOD[n,m] for m in l],
+          [LTT[n,m] for m in l],
+          [IWPath[n,m] == -9999 ? missing : IWPath[n,m] for m in l],
+          [horav[n,m] for m in l]
+        end
+      end # loop over time steps in current file
+      layers[i], feature[i], OD[i], IWP[i], Ttop[i], averaging[i] =
+        layer, feat, optdepth, icewater, toptemp, average
     end #loop over files
-    pm.finish!(prog)
 
     # Save time, lat/lon arrays in CLay struct
-    new(DataFrame(time=[DateTime[]; utc...], lat=[AbstractFloat[]; lat...],
-      lon=[AbstractFloat[]; lon...]))
+    new(DataFrame(time=[DateTime[]; utc...], lat=[AbstractFloat[]; lat...], lon=[AbstractFloat[]; lon...],
+      layer=[NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}[]; layers...],
+      feature=[Vector{Symbol}[]; feature...], OD=[Vector{AbstractFloat}[]; OD...],
+      IWP=[Vector{<:Union{Missing,<:AbstractFloat}}[]; IWP...], Ttop=[Vector{AbstractFloat}[]; Ttop...],
+      Htropo = [AbstractFloat[]; Htropo...], night = [BitArray(undef,0); night...],
+      averaging = [Vector{Int}[]; averaging...]))
   end #constructor 2 CLay
 end #struct CLay
 
 
 """ External constructor for emtpy CLay struct """
-CLay() = CLay(DataFrame(time = DateTime[], lat = AbstractFloat[], lon = AbstractFloat[]))
+CLay() = CLay(DataFrame(time = DateTime[], lat = AbstractFloat[], lon = AbstractFloat[],
+  layer = NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}[],
+  feature = Vector{Symbol}[], OD = Vector{<:AbstractFloat}[], IWP = Vector{<:AbstractFloat}[],
+  Ttop = Vector{<:AbstractFloat}[], Htropo = AbstractFloat[], night = BitVector(),
+  averaging = Vector{Int}[]))
 
 
 """
@@ -823,86 +883,72 @@ struct CPro
 
   """ unmodified constructor """
   function CPro(data::DataFrame)
-    standardnames = ["time", "lat", "lon", "FCF", "EC532"]
+    standardnames = ["time", "lat", "lon", "feature", "EC532"]
     standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
-      Vector{<:Vector{<:Union{Missing,UInt16}}}, Vector{<:Vector{<:Union{Missing,AbstractFloat}}}]
+      Vector{<:Vector{<:Union{Missing,Symbol}}}, Vector{<:Vector{<:Union{Missing,AbstractFloat}}}]
     bounds = (:lat => (-90,90), :lon => (-180,180))
     checkcols!(data, standardnames, standardtypes, bounds, "CPro")
     new(data)
-  end #constructor 1
+  end #constructor 1 CPro
 
+  """
+  Modified constructor of `CPro` reading data from hdf `files` for all given `sattime` indices
+  using MATLAB session `ms` and `lidar` profile data, if data is above `altmin`.
+  """
   function CPro(ms::mat.MSession, files::Vector{String}, sattime::Vector{DateTime},
     lidar::NamedTuple)
+    # Return default empty struct if files are empty
+    isempty(files) && return CPro()
     # Initialise arrays
     # essential data
     utc = Vector{Vector{DateTime}}(undef, length(files))
     lat = Vector{Vector{AbstractFloat}}(undef, length(files))
-    lon = Vector{Vector{AbstractFloat}}(undef, length(files))    # non-essential data
-    avd = Vector{Vector{Vector{<:Union{Missing,UInt16}}}}(undef, length(files))
+    lon = Vector{Vector{AbstractFloat}}(undef, length(files))
+    # non-essential data
+    fcf = Vector{Vector{Vector{<:Union{Missing,UInt16}}}}(undef, length(files))
     ec532 = Vector{Vector{Vector{<:Union{Missing,Float32}}}}(undef, length(files))
-    # Loop over files
-    prog = pm.Progress(length(files), "load CPro data...")
     # Loop over files with cloud profile data
     for (i, file) in enumerate(files)
-      # Retrieve essential data
-      try
-        # Extract time
-        mat.put_variable(ms, :file, file)
-        mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
-        # Extract lat/lon
-        mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-        longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
-        mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-        latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
-        # Save time converted to UTC and lat/lon
-        utc[i] = convertUTC.(t)
-        lon[i] = longitude
-        lat[i] = latitude
-      catch err
-        @debug rethrow(err)
-        # Warn on failure
-        @warn("read error in CALIPSO granule; data skipped",
-          granule = splitext(basename(file))[1])
-        # Monitor progress and skip to next file
-        pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
-        continue
-      end
-      # Retrieve non-essential data
+      ## Retrieve cloud profile data; assumes faulty files are filtered by SatData
+      # Extract time
+      mat.put_variable(ms, :file, file)
+      mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
+      utc[i] = convertUTC.(mat.jarray(mat.get_mvariable(ms, :t))[:,2])
+      # Extract lat/lon
+      mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
+      lon[i] = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
+      mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
+      lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
       # Extract feature classification flags
-      avd[i] = try get_lidarcolumn(avd, ms, "Atmospheric_Volume_Description", lidar)
-      catch err
-        @debug rethrow(err)
-        @warn "missing Atmosphericc Volume Description"  granule = splitext(basename(file))[1]
-        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
-        [[missing for i = 1:length(lidar.fine)] for i in t]
-      end
-      ec532[i] = try get_lidarcolumn(ec532, ms, "Extinction_Coefficient_532", lidar,
+      fcf[i] = get_lidarcolumn(fcf, ms, "Atmospheric_Volume_Description", lidar)
+      ec532[i] = get_lidarcolumn(ec532, ms, "Extinction_Coefficient_532", lidar,
         true, missingvalues = -9999)
-      catch err
-        rethrow(err)
-        @warn "missing Extinction Coefficient 532nm" granule = splitext(basename(file))[1]
-        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
-        [[missing for i = 1:length(lidar.coarse)] for i in t]
-      end
-      # Monitor progress for progress bar
-      pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
     end #loop over files
-    pm.finish!(prog)
 
+    # Rearrange time vector and get time range
     utc = [DateTime[]; utc...]
     idx = [findfirst(utc .== t) for t in sattime]
+    # Rearrange FCF vector and convert to symbols
+    fcf = [Vector{<:Union{Missing,UInt16}}[]; fcf...]
+    avd =  Vector{Vector{Union{Missing,Symbol}}}(undef, length(fcf))
+    for i = 1:length(fcf)
+      vect = Vector{Union{Missing,Symbol}}(undef, length(fcf[i]))
+      for j = 1:length(fcf[i])
+        vect[j] = ismissing(fcf[i][j]) ? missing :
+          feature_classification(classification(fcf[i][j])...)
+      end
+      avd[i] = vect
+    end
     # Save time, lat/lon arrays, and feature classification flags (FCF) in CPro struct
     new(DataFrame(time=utc[idx], lat=[AbstractFloat[]; lat...][idx], lon=[AbstractFloat[]; lon...][idx],
-      FCF=[Vector{<:Union{Missing,UInt16}}[]; avd...][idx],
-      EC532=[Vector{<:Union{Missing,AbstractFloat}}[]; ec532...][idx]))
-  end
+      feature=avd[idx], EC532=[Vector{<:Union{Missing,AbstractFloat}}[]; ec532...][idx]))
+  end #constructor 2 CPro
 end #struct CPro
 
 
 """ External constructor for emtpy CPro struct """
 CPro() = CPro(DataFrame(time = DateTime[], lat = AbstractFloat[], lon = AbstractFloat[],
-	FCF = UInt16[], EC532 = AbstractFloat[]))
+	feature = Vector{Symbol}[], EC532 = Vector{<:AbstractFloat}[]))
 
 
 ## Define structs related to intersection data
