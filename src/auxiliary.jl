@@ -455,7 +455,7 @@ end
       tsat::DateTime,
       satspan::Int,
       flightalt::AbstractFloat,
-      lidar::NamedTuple,
+      lidarprofile::NamedTuple,
       lidarrange::Tuple{Real,Real},
       savesecondtype::Bool
     ) -> cpro::CPro, clay::CLay, feature::Symbol, ts::Int
@@ -467,12 +467,20 @@ cloud profile (`cpro`) and/or layer data (`clay`) together with the atmospheric
 and `cpro` data.
 When `savesecondtype` is set to `false`, only the data type (`CLay`/`CPro`) in `sat`
 is saved; if set to `true`, the corresponding data type is save if available.
-The lidar column data is saved for the height levels givin in the `lidar` data
+The lidar column data is saved for the height levels givin in the `lidarprofile` data
 and defined by the `lidarrange`.
 """
-function get_satdata(ms::mat.MSession, sat::SatData, tsat::DateTime, satspan::Int,
-  flightalt::Real, lidar::NamedTuple, lidarrange::Tuple{Real,Real},
-  savesecondtype::Bool)
+function get_satdata(
+  ms::mat.MSession,
+  sat::SatData,
+  tsat::DateTime,
+  satspan::Int,
+  flightalt::Real,
+  flightid::Union{Int,String},
+  lidarprofile::NamedTuple,
+  lidarrange::Tuple{Real,Real},
+  savesecondtype::Bool
+)
   # Get satellite data used to find the intersection and find DataFrame row of intersection
   ts = argmin(abs.(sat.data.time .- tsat))
   sattype = sat.metadata.type
@@ -490,8 +498,8 @@ function get_satdata(ms::mat.MSession, sat::SatData, tsat::DateTime, satspan::In
   # Get CPro/CLay data from near the intersection
   clay = sattype == :CLay ? CLay(ms, primfiles, lidarrange, flightalt) :
     CLay(ms, secfiles, lidarrange, flightalt)
-  cpro = sattype == :CPro ? CPro(ms, primfiles, timespan, lidar) :
-    CPro(ms, secfiles, timespan, lidar)
+  cpro = sattype == :CPro ? CPro(ms, primfiles, timespan, lidarprofile) :
+    CPro(ms, secfiles, timespan, lidarprofile)
   clay = extract_timespan(clay, timespan)
   cpro = extract_timespan(cpro, timespan)
 
@@ -500,7 +508,8 @@ function get_satdata(ms::mat.MSession, sat::SatData, tsat::DateTime, satspan::In
   ts = argmin(abs.(primdata.data.time .- tsat))
 
   # Get feature classification
-  feature = sattype == :CPro ? atmosphericinfo(primdata, lidar.fine, flightalt, ts) :
+  feature = sattype == :CPro ?
+    atmosphericinfo(primdata, lidarprofile.fine, ts, flightalt, flightid) :
     atmosphericinfo(primdata, flightalt, ts)
 
   return cpro, clay, feature, ts

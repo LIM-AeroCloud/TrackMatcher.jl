@@ -12,7 +12,7 @@ Return a `NamedTuple` with the following entries in the `lidarrange` (top, botto
 """
 function get_lidarheights(lidarrange::Tuple{Real,Real})
   # Read CPro lidar altitude profile
-  hfile = normpath(@__DIR__, "../data/CPro_Lidar_Altitudes_km.dat")
+  hfile = normpath(@__DIR__, "../data/CPro_Lidar_Altitudes_m.dat")
   hprofile = CSV.read(hfile)
   # Consider only levels between max/min given in lidarrange
   itop = findfirst(hprofile.CPro .≤ lidarrange[1])
@@ -23,9 +23,9 @@ function get_lidarheights(lidarrange::Tuple{Real,Real})
 	end
 
   # add extralayers for region with double precision
-  h30m = findlast(levels.≥8.3)
+  h30m = findlast(levels.≥8300)
   hfine = try hfine = [(levels[i] + levels[i+1])/2 for i = h30m:length(levels)-1]
- 		sort([levels; hfine; levels[end]-0.03], rev=true)
+ 		sort([levels; hfine; levels[end]-30], rev=true)
 	catch
 		AbstractFloat[]
 	end
@@ -41,7 +41,7 @@ end #function get_lidarheights
       vec::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
       ms::mat.MSession,
       variable::String,
-      lidar::NamedTuple,
+      lidarprofile::NamedTuple,
       coarse::Bool = false;
       missingvalues = missing
     ) where T
@@ -49,7 +49,7 @@ end #function get_lidarheights
 Append the vector `vec` with CALIPSO lidar data of the `variable` using the MATLAB
 session `ms` to read the variable from an hdf file already opened in `ms` outside
 of `append_lidardata!`. Information about the lidar heigths used in `vec` are stored
-in `lidar` together with information whether to use `coarse` levels (when set to
+in `lidarprofile` together with information whether to use `coarse` levels (when set to
 `true`, otherwise fine levels are used).
 `missingvalues` can be set to any value, which will be replaced with `missing`
 in `vec`.
@@ -58,7 +58,7 @@ function get_lidarcolumn(
   vec::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
   ms::mat.MSession,
   variable::String,
-  lidar::NamedTuple,
+  lidarprofile::NamedTuple,
   coarse::Bool = false;
   missingvalues = missing
 ) where T
@@ -70,27 +70,27 @@ function get_lidarcolumn(
 	for i = 1:size(var, 1)
     row[i] = if coarse && ismissing(missingvalues)
       # Save row vector for coarse heights data without transforming missing values
-      var[i,lidar.itop:lidar.ibottom]
+      var[i,lidarprofile.itop:lidarprofile.ibottom]
     elseif coarse
       # Save row vector for coarse heights data after transforming missing values
-      v = convert(Vector{Union{Missing,T}}, var[i,lidar.itop:lidar.ibottom])
+      v = convert(Vector{Union{Missing,T}}, var[i,lidarprofile.itop:lidarprofile.ibottom])
       v[v.==missingvalues] .= missing
       v
     elseif ismissing(missingvalues)
       # Save row vector for coarse heights data after transforming missing values
-  		v = Vector{T}(undef,length(lidar.fine))
-  		v[1:lidar.i30-1] = var[i,lidar.itop:lidar.itop+lidar.i30-2,1]
-  		v[lidar.i30:2:end] = var[i,lidar.itop+lidar.i30-1:lidar.ibottom,1]
-  		v[lidar.i30+1:2:end] = var[i,lidar.itop+lidar.i30-1:lidar.ibottom,2]
+  		v = Vector{T}(undef,length(lidarprofile.fine))
+  		v[1:lidarprofile.i30-1] = var[i,lidarprofile.itop:lidarprofile.itop+lidarprofile.i30-2,1]
+  		v[lidarprofile.i30:2:end] = var[i,lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom,1]
+  		v[lidarprofile.i30+1:2:end] = var[i,lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom,2]
 			v
     else
       # Save row vector for refined heights data after transforming missing values
-      v = convert(Vector{Union{Missing,T}}, var[i,lidar.itop:lidar.ibottom])
+      v = convert(Vector{Union{Missing,T}}, var[i,lidarprofile.itop:lidarprofile.ibottom])
       v[v.==missingvalues] .= missing
-  		v = Vector{T}(undef,length(lidar.fine))
-  		v[1:lidar.i30-1] = var[i,lidar.itop:lidar.itop+lidar.i30-2,1]
-  		v[lidar.i30:2:end] = var[i,lidar.itop+lidar.i30-1:lidar.ibottom,1]
-  		v[lidar.i30+1:2:end] = var[i,lidar.itop+lidar.i30-1:lidar.ibottom,2]
+  		v = Vector{T}(undef,length(lidarprofile.fine))
+  		v[1:lidarprofile.i30-1] = var[i,lidarprofile.itop:lidarprofile.itop+lidarprofile.i30-2,1]
+  		v[lidarprofile.i30:2:end] = var[i,lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom,1]
+  		v[lidarprofile.i30+1:2:end] = var[i,lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom,2]
 			v
     end
 	end
@@ -242,17 +242,17 @@ flight altitude and the lidar levels was found or the feature array couldn't be 
 function atmosphericinfo(
   sat::CPro,
   hlevels::Vector{<:AbstractFloat},
-  alt::AbstractFloat,
-  isat::Int
+	isat::Int,
+  flightalt::Real,
+	flightid::Union{Int,String}
 )::Union{Missing,Symbol}
-  alt = ft2km(alt)
-  ifine = argmin(abs.(hlevels .- alt))
-  if abs(hlevels[ifine] - alt) > 0.06
+  i = argmin(abs.(hlevels .- flightalt))
+  if abs(hlevels[i] - flightalt) > 60
     println(); @warn string("insufficient altitudes for lidar data saved; ",
-      "missing used for feature in intersections of flight $(flight.metadata.dbID)")
+      "missing used for feature in intersections of flight $(flightid)")
     missing
   else
-    try sat.data.feature[isat][ifine]
+    try sat.data.feature[isat][i]
     catch
       missing
     end
@@ -278,14 +278,16 @@ function atmosphericinfo(
   alt::AbstractFloat,
   isat::Int
 )::Union{Missing,Symbol}
-  alt = ft2km(alt)
-  try
+  feature = try
     for (i, (top, base)) in enumerate(sat.data.layer[isat])
+			@show i, top, base
       if base ≤ alt ≤ top
+        @show isat, sat.data.feature[isat][i]
         return sat.data.feature[isat][i]
       end
     end
   catch
     return missing
   end
+	isnothing(feature) && return missing
 end #function atmosphericinfo
