@@ -8,7 +8,7 @@ function find_intersections(
   maxtimediff::Int,
   stepwidth::AbstractFloat,
   Xradius::Real,
-  lidar::NamedTuple,
+  lidarprofile::NamedTuple,
   lidarrange::Tuple{Real,Real},
   flightspan::Int,
   satspan::Int,
@@ -23,7 +23,7 @@ datapoints of the intersection).
 When `savesecondsattype` is set to true, the additional satellite data type not
 used to derive the intersections from the `SatData` is stored as well in `Intersection`.
 Satellite column data is stored over the range as defined by `lidarrange` and
-given in `lidar`.
+given in `lidarprofile`.
 
 Find intersections within a maximum time delay `maxtimediff between the aircraft
 and satellite overpass using the `stepwidth` for the interpolation of the data.
@@ -36,16 +36,16 @@ function find_intersections(
   flighttracks::Vector,
   sat::SatData,
   sattracks::Vector,
+  overlap::Vector{UnitRange},
   maxtimediff::Int,
-  stepwidth::AbstractFloat,
+  dmin::Real,
   Xradius::Real,
-  lidar::NamedTuple,
+  lidarprofile::NamedTuple,
   lidarrange::Tuple{Real,Real},
   flightspan::Int,
   satspan::Int,
   savesecondsattype::Bool
 )
-
   # Initialise DataFrames for current flight
   Xdata = DataFrame(id=String[], lat=AbstractFloat[], lon=AbstractFloat[],
     tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[],
@@ -55,7 +55,7 @@ function find_intersections(
     satcoord=AbstractFloat[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
   counter = 0 # for intersections within the same flight used in the id
   # Loop over sat and flight tracks
-  for st in sattracks, ft in flighttracks
+  for (i, st) in enumerate(sattracks), ft in flighttracks
     if ft.min < st.max && ft.max > st.min
       # Use overlap of sat and flight data only and retrieve lat/lon values
       ilat = ft.lat[st.min .< ft.lat .< st.max]
@@ -87,8 +87,6 @@ function find_intersections(
       else
         m1+1
       end
-      # Calculate minimum accuracy at equator
-      dprec = geo.distance(geo.LatLon(0,0), geo.LatLon(0,0+stepwidth))
       # Determine intersection between the 2 point pairs analytically by linear interpolation
       X = (((fcoord[m1].lat*fcoord[m2].lon - fcoord[m1].lon*fcoord[m2].lat) *
         (scoord[m1].lat - scoord[m2].lat) - (fcoord[m1].lat - fcoord[m2].lat) *
@@ -108,13 +106,13 @@ function find_intersections(
       Xf = flight.metadata.useLON ? geo.LatLon(ft.track(X[2]), X[2]) : geo.LatLon(X[1], ft.track(X[1]))
       Xs = geo.LatLon(X[1], st.track(X[1]))
       dx = geo.distance(Xf, Xs)
-      dx < dprec || continue # ignore solutions outside tolerance
+      dx < dmin || continue # ignore solutions outside tolerance
       # Determine time difference between aircraf/satellite at intersection
       tmf = flight.metadata.useLON ? timesec(ft.time(X[2])) : timesec(ft.time(X[1]))
       tms = timesec(st.time(X[1]))
       dt = Dates.canonicalize(Dates.CompoundPeriod(tms-tmf))
       # Consider only intersections within allowed time span
-      Dates.Minute(-maxtimediff) < tmf - tms < Dates.Minute(maxtimediff) || continue
+      abs(tmf - tms) < Dates.Minute(maxtimediff) || continue
       # Look at previous intersections at the coordinates within Xradius
       dup = findfirst([geo.distance(Xf, geo.LatLon(Xdata[i,[:lat,:lon]]...))
         for i = 1:length(Xdata.id)] .< Xradius)
@@ -123,9 +121,9 @@ function find_intersections(
       # is more accurate or new (not within Xradius)
       if dup == nothing || dx < accuracy.intersection[dup]
         # Extract the DataFrame rows of the sat/flight data near the intersection
-        Xflight, ift = get_flightdata(flight, tmf, flightspan)
-        cpro, clay, feature, ist = get_satdata(ms, sat, tms, satspan,
-          flight.data.alt[ift], lidar, lidarrange, savesecondsattype)
+        Xflight, ift = get_flightdata(flight, X, flightspan)
+        cpro, clay, feature, ist = get_satdata(ms, sat, X, overlap[i], satspan,
+          Xflight.data.alt[ift], Xflight.metadata.dbID, lidarprofile, lidarrange, savesecondsattype)
         Xsat = sat.metadata.type == :CPro ? cpro.data : clay.data
         # Calculate accuracies
         fxmeas = geo.LatLon(Xflight.data.lat[ift], Xflight.data.lon[ift])
@@ -170,7 +168,7 @@ in the sat data that are in the vicinity of the flight track (min/max of lat/lon
 Consider only satellite data of ± `maxtimediff` minutes before the start and after
 the end of the flight.
 """
-function findoverlap(flight::FlightData, sat::SatData, maxtimediff::Int)
+function findoverlap(flight::FlightData, sat::SatData, maxtimediff::Int)::Vector{UnitRange}
 
   # Initialise
   satranges = UnitRange[]; t1 = t2 = nothing

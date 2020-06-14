@@ -332,7 +332,7 @@ struct XMetadata
 
   function XMetadata(
     maxtimediff::Int,
-    stepwidth::AbstractFloat,
+    stepwidth::Real,
     Xradius::Real,
     lidarrange::NamedTuple{(:top,:bottom),Tuple{Real,Real}},
     lidarprofile::NamedTuple,
@@ -345,7 +345,7 @@ struct XMetadata
 
   function XMetadata(
     maxtimediff::Int,
-    stepwidth::AbstractFloat,
+    stepwidth::Real,
     Xradius::Real,
     lidarrange::Tuple{Real,Real},
     lidarprofile::NamedTuple,
@@ -494,7 +494,7 @@ online data with the keyword `odelim`. Use any character or string as delimiter.
 By default (`odelim=nothing`), auto-detection is used.
 
     FlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
-      altmin::Real=15_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
+      altmin::Real=5_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
 
 `DBtype` can be identified with:
 - `1` or `i`: VOLPE AEDT inventory
@@ -529,7 +529,7 @@ struct FlightDB
   database type and the respective folder path for that database.
   """
   function FlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
-    altmin::Real=15_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
+    altmin::Real=5_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
 
     # Save time of database creation
     tstart = Dates.now()
@@ -548,23 +548,18 @@ struct FlightDB
     for i in i1
       findfiles!(ifiles, folder[i], ".csv")
     end
-    inventory = loadInventory(ifiles, altmin=altmin)
+    inventory = loadInventory(ifiles..., altmin=altmin)
     # FlightAware commercial archive
     ifiles = String[]
     for i in i2
       findfiles!(ifiles, folder[i], ".csv")
     end
-    archive = loadArchive(ifiles, altmin=altmin)
+    archive = loadArchive(ifiles..., altmin=altmin)
     ifiles = String[]
     for i in i3
-      if VERSION ≥ v"1.2"
-        findfiles!(ifiles, folder[i], ".txt", ".dat")
-      else
-        findfiles!(ifiles, folder[i], ".txt")
-        findfiles!(ifiles, folder[i], ".dat")
-      end
+      findfiles!(ifiles, folder[i], ".txt", ".dat")
     end
-    onlineData = loadOnlineData(ifiles, altmin=altmin, delim=odelim)
+    onlineData = loadOnlineData(ifiles..., altmin=altmin, delim=odelim)
     tmin = minimum([[f.metadata.date.start for f in inventory];
       [f.metadata.date.start for f in archive];
       [f.metadata.date.start for f in onlineData]])
@@ -802,7 +797,7 @@ struct CLay
       mat.eval_string(ms, "clear LTT\ntry\nLTT = hdfread(file, 'Layer_Top_Temperature');\nend")
       LTT = mat.jarray(mat.get_mvariable(ms, :LTT))
       mat.eval_string(ms, "clear Htropo\ntry\nHtropo = hdfread(file, 'Tropopause_Height');\nend")
-      Htropo[i] = vec(mat.jarray(mat.get_mvariable(ms, :Htropo)))
+      Htropo[i] = 1000vec(mat.jarray(mat.get_mvariable(ms, :Htropo)))
       mat.eval_string(ms, "clear daynight\ntry\ndaynight = hdfread(file, 'Day_Night_Flag');\nend")
       night[i] = Bool.(vec(mat.jarray(mat.get_mvariable(ms, :daynight))))
       mat.eval_string(ms, "clear average\ntry\naverage = hdfread(file, 'Horizontal_Averaging');\nend")
@@ -823,12 +818,12 @@ struct CLay
         else
           l = findall((basealt[n,:] .> 0) .& (topalt[n,:] .> 0) .& (basealt[n,:] .< lidarrange[1]) .&
             (topalt[n,:] .> lidarrange[2]))
-          (top = [topalt[n, m] for m in l] , base = [basealt[n, m] for m in l]),
+          (top = [1000topalt[n, m] for m in l] , base = [1000basealt[n, m] for m in l]),
           [feature_classification(classification(FCF[n,m])...) for m in l],
           [FOD[n,m] for m in l],
           [LTT[n,m] for m in l],
           [IWPath[n,m] == -9999 ? missing : IWPath[n,m] for m in l],
-          [horav[n,m] for m in l]
+          [1000horav[n,m] for m in l]
         end
       end # loop over time steps in current file
       layers[i], feature[i], OD[i], IWP[i], Ttop[i], averaging[i] =
@@ -893,10 +888,10 @@ struct CPro
 
   """
   Modified constructor of `CPro` reading data from hdf `files` for all given `sattime` indices
-  using MATLAB session `ms` and `lidar` profile data, if data is above `altmin`.
+  using MATLAB session `ms` and `lidarprofile` data, if data is above `altmin`.
   """
   function CPro(ms::mat.MSession, files::Vector{String}, sattime::Vector{DateTime},
-    lidar::NamedTuple)
+    lidarprofile::NamedTuple)
     # Return default empty struct if files are empty
     isempty(files) && return CPro()
     # Initialise arrays
@@ -920,8 +915,8 @@ struct CPro
       mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
       lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
       # Extract feature classification flags
-      fcf[i] = get_lidarcolumn(fcf, ms, "Atmospheric_Volume_Description", lidar)
-      ec532[i] = get_lidarcolumn(ec532, ms, "Extinction_Coefficient_532", lidar,
+      fcf[i] = get_lidarcolumn(fcf, ms, "Atmospheric_Volume_Description", lidarprofile)
+      ec532[i] = get_lidarcolumn(ec532, ms, "Extinction_Coefficient_532", lidarprofile,
         true, missingvalues = -9999)
     end #loop over files
 
@@ -1091,10 +1086,18 @@ struct Intersection
 
 
   """ Modified constructor with some automated calculations of the intersection data. """
-  function Intersection(flights::FlightDB, sat::SatData, savesecondsattype::Bool=false;
-    maxtimediff::Int=30, flightspan::Int=0, satspan::Int=15, lidarrange::Tuple{Real,Real}=(15,-Inf),
-    stepwidth::AbstractFloat=0.01, Xradius::Real=5000, remarks=nothing)
-
+  function Intersection(
+    flights::FlightDB,
+    sat::SatData,
+    savesecondsattype::Bool=false;
+    maxtimediff::Int=30,
+    flightspan::Int=0,
+    satspan::Int=15,
+    lidarrange::Tuple{Real,Real}=(15_000,-Inf),
+    stepwidth::Real=1000,
+    Xradius::Real=5000,
+    remarks=nothing
+  )
     # Initialise DataFrames with Intersection data and monitor start time
     tstart = Dates.now()
     Xdata = DataFrame(id=String[], lat=AbstractFloat[], lon=AbstractFloat[],
@@ -1104,7 +1107,9 @@ struct Intersection
     accuracy = DataFrame(id=String[], intersection=AbstractFloat[], flightcoord=AbstractFloat[],
       satcoord=AbstractFloat[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
     # Get lidar altitude levels
-    lidar = get_lidarheights(lidarrange)
+    lidarprofile = get_lidarheights(lidarrange)
+    # Save stepwidth in degrees at equator using Earth's equatorial circumference to convert
+    degsteps  = stepwidth*360/40_075_017
     # New MATLAB session
     ms = mat.MSession()
     # Loop over data from different datasets and interpolate track data and time, throw error on failure
@@ -1116,10 +1121,10 @@ struct Intersection
         isempty(overlap) && continue
         # Interpolate trajectories using MATLAB's pchip routine
         sattracks = interpolate_satdata(ms, sat, overlap, flight.metadata)
-        flighttracks = interpolate_flightdata(ms, flight, stepwidth)
+        flighttracks = interpolate_flightdata(ms, flight, degsteps)
         # Calculate intersections and store data and metadata in DataFrames
         currdata, currtrack, curraccuracy = find_intersections(ms, flight, flighttracks,
-          sat, sattracks, maxtimediff, stepwidth, Xradius, lidar, lidarrange,
+          sat, sattracks, overlap, maxtimediff, stepwidth, Xradius, lidarprofile, lidarrange,
           flightspan, satspan, savesecondsattype)
         append!(Xdata, currdata); append!(track, currtrack)
         append!(accuracy, curraccuracy)
@@ -1144,7 +1149,7 @@ struct Intersection
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
       "\n▪ data\n▪ tracked\n▪ accuracy\n▪ metadata")
     new(Xdata, track, accuracy,
-      XMetadata(maxtimediff,stepwidth,Xradius,lidarrange,lidar,tc,loadtime,remarks))
+      XMetadata(maxtimediff,stepwidth,Xradius,lidarrange,lidarprofile,tc,loadtime,remarks))
   end #constructor Intersection
 end #struct Intersection
 
