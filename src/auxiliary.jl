@@ -405,10 +405,16 @@ and return the `Vector{DateTime}` together with a `Vector{Int}` holding the
 file indices. The time index vector considers possible missing points at the edges
 of the `DataFrame`.
 """
-function find_timespan(sat::DataFrame, t::Int, timespan::Int=15)
-  t1 = max(1, min(t-timespan, length(sat.time)))
-  t2 = min(length(sat.time), t+timespan)
-  # t2 = t-timespan > length(data[:,1]) ? 0 : t2
+function find_timespan(sat::DataFrame, X::Tuple{<:AbstractFloat, <:AbstractFloat},
+  dataspan::Int=15)
+  # Find index in sat data array with minimum distance to analytic intersection solutin
+  Xlatlon = geo.LatLon(X...)
+  coords = geo.LatLon.(sat.lat, sat.lon)
+  imin = argmin([geo.distance(coord, Xlatlon) for coord in coords])
+  # Find first/last index of span acknowledging bounds of the data array
+  t1 = max(1, min(imin-dataspan, length(sat.time)))
+  t2 = min(length(sat.time), imin+dataspan)
+
   return sat.time[t1:t2], unique(sat.fileindex[t1:t2])
 end #function find_timespan
 
@@ -428,24 +434,28 @@ end #function extract_timespan
 
 
 """
-    get_trackdata(flight::FlightData, tflight::DateTime, flightspan::Int)
+    get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:AbstractFloat}, flightspan::Int)
       -> flightdata::FlightData
 
 From the measured `flight` data and the time of the aircrafat the intersection (`tflight`),
 save the closest measured value to the interpolated intersection ±`flightspan` data points
 to `flightdata`.
 """
-function get_flightdata(flight::FlightData, tflight::DateTime, flightspan::Int)
+function get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:AbstractFloat}, flightspan::Int)
+  # Convert to LatLon structs
+  Xlatlon = geo.LatLon(X...)
+  coords = geo.LatLon.(flight.data.lat, flight.data.lon)
   # Find the index (DataFrame row) of the intersection in the flight data
-  tf = argmin(abs.(flight.data.time .- tflight))
+  imin = argmin([geo.distance(coord, Xlatlon) for coord in coords])
   # Construct FlightData at Intersection
-  t1 = max(1, min(tf-flightspan, length(flight.data.time)))
-  t2 = min(length(flight.data.time), tf+flightspan)
+  t1 = max(1, min(imin-flightspan, length(flight.data.time)))
+  t2 = min(length(flight.data.time), imin+flightspan)
   # t2 = t-timespan > length(data[:,1]) ? 0 : t2
   flightdata = FlightData(flight.data[t1:t2,:], flight.metadata)
 
-  return flightdata, argmin(abs.(flightdata.data.time .- tflight))
-end
+  return flightdata, argmin([geo.distance(coord, Xlatlon)
+    for coord in geo.LatLon.(flightdata.data.lat, flightdata.data.lon)])
+end #function get_flightdata
 
 
 """
@@ -473,7 +483,8 @@ and defined by the `lidarrange`.
 function get_satdata(
   ms::mat.MSession,
   sat::SatData,
-  tsat::DateTime,
+  X::Tuple{<:AbstractFloat, <:AbstractFloat},
+  overlap::UnitRange,
   satspan::Int,
   flightalt::Real,
   flightid::Union{Int,String},
@@ -481,34 +492,32 @@ function get_satdata(
   lidarrange::Tuple{Real,Real},
   savesecondtype::Bool
 )
-  # Get satellite data used to find the intersection and find DataFrame row of intersection
-  ts = argmin(abs.(sat.data.time .- tsat))
-  sattype = sat.metadata.type
   # Retrieve DataFrame at Intersection ± 15 time steps
-  timespan, fileindex = find_timespan(sat.data, ts, satspan)
+  timespan, fileindex = find_timespan(sat.data, X, satspan)
   primfiles = map(f -> get(sat.metadata.files, f, 0), fileindex)
-  secfiles = if sattype == :CPro && savesecondtype
+  secfiles = if sat.metadata.type == :CPro && savesecondtype
     replace.(primfiles, "CPro" => "CLay")
-  elseif sattype == :CLay && savesecondtype
+  elseif sat.metadata.type == :CLay && savesecondtype
     replace.(primfiles, "CLay" => "CPro")
   else
     String[]
   end
 
   # Get CPro/CLay data from near the intersection
-  clay = sattype == :CLay ? CLay(ms, primfiles, lidarrange, flightalt) :
+  clay = sat.metadata.type == :CLay ? CLay(ms, primfiles, lidarrange, flightalt) :
     CLay(ms, secfiles, lidarrange, flightalt)
-  cpro = sattype == :CPro ? CPro(ms, primfiles, timespan, lidarprofile) :
+  cpro = sat.metadata.type == :CPro ? CPro(ms, primfiles, timespan, lidarprofile) :
     CPro(ms, secfiles, timespan, lidarprofile)
   clay = extract_timespan(clay, timespan)
   cpro = extract_timespan(cpro, timespan)
 
   # Define primary data and index of intersection in primary data
-  primdata = sattype == :CPro ? cpro : clay
-  ts = argmin(abs.(primdata.data.time .- tsat))
+  primdata = sat.metadata.type == :CPro ? cpro : clay
+  ts = argmin([geo.distance(coord, geo.LatLon(X...))
+    for coord in geo.LatLon.(primdata.data.lat, primdata.data.lon)])
 
   # Get feature classification
-  feature = sattype == :CPro ?
+  feature = sat.metadata.type == :CPro ?
     atmosphericinfo(primdata, lidarprofile.fine, ts, flightalt, flightid) :
     atmosphericinfo(primdata, flightalt, ts)
 

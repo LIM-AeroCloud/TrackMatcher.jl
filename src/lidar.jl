@@ -280,9 +280,7 @@ function atmosphericinfo(
 )::Union{Missing,Symbol}
   feature = try
     for (i, (top, base)) in enumerate(sat.data.layer[isat])
-			@show i, top, base
       if base ≤ alt ≤ top
-        @show isat, sat.data.feature[isat][i]
         return sat.data.feature[isat][i]
       end
     end

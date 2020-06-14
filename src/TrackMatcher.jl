@@ -1124,7 +1124,7 @@ struct Intersection
         flighttracks = interpolate_flightdata(ms, flight, degsteps)
         # Calculate intersections and store data and metadata in DataFrames
         currdata, currtrack, curraccuracy = find_intersections(ms, flight, flighttracks,
-          sat, sattracks, maxtimediff, stepwidth, Xradius, lidarprofile, lidarrange,
+          sat, sattracks, overlap, maxtimediff, stepwidth, Xradius, lidarprofile, lidarrange,
           flightspan, satspan, savesecondsattype)
         append!(Xdata, currdata); append!(track, currtrack)
         append!(accuracy, curraccuracy)
