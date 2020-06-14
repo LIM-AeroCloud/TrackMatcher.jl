@@ -297,6 +297,7 @@ Immutable struct with additional information of databases:
 - `remarks`: any additional data or comments that can be attached to the database
 """
 struct DBMetadata
+  altmin::Real
   date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
   created::Union{DateTime,ZonedDateTime}
   loadtime::Dates.CompoundPeriod
@@ -577,7 +578,7 @@ struct FlightDB
       "▪ onlineData ($(length(onlineData)) entries)\n▪ metadata")
 
     new(inventory, archive, onlineData,
-      DBMetadata((start=tmin, stop=tmax), tc, loadtime, remarks))
+      DBMetadata(altmin, (start=tmin, stop=tmax), tc, loadtime, remarks))
   end # constructor 2 FlightDB
 end #struct FlightDB
 
