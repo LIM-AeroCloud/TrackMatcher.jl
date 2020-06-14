@@ -327,6 +327,10 @@ struct XMetadata
   Xradius::Real
   lidarrange::NamedTuple{(:top,:bottom),Tuple{Real,Real}}
   lidarprofile::NamedTuple
+  sattype::Symbol
+  satdates::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
+  altmin::Real
+  flightdates::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
   created::Union{DateTime,ZonedDateTime}
   loadtime::Dates.CompoundPeriod
   remarks
@@ -337,11 +341,16 @@ struct XMetadata
     Xradius::Real,
     lidarrange::NamedTuple{(:top,:bottom),Tuple{Real,Real}},
     lidarprofile::NamedTuple,
+    sattype::Symbol,
+    satdates::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+    altmin::Real,
+    flightdates::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
     created::Union{DateTime,ZonedDateTime},
     loadtime::Dates.CompoundPeriod,
     remarks
   )
-    new(maxtimediff, stepwidth, Xradius,lidarrange, lidarprofile, created, loadtime, remarks)
+    new(maxtimediff, stepwidth, Xradius,lidarrange, lidarprofile,
+      sattype, satdates, altmin, flightdates, created, loadtime, remarks)
   end #constructor 1 XMetaData
 
   function XMetadata(
@@ -350,12 +359,16 @@ struct XMetadata
     Xradius::Real,
     lidarrange::Tuple{Real,Real},
     lidarprofile::NamedTuple,
+    sattype::Symbol,
+    satdates::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+    altmin::Real,
+    flightdates::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
     created::Union{DateTime,ZonedDateTime},
     loadtime::Dates.CompoundPeriod,
     remarks=nothing
   )
     new(maxtimediff, stepwidth, Xradius,(top=lidarrange[1], bottom=lidarrange[2]),
-      lidarprofile, created, loadtime, remarks)
+      lidarprofile, sattype, satdates, altmin, flightdates, created, loadtime, remarks)
   end #constructor 2 XMetaData
 end #struct XMetaData
 
@@ -1149,8 +1162,9 @@ struct Intersection
     @info string("Intersection data ($(length(Xdata[!,1])) matches) loaded in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
       "\n▪ data\n▪ tracked\n▪ accuracy\n▪ metadata")
-    new(Xdata, track, accuracy,
-      XMetadata(maxtimediff,stepwidth,Xradius,lidarrange,lidarprofile,tc,loadtime,remarks))
+    new(Xdata, track, accuracy, XMetadata(maxtimediff, stepwidth, Xradius,
+      lidarrange, lidarprofile, sat.metadata.type, sat.metadata.date,
+      flights.metadata.altmin, flights.metadata.date, tc, loadtime, remarks))
   end #constructor Intersection
 end #struct Intersection
 
