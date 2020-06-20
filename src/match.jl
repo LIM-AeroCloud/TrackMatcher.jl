@@ -1,34 +1,37 @@
 """
-function find_intersections(
-  ms::mat.MSession,
-  flight::FlightData,
-  flighttracks::Vector,
-  sat::SatData,
-  sattracks::Vector,
-  maxtimediff::Int,
-  stepwidth::AbstractFloat,
-  Xradius::Real,
-  lidarprofile::NamedTuple,
-  lidarrange::Tuple{Real,Real},
-  flightspan::Int,
-  satspan::Int,
-  savesecondsattype::Bool
-) -> Xdata::DataFrame, track::DataFrame, accuracy::DataFrame
+    find_intersections(
+      ms::mat.MSession,
+      flight::FlightData,
+      flighttracks::Vector,
+      sat::SatData,
+      sattracks::Vector,
+      overlap::Vector{UnitRange},
+      maxtimediff::Int,
+      dmin::Real,
+      Xradius::Real,
+      lidarprofile::NamedTuple,
+      lidarrange::Tuple{Real,Real},
+      flightspan::Int,
+      satspan::Int,
+      savesecondsattype::Bool
+    ) -> Xdata::DataFrame, track::DataFrame, accuracy::DataFrame
 
 Using interpolated `flighttracks` and `sattracks` and the MATLAB session `ms`,
-add new spatial and temporal coordinates of the current flight along with the
-measured `flight` and `sat` track near the intersection (±`flightspan`/±`satspan`
-datapoints of the intersection).
+add new spatial and temporal coordinates of all intersections of the current flight
+with satellite tracks to `Xdata`, if the overpass of the aircraft and the satellite
+at the intersection is within `maxtimediff` minutes. Additionally, save the measured
+`flight` and `sat` `tracked` data near the intersection (±`flightspan`/±`satspan`
+datapoints of the intersection) and information about the `accuracy`.
 
 When `savesecondsattype` is set to true, the additional satellite data type not
 used to derive the intersections from the `SatData` is stored as well in `Intersection`.
-Satellite column data is stored over the range as defined by `lidarrange` and
-given in `lidarprofile`.
+Satellite column data is stored over the `lidarrange` and defined by the `lidarprofile`.
 
-Find intersections within a maximum time delay `maxtimediff between the aircraft
-and satellite overpass using the `stepwidth` for the interpolation of the data.
-Intersections within `Xradius` in meters are viewed as duplicates and only the
-one with the minimum time delay between aircraft and satellite overpass is considered.
+The algorithm finds intersections, by finding the minimum distance between flight and
+sat track points in the `overlap` region of both tracks. To be an intersection,
+the minimum distance of the interpolated track points must be below a threshold `dmin`.
+For duplicate intersection finds within an `Xradius`, only the one with the least
+time difference between the flight and sat overpass is counted.
 """
 function find_intersections(
   ms::mat.MSession,
@@ -211,10 +214,10 @@ end#function findoverlap
 
 
 """
-    interpolate_satdata(ms::mat.MSession, DB::SatData, overlap::NamedTuple, flight::FlightMetadata)
+    interpolate_satdata(ms::mat.MSession, sat::SatData, overlap::Vector{UnitRange}, flight::FlightMetadata)
       -> Vector{Any}
 
-Using the `SatData` in `DB`, and the stored `overlap` ranges, interpolate the data
+Using the `sat` data and the stored `overlap` ranges, interpolate the data
 with the pchip method in the MATLAB session (`ms`). Use the metadata in `flight`
 for error reports.
 """

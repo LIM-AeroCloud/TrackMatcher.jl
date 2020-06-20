@@ -7,7 +7,7 @@ From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `inventory` field in `FlightDB`.
 
 When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
-altitude threshold of the aircraft data (default: `altmin=5_000`).
+altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
 """
 function loadInventory(files::String...; altmin::Real=5_000)
 
@@ -84,7 +84,7 @@ From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `archive` field in `FlightDB`.
 
 When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
-altitude threshold of the aircraft data (default: `altmin=5_000`).
+altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
 """
 function loadArchive(files::String...; altmin::Real=5_000)
   # Initialise archive file array
@@ -169,7 +169,7 @@ The `delim`iter of the data in the input file can be specified by a string or ch
 Default is `nothing`, which means auto-detection of the delimiter is used.
 
 When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
-altitude threshold of the aircraft data (default: `altmin=5_000`).
+altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
 """
 function loadOnlineData(files::String...; altmin::Real=5_000,
   delim::Union{Nothing,Char,String}=nothing)
