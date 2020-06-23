@@ -168,7 +168,7 @@ classification(FCF::UInt16)::Tuple{UInt16,UInt16} = FCF & 7, FCF << -9 & 7
 From the feature classification `ftype` and `fsub`type, return a descriptive `Symbol`
 explaining the feature classification type.
 """
-function feature_classification(ftype::UInt16, fsub::UInt16)::Symbol
+function feature_classification(ftype::UInt16, fsub::UInt16)
   if ftype == 0
     missing
   elseif ftype == 1

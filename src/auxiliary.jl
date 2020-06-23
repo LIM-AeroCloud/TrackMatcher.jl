@@ -465,7 +465,6 @@ end #function get_flightdata
       ms::mat.MSession,
       sat::SatData,
       X::Tuple{<:AbstractFloat, <:AbstractFloat},
-      overlap::UnitRange,
       satspan::Int,
       flightalt::Real,
       flightid::Union{Int,String},
@@ -474,21 +473,20 @@ end #function get_flightdata
       savesecondtype::Bool
     ) -> cpro::CPro, clay::CLay, feature::Symbol, ts::Int
 
-Using the `sat` data measurements within the `overlap` range and the MATLAB session
+Using the `sat` data measurements within the overlap region and the MATLAB session
 `ms`, extract CALIOP cloud profile (`cpro`) and/or layer data (`clay`) together with
 the atmospheric `feature` at flight level (`flightalt`) for the data point closest
 to the calculated intersection `X` ± `satspan` timesteps. In addition, return the
 index `ts` within `cpro`/`clay` of the data point closest to `X`.
 When `savesecondtype` is set to `false`, only the data type (`CLay`/`CPro`) in `sat`
-is saved; if set to `true`, the corresponding data type is save if available.
+is saved; if set to `true`, the corresponding data type is saved if available.
 The lidar column data is saved for the height levels givin in the `lidarprofile` data
-and defined by the `lidarrange`.
+for the `lidarrange`.
 """
 function get_satdata(
   ms::mat.MSession,
   sat::SatData,
   X::Tuple{<:AbstractFloat, <:AbstractFloat},
-  overlap::UnitRange,
   satspan::Int,
   flightalt::Real,
   flightid::Union{Int,String},
