@@ -20,9 +20,9 @@ function loadInventory(files::String...; altmin::Real=5_000)
 
     # Load data
     parallel = VERSION ≥ v"1.3" ? true : false
-    flights = CSV.read(file, datarow=3, footerskip=2, ignoreemptylines=true,
+    flights = CSV.File(file, datarow=3, footerskip=2, ignoreemptylines=true,
       silencewarnings=true, threaded=parallel, dateformat="HH:MM:SS.sssm",
-      select = [1:11;16])
+      select = [1:11;16]) |> df.DataFrame!
     # Monitor progress for progress bar
     pm.next!(prog, showvalues = [(:file,splitext(basename(file))[1])])
 
@@ -54,6 +54,7 @@ function loadInventory(files::String...; altmin::Real=5_000)
         # Determine predominant flight direction, inflection points, and remove duplicate entries
         flightdata, flex, useLON = preptrack(flightdata)
         # Save the FlightData in the inventory vector
+        standardisecols!(flightdata)
         push!(inventory, FlightData(flightdata, FID,
           missing, missing, missing, flex, useLON, "VOLPE AEDT", file))
         # Empty data vectors
@@ -94,10 +95,11 @@ function loadArchive(files::String...; altmin::Real=5_000)
   for file in files
     # Load data
     parallel = VERSION ≥ v"1.3" ? true : false
-    flights = CSV.read(file, datarow=2, normalizenames=true, ignoreemptylines=true,
-      silencewarnings=true, threaded=parallel, copycols=true, dateformat="m/d/y H:M:S",
+    flights = CSV.File(file, datarow=2, normalizenames=true, ignoreemptylines=true,
+      silencewarnings=true, threaded=parallel, dateformat="m/d/y H:M:S",
       types = Dict(:Altitude_feet_ => Float32, :Groundspeed_knots_ => Float32),
-      drop = ["Direction", "Facility_Name", "Facility_Description", "Estimated"])
+      drop = ["Direction", "Facility_Name", "Facility_Description", "Estimated"]) |>
+      df.DataFrame!
     # Unit conversions
     flights.Altitude_feet_ = ft2m.(flights.Altitude_feet_)
     flights.Groundspeed_knots_ = knot2mps.(flights.Groundspeed_knots_)
@@ -127,6 +129,7 @@ function loadArchive(files::String...; altmin::Real=5_000)
         # Determine predominant flight direction, inflection points, and remove duplicate entries
         flightdata, flex, useLON = preptrack(flightdata)
         # Save the FlightData in the archive vector
+        standardisecols!(flightdata)
         push!(archive, FlightData(flightdata, FID, flights.Ident[n],
           flights.Aircraft_Type[n], (orig=flights.Origin[n],
           dest=flights.Destination[n]), flex, useLON, "FlightAware", file))
@@ -179,11 +182,11 @@ function loadOnlineData(files::String...; altmin::Real=5_000,
   prog = pm.Progress(length(files), "load online data...")
   for file in files
     # Read flight data
-    parallel = VERSION ≥ v"1.3" ? true : false
-    flight = CSV.read(file, delim=delim, ignoreemptylines=true, normalizenames=true, copycols=true,
-      silencewarnings=true, threaded=parallel, types=Dict(:Latitude => Float32,
+    # parallel = VERSION ≥ v"1.3" ? true : false
+    flight = CSV.File(file, delim=delim, ignoreemptylines=true, normalizenames=true,
+      silencewarnings=true, threaded=false, types=Dict(:Latitude => Float32,
       :Longitude => Float32, :feet => String, :kts => Float32, :Course => String,
-      :Rate => String), drop = ["mph", "Reporting_Facility"])
+      :Rate => String), drop = ["mph", "Reporting_Facility"]) |> df.DataFrame!
     # Convert knots to m/s
     flight.kts = knot2mps.(flight.kts)
     if length(names(flight)) ≠ 7 || names(flight)[2:7] ≠
@@ -297,6 +300,7 @@ function loadOnlineData(files::String...; altmin::Real=5_000,
     flight, flex, useLON = preptrack(flight)
 
     # Save data as FlightData
+    standardisecols!(flight)
     push!(archive, FlightData(flight, replace(filename, "_" => "/"), flightID,
       missing, (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
     # Monitor progress for progress bar

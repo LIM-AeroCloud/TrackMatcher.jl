@@ -45,6 +45,19 @@ end # function findfiles!
 
 
 """
+    standardisecols!(df::DataFrame)
+
+Convert possible SentinelArrays from `CSV` to `Vector{<:Union{Missing, Type}}`.
+"""
+function standardisecols!(df::DataFrame)
+  for col in names(df)
+    df[!,col] = [el for el in df[!,col]]
+    df[!,col] isa Vector{Bool} && (df[!,col] = BitVector(df[!,col]))
+  end #loop over DataFrame columns
+end #function standardisecols
+
+
+"""
     remdup!(data::DataFrame, useLON::Bool)
 
 Remove entries with duplicate x and y (`lat`/`lon` or `lon`/`lat`) values from
@@ -84,7 +97,7 @@ end #function remdup!
 Find inflection points in `x` and return a vector of named tuples with index ranges
 between inflection points and corresponding extrema.
 """
-function findflex(x::Vector{<:Real})
+function findflex(x::Union{Vector{<:Real},CSV.SentinelArrays.SentinelArray{<:Real}})
   # Save starting index
   flex = Int[1]
   # Loop over data points
@@ -375,7 +388,7 @@ function correctDF!(data::DataFrame, correctcols::Vector{Int},
   end
   additionalcols = setdiff(collect(1:length(names(data))), correctcols)
   !isempty(additionalcols) &&
-    @warn "additional columns $(join(additionalcols, ", ", " and ")) deleted in data"
+    @warn "additional column $(join(additionalcols, ", ", " and ")) deleted in data"
   df.select!(data, correctcols)
   df.rename!(data, standardnames)
 end #function correctDF!

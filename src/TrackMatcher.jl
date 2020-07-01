@@ -758,7 +758,7 @@ CALIOP cloud layer `data` stored in a `DataFrame` with columns:
 # Instantiation
 
     CLay(ms::mat.MSession, files::Vector{String},
-      lidarrange::Tuple{Real,Real}=(15,-Inf), altmin::Real=15_000) -> struct CLay
+      lidarrange::Tuple{Real,Real}=(15_000,-Inf), altmin::Real=5_000) -> struct CLay
 
 Construct `CLay` from a list of file names (including directories) and a running
 MATLAB session `ms` and save data in the `lidarrange` if layers are within the bounds
@@ -791,7 +791,7 @@ struct CLay
   in the `lidarrange` (top to bottom), if data is above `altmin`.
   """
   function CLay(ms::mat.MSession, files::Vector{String},
-    lidarrange::Tuple{Real,Real}=(15,-Inf), altmin::Real=15_000)
+    lidarrange::Tuple{Real,Real}=(15_000,-Inf), altmin::Real=5000)
     # Return default empty struct if files are empty
     isempty(files) && return CLay()
     # Initialise arrays
@@ -802,9 +802,9 @@ struct CLay
     # non-essential data
     layers = Vector{Vector{NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}}}(undef, length(files))
     feature = Vector{Vector{Vector{Symbol}}}(undef,length(files))
-    OD = Vector{Vector{Vector{<:AbstractFloat}}}(undef,length(files))
+    OD = Vector{Vector{Vector{AbstractFloat}}}(undef,length(files))
     IWP = Vector{Vector{Vector{Union{Missing,<:AbstractFloat}}}}(undef,length(files))
-    Ttop = Vector{Vector{Vector{<:AbstractFloat}}}(undef,length(files))
+    Ttop = Vector{Vector{Vector{AbstractFloat}}}(undef,length(files))
     Htropo = Vector{Vector{AbstractFloat}}(undef, length(files))
     night = Vector{BitVector}(undef, length(files))
     averaging = Vector{Vector{Vector{Int}}}(undef,length(files))
@@ -872,13 +872,14 @@ struct CLay
         layer, feat, optdepth, icewater, toptemp, average
     end #loop over files
 
+    # Construct and standardise data
+    data = DataFrame(time=[[]; utc...], lat=[[]; lat...], lon=[[]; lon...],
+      layer=[[]; layers...], feature=[[]; feature...], OD=[[]; OD...],
+      IWP=[[]; IWP...], Ttop=[[]; Ttop...], Htropo = [[]; Htropo...],
+      night = [[]; night...], averaging = [[]; averaging...])
+    standardisecols!(data)
     # Save time, lat/lon arrays in CLay struct
-    new(DataFrame(time=[DateTime[]; utc...], lat=[AbstractFloat[]; lat...], lon=[AbstractFloat[]; lon...],
-      layer=[NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}[]; layers...],
-      feature=[Vector{Symbol}[]; feature...], OD=[Vector{AbstractFloat}[]; OD...],
-      IWP=[Vector{<:Union{Missing,<:AbstractFloat}}[]; IWP...], Ttop=[Vector{AbstractFloat}[]; Ttop...],
-      Htropo = [AbstractFloat[]; Htropo...], night = [BitArray(undef,0); night...],
-      averaging = [Vector{Int}[]; averaging...]))
+    new(data)
   end #constructor 2 CLay
 end #struct CLay
 
@@ -886,8 +887,8 @@ end #struct CLay
 """ External constructor for emtpy CLay struct """
 CLay() = CLay(DataFrame(time = DateTime[], lat = AbstractFloat[], lon = AbstractFloat[],
   layer = NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}[],
-  feature = Vector{Symbol}[], OD = Vector{<:AbstractFloat}[], IWP = Vector{<:AbstractFloat}[],
-  Ttop = Vector{<:AbstractFloat}[], Htropo = AbstractFloat[], night = BitVector(),
+  feature = Vector{Symbol}[], OD = Vector{AbstractFloat}[], IWP = Vector{AbstractFloat}[],
+  Ttop = Vector{AbstractFloat}[], Htropo = AbstractFloat[], night = BitVector(),
   averaging = Vector{Int}[]))
 
 
@@ -979,16 +980,19 @@ struct CPro
       end
       avd[i] = vect
     end
+    # Construct and standardise data
+    data = DataFrame(time=utc[idx], lat=[[]; lat...][idx], lon=[[]; lon...][idx],
+      feature=avd[idx], EC532=[[]; ec532...][idx])
+    standardisecols!(data)
     # Save time, lat/lon arrays, and feature classification flags (FCF) in CPro struct
-    new(DataFrame(time=utc[idx], lat=[AbstractFloat[]; lat...][idx], lon=[AbstractFloat[]; lon...][idx],
-      feature=avd[idx], EC532=[Vector{<:Union{Missing,AbstractFloat}}[]; ec532...][idx]))
+    new(data)
   end #constructor 2 CPro
 end #struct CPro
 
 
 """ External constructor for emtpy CPro struct """
 CPro() = CPro(DataFrame(time = DateTime[], lat = AbstractFloat[], lon = AbstractFloat[],
-	feature = Vector{Symbol}[], EC532 = Vector{<:AbstractFloat}[]))
+	feature = Vector{Symbol}[], EC532 = Vector{AbstractFloat}[]))
 
 
 ## Define structs related to intersection data
