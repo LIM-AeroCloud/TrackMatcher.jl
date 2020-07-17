@@ -1,9 +1,9 @@
 # Functions related to processing CALIOP data
 
 """
-    get_lidarheights() -> NamedTuple
+    get_lidarheights(lidarrange::Tuple{Real,Real}) -> NamedTuple
 
-Return a `NamedTuple` with the following entries:
+Return a `NamedTuple` with the following entries in the `lidarrange` (top, bottom):
 - `coarse`: altitude levels of the CALIOP lidar data as defined in the metadata of the hdf files
 - `fine`: altitude levels of CALIOP lidar data with 30m intervals below 8.3km
 - `itop`: index in the original data array of the first selected top height
@@ -12,29 +12,36 @@ Return a `NamedTuple` with the following entries:
 """
 function get_lidarheights(lidarrange::Tuple{Real,Real})
   # Read CPro lidar altitude profile
-  hfile = normpath(@__DIR__, "../data/CPro_Lidar_Altitudes_km.dat")
-  hprofile = CSV.read(hfile)
+  hfile = normpath(@__DIR__, "../data/CPro_Lidar_Altitudes_m.dat")
+  hprofile = CSV.File(hfile) |> df.DataFrame!
   # Consider only levels between max/min given in lidarrange
   itop = findfirst(hprofile.CPro .≤ lidarrange[1])
   ibottom = findlast(hprofile.CPro .≥ lidarrange[2])
-  levels = hprofile.CPro[itop:ibottom]
+  levels = try hprofile.CPro[itop:ibottom]
+	catch
+		AbstractFloat[]
+	end
 
   # add extralayers for region with double precision
-  h30m = findlast(levels.≥8.3)
-  hfine=[(levels[i] + levels[i+1])/2 for i = h30m:length(levels)-1]
-  hfine = sort([levels; hfine; levels[end]-0.03], rev=true)
+  h30m = findlast(levels.≥8300)
+  hfine = try hfine = [(levels[i] + levels[i+1])/2 for i = h30m:length(levels)-1]
+ 		sort([levels; hfine; levels[end]-30], rev=true)
+	catch
+		AbstractFloat[]
+	end
 
-  # Return original and refined altitude profiles as Vector{AbstractFloat}
-  return (coarse = levels, fine = hfine, itop=itop, ibottom=ibottom, i30=h30m)
+  # Return original and refined altitude profiles and important indices
+  return (coarse = levels, fine = hfine, itop = itop == nothing ? 0 : itop,
+		ibottom = ibottom == nothing ? 0 : ibottom, i30 = h30m == nothing ? 0 : h30m)
 end #function get_lidarheights
 
 
 """
-    function append_lidardata!(
-      vec::Vector{Vector{<:Union{Missing,T}}},
+    append_lidardata!(
+      vec::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
       ms::mat.MSession,
       variable::String,
-      lidar::NamedTuple,
+      lidarprofile::NamedTuple,
       coarse::Bool = false;
       missingvalues = missing
     ) where T
@@ -42,39 +49,54 @@ end #function get_lidarheights
 Append the vector `vec` with CALIPSO lidar data of the `variable` using the MATLAB
 session `ms` to read the variable from an hdf file already opened in `ms` outside
 of `append_lidardata!`. Information about the lidar heigths used in `vec` are stored
-in `lidar` together with information whether to use `coarse` levels (when set to
-`true`, otherwise fine levels are used).
-`missingvalues` can be set to any value, which will be replace with `missing` values
+in `lidarprofile`. Further information whether to use `coarse` levels (when set to
+`true`, otherwise fine levels are used) is needed as input.
+`missingvalues` can be set to any value, which will be replaced with `missing`
 in `vec`.
 """
-function append_lidardata!(
-  vec::Vector{Vector{<:Union{Missing,T}}},
+function get_lidarcolumn(
+  vect::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
   ms::mat.MSession,
   variable::String,
-  lidar::NamedTuple,
+  lidarprofile::NamedTuple,
   coarse::Bool = false;
   missingvalues = missing
 ) where T
+  # Read variable from hdf file with MATLAB
 	mat.eval_string(ms, "try\nvar = hdfread(file, '$variable');\nend")
 	var = mat.jarray(mat.get_mvariable(ms, :var))
+  # Initialise vector to store all row vectors and loop over matrix
+  row = Vector{Vector{Union{Missing,T}}}(undef, size(var, 1))
 	for i = 1:size(var, 1)
-    if coarse && ismissing(missingvalues)
-      push!(vec, var[i,lidar.itop:lidar.ibottom])
+    row[i] = if coarse && ismissing(missingvalues)
+      # Save row vector for coarse heights data without transforming missing values
+      var[i,lidarprofile.itop:lidarprofile.ibottom]
     elseif coarse
-      v = convert(Vector{Union{Missing,T}}, var[i,lidar.itop:lidar.ibottom])
+      # Save row vector for coarse heights data after transforming missing values
+      v = convert(Vector{Union{Missing,T}}, var[i,lidarprofile.itop:lidarprofile.ibottom])
       v[v.==missingvalues] .= missing
-      push!(vec, v)
+      v
+    elseif ismissing(missingvalues)
+      # Save row vector for coarse heights data after transforming missing values
+  		v = Vector{T}(undef,length(lidarprofile.fine))
+  		v[1:lidarprofile.i30-1] = var[i,lidarprofile.itop:lidarprofile.itop+lidarprofile.i30-2,1]
+  		v[lidarprofile.i30:2:end] = var[i,lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom,1]
+  		v[lidarprofile.i30+1:2:end] = var[i,lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom,2]
+			v
     else
-  		v = Vector{T}(undef,length(lidar.fine))
-  		v[1:lidar.i30-1] = var[i,lidar.itop:lidar.itop+lidar.i30-2,1]
-  		v[lidar.i30:2:end] = var[i,lidar.itop+lidar.i30-1:lidar.ibottom,1]
-  		v[lidar.i30+1:2:end] = var[i,lidar.itop+lidar.i30-1:lidar.ibottom,2]
-  		push!(vec, v)
+      # Save row vector for refined heights data after transforming missing values
+      v = convert(Vector{Union{Missing,T}}, var[i,lidarprofile.itop:lidarprofile.ibottom])
+      v[v.==missingvalues] .= missing
+  		v = Vector{T}(undef,length(lidarprofile.fine))
+  		v[1:lidarprofile.i30-1] = var[i,lidarprofile.itop:lidarprofile.itop+lidarprofile.i30-2,1]
+  		v[lidarprofile.i30:2:end] = var[i,lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom,1]
+  		v[lidarprofile.i30+1:2:end] = var[i,lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom,2]
+			v
     end
 	end
 
-	return vec
-end #function append_lidardata!
+	return row
+end #function get_lidarcolumn
 
 
 """
@@ -83,7 +105,8 @@ classification(FCF::UInt16) -> UInt16, UInt16
 From the CALIPSO feature classification flag (`FCF`), return the `type` and `subtype`.
 
 
-# Detailed CALIPSO description
+# Extended help
+## Detailed CALIPSO description
 
 This function accepts an array a feature classification flag (FCF) and
 returns the feature type and feature subtype. Feature and subtype are
@@ -145,7 +168,7 @@ classification(FCF::UInt16)::Tuple{UInt16,UInt16} = FCF & 7, FCF << -9 & 7
 From the feature classification `ftype` and `fsub`type, return a descriptive `Symbol`
 explaining the feature classification type.
 """
-function feature_classification(ftype::UInt16, fsub::UInt16)::Symbol
+function feature_classification(ftype::UInt16, fsub::UInt16)
   if ftype == 0
     missing
   elseif ftype == 1
@@ -199,39 +222,72 @@ end
 
 
 """
-    function atmosphericinfo(
-      sat::SatDB,
-      sattype::Symbol,
-      flight::FlightData,
-      index::Tuple{Int,Int}
-    )::Union{Missing,Symbol}
+		atmosphericinfo(
+			sat::CPro,
+			hlevels::Vector{<:AbstractFloat},
+			isat::Int,
+			flightalt::Real,
+			flightid::Union{Int,String}
+		)::Union{Missing,Symbol}
 
-From the subsets `sat` of `SatDB` data  and `flight` of `FlightData` in `Intersection`,
-return a `Symbol` with a human readable feature classification for the satellite data
-of `sattype`; `index` stores the indices of the data at the time of the intersection
-for the flight (`[1]`) and sat (`[2]`) data.
+From the `CPro` cloud profile data at data point `isat` in `Intersection`
+(index in the `DataFrame` of the intersection), return a `Symbol` with a human-readable
+feature classification.
+
+Use the `hlevels` in the lidar column data and the `flightalt`itude to determine
+the atmospheric conditions (`feature`) at flight level at the intersection.
 
 `atmosphericinfo` returns a `missing` value, if no height level overlap between the
-flight altitude and the lidar levels was found.
+flight altitude and the lidar levels was found or the feature array couldn't be accessed.
+On errors, `flightid` will be returned to identify the source of the error.
 """
 function atmosphericinfo(
-  sat::SatDB,
-  sattype::Symbol,
-  flight::FlightData,
-  index::Tuple{Int,Int}
+  sat::CPro,
+  hlevels::Vector{<:AbstractFloat},
+	isat::Int,
+  flightalt::Real,
+	flightid::Union{Int,String}
 )::Union{Missing,Symbol}
-  hflight = ft2km(flight.data.alt[index[1]])
-  if sattype == :CPro
-    hlevels = sat.CPro.metadata.lidarlevels.fine
-    ifine = argmin(abs.(hlevels .- hflight))
-    if hlevels[ifine] - hflight > 0.03
-      println(); @warn string("insufficient altitudes for lidar data saved; ",
-        "missing used for feature in intersections of flight $(flight.metadata.dbID)")
-      missing
-    else
-      feature_classification(classification(sat.CPro.data.FCF[index[2]][ifine])...)
-    end
-  else #atmospheric volume information currently available only for CPro data
+  i = argmin(abs.(hlevels .- flightalt))
+  if abs(hlevels[i] - flightalt) > 60
+    println(); @warn string("insufficient altitudes for lidar data saved; ",
+      "missing used for feature in intersections of flight $(flightid)")
     missing
+  else
+    try sat.data.feature[isat][i]
+    catch
+      missing
+    end
   end
+end #function atmosphericinfo
+
+
+"""
+    atmosphericinfo(
+      sat::CLay,
+      alt::AbstractFloat,
+      isat::Int
+    )::Union{Missing,Symbol}
+
+From the `CLay` cloud layer data at data point `isat` in `Intersection`
+(index in the `DataFrame` of the intersection), return a `Symbol` with a human-readable
+feature classification at flight `alt`itude.
+
+`atmosphericinfo` returns a `missing` value, if no feature was found at flight level.
+"""
+function atmosphericinfo(
+  sat::CLay,
+  alt::AbstractFloat,
+  isat::Int
+)::Union{Missing,Symbol}
+  feature = try
+    for (i, (top, base)) in enumerate(sat.data.layer[isat])
+      if base ≤ alt ≤ top
+        return sat.data.feature[isat][i]
+      end
+    end
+  catch
+    return missing
+  end
+	isnothing(feature) && return missing
 end #function atmosphericinfo
