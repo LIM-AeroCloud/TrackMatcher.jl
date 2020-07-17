@@ -441,12 +441,12 @@ struct FlightData
     # Column checks and warnings
     standardnames = ["time", "lat", "lon", "alt", "heading", "climb", "speed"]
     standardtypes = [Union{DateTime,Vector{DateTime}},
-      Union{AbstractFloat,Vector{<:AbstractFloat}},
-      Union{AbstractFloat,Vector{<:AbstractFloat}},
-      Union{Missing,AbstractFloat,Vector{<:Union{Missing,AbstractFloat}}},
-      Union{Missing,Int,Vector{<:Union{Missing,Int}}},
-      Union{Missing,Int,Vector{<:Union{Missing,Int}}},
-      Union{Missing,AbstractFloat,Vector{<:Union{Missing,AbstractFloat}}}]
+      Vector{<:AbstractFloat},
+      Vector{<:AbstractFloat},
+      Vector{<:Union{Missing,AbstractFloat}},
+      Vector{<:Union{Missing,Int}},
+      Vector{<:Union{Missing,Int}},
+      Vector{<:Union{Missing,AbstractFloat}}]
     bounds = (:lat => (-90, 90), :lon => (-180, 180), :alt => (0,Inf),
       :heading => (0, 360), :speed => (0, Inf))
     checkcols!(data, standardnames, standardtypes, bounds,
@@ -558,7 +558,7 @@ struct FlightDB
   Modified constructor creating the database from an identifer of the
   database type and the respective folder path for that database.
   """
-  function FlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
+  function FlightDB(DBtype::String, folder::String...;
     altmin::Real=5_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
 
     # Save time of database creation
@@ -926,7 +926,7 @@ struct CPro
   function CPro(data::DataFrame)
     standardnames = ["time", "lat", "lon", "feature", "EC532"]
     standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
-      Vector{<:Vector{<:Union{Missing,Symbol}}}, Vector{<:Vector{<:Union{Missing,AbstractFloat}}}]
+      Vector{<:Vector{<:Union{Missing,Symbol}}}, Vector{<:Vector{<:Union{Missing,<:AbstractFloat}}}]
     bounds = (:lat => (-90,90), :lon => (-180,180))
     checkcols!(data, standardnames, standardtypes, bounds, "CPro")
     new(data)
@@ -1061,7 +1061,7 @@ Measures about the accuracy of the intersection calculations and the quality of 
       satspan::Int=15,
       lidarrange::Tuple{Real,Real}=(15_000,-Inf),
       stepwidth::Real=1000,
-      Xradius::Real=5000,
+      Xradius::Real=20_000,
       remarks=nothing
     ) -> struct Intersection
 
@@ -1083,7 +1083,7 @@ data saved to the struct:
   between `(max, min)` (set to `Inf`/`-Inf` to store all values up to top/bottom)
 - `stepwidth::Real=1000`: step width of interpolation in flight and sat tracks
   in meters (partially internally converted to degrees at equator)
-- `Xradius::Real=5000`: radius in meters within which multiple finds of an
+- `Xradius::Real=20_000`: radius in meters within which multiple finds of an
   intersection are disregarded and only the most accurate is counted
 - `remarks=nothing`: any data or remarks attached to the metadata
 
@@ -1144,7 +1144,7 @@ struct Intersection
     satspan::Int=15,
     lidarrange::Tuple{Real,Real}=(15_000,-Inf),
     stepwidth::Real=1000,
-    Xradius::Real=5000,
+    Xradius::Real=20_000,
     remarks=nothing
   )
     # Initialise DataFrames with Intersection data and monitor start time
