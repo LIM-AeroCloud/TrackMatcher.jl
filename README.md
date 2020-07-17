@@ -107,9 +107,9 @@ Intersection(
   maxtimediff::Int=30, 
   flightspan::Int=0, 
   satspan::Int=15, 
-  lidarrange::Tuple{Real,Real}=(15,-Inf),
-  stepwidth::AbstractFloat=0.01, 
-  Xradius::Real=5000, 
+  lidarrange::Tuple{Real,Real}=(15_000,-Inf),
+  stepwidth::AbstractFloat=1000, 
+  Xradius::Real=20_000, 
   remarks=nothing)
 ```
 
@@ -118,11 +118,11 @@ Intersection(
 - `maxtimediff::Int=30`: maximum delay at intersection between aircraft/satellite overpass
 - `flightspan::Int=0`: number of flight data points saved before and after the closest measurement to the intersection
 - `satspan::Int=15`: number of satellite data points saved before and after the closest measurement to the intersection
-- `lidarrange::Tuple{Real,Real}=(15,-Inf)`: top/bottom bounds of the lidar column data, between which
+- `lidarrange::Tuple{Real,Real}=(15_000,-Inf)`: top/bottom bounds of the lidar column data, between which
   data is stored; use `(Inf, -Inf)` to store the whole column
-- `stepwidth::Float64=0.01`: stepwidth in degrees (at the equator) used for the 
+- `stepwidth::Float64=1000`: stepwidth in degrees (at the equator) used for the 
   interpolation of flight and satellite tracks
-- `Xradius::Real=5000`: Radius in meters, in which multiple intersection finds are
+- `Xradius::Real=20_000`: Radius in meters, in which multiple intersection finds are
   assumed to correspond to the same intersection and only the intersection with the
   minimum delay between flight and sat overpass is saved
 - `remarks=nothing`: any data or comments that can be attached to the metadata of `Intersection`
