@@ -41,9 +41,20 @@ function findfiles!(inventory::Vector{String}, folder::String, filetypes::String
       push!(inventory, cwd)
     end
   end
-
-  return inventory
 end # function findfiles!
+
+
+"""
+    standardisecols!(df::DataFrame)
+
+Convert possible SentinelArrays from `CSV` to `Vector{<:Union{Missing, Type}}`.
+"""
+function standardisecols!(df::DataFrame)
+  for col in names(df)
+    df[!,col] = [el for el in df[!,col]]
+    df[!,col] isa Vector{Bool} && (df[!,col] = BitVector(df[!,col]))
+  end #loop over DataFrame columns
+end #function standardisecols
 
 
 """
@@ -86,7 +97,7 @@ end #function remdup!
 Find inflection points in `x` and return a vector of named tuples with index ranges
 between inflection points and corresponding extrema.
 """
-function findflex(x::Vector{<:Real})
+function findflex(x::Union{Vector{<:Real},CSV.SentinelArrays.SentinelArray{<:Real}})
   # Save starting index
   flex = Int[1]
   # Loop over data points
@@ -135,7 +146,7 @@ end
 
 
 """
-    function checkcols!(
+    checkcols!(
       data::DataFrame,
       standardnames::Vector{String},
       standardtypes::Vector{<:Type},
@@ -187,7 +198,7 @@ end #function checkcols!
 
 
 """
-    function definebounds(
+    definebounds(
       bounds::Tuple{Vararg{Pair{<:Union{Int,Symbol},<:Tuple}}},
       colnames::Vector{Symbol}
     ) -> bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
@@ -219,7 +230,7 @@ end #function definebounds!
 
 
 """
-    function checkbounds!(
+    checkbounds!(
       correctcols::Vector{Int},
       bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
       data::DataFrame,
@@ -252,7 +263,7 @@ end
 
 
 """
-    function findbyname!(
+    findbyname!(
       correctcols::Vector{Int},
       data::DataFrame,
       standardnames::Vector{String},
@@ -286,7 +297,7 @@ end #function findbyname!
 
 
 """
-    function findbyposition!(
+    findbyposition!(
       correctcols::Vector{Int},
       opencols::Vector{Int},
       data::DataFrame,
@@ -319,7 +330,7 @@ end #function findbyposition!
 
 
 """
-    function findbytype!(
+    findbytype!(
       correctcols::Vector{Int},
       opencols::Vector{Int},
       remianingcols::Vector{Int},
@@ -355,7 +366,7 @@ end #function findbytype!
 
 
 """
-    function correctDF!(
+    correctDF!(
       data::DataFrame,
       correctcols::Vector{Int},
       standardnames::Vector{String},
@@ -377,7 +388,7 @@ function correctDF!(data::DataFrame, correctcols::Vector{Int},
   end
   additionalcols = setdiff(collect(1:length(names(data))), correctcols)
   !isempty(additionalcols) &&
-    @warn "additional columns $(join(additionalcols, ", ", " and ")) deleted in data"
+    @warn "additional column $(join(additionalcols, ", ", " and ")) deleted in data"
   df.select!(data, correctcols)
   df.rename!(data, standardnames)
 end #function correctDF!
@@ -398,12 +409,15 @@ end #function checkDBtype
 
 
 """
-    find_timespan(data::DataFrame, t::Int, timespan::Int=15) -> DataFrame
+    find_timespan(sat::DataFrame, X::Tuple{<:AbstractFloat, <:AbstractFloat}, dataspan::Int=15)
+      -> DataFrame, Vector{Int}
 
-From the `data` in a `DataFrame`, find the time indices `t` ± `timespan`
-and return the `Vector{DateTime}` together with a `Vector{Int}` holding the
-file indices. The time index vector considers possible missing points at the edges
-of the `DataFrame`.
+From the `sat` data in a `DataFrame` and the intersection `X` (as lat/lon pair),
+find the time indices `t` ± `dataspan` for which the distance at `t` is minimal to `X`.
+
+Return a `DataFrame` with `sat` data in the time span together with a `Vector{Int}`
+holding the file indices of the corresponding granule file(s).
+The `sat` data may be smaller than the `dataspan` at the edges of the `sat` `DataFrame`.
 """
 function find_timespan(sat::DataFrame, X::Tuple{<:AbstractFloat, <:AbstractFloat},
   dataspan::Int=15)
@@ -435,11 +449,12 @@ end #function extract_timespan
 
 """
     get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:AbstractFloat}, flightspan::Int)
-      -> flightdata::FlightData
+      -> flightdata::FlightData, index::Int
 
-From the measured `flight` data and the time of the aircrafat the intersection (`tflight`),
+From the measured `flight` data and lat/lon coordinates the intersection `X`,
 save the closest measured value to the interpolated intersection ±`flightspan` data points
-to `flightdata`.
+to `flightdata` and return it together with the `index` in `flightdata` of the time with the coordinates
+closest to `X`.
 """
 function get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:AbstractFloat}, flightspan::Int)
   # Convert to LatLon structs
@@ -462,29 +477,29 @@ end #function get_flightdata
     get_satdata(
       ms::mat.MSession,
       sat::SatData,
-      tsat::DateTime,
+      X::Tuple{<:AbstractFloat, <:AbstractFloat},
       satspan::Int,
-      flightalt::AbstractFloat,
+      flightalt::Real,
+      flightid::Union{Int,String},
       lidarprofile::NamedTuple,
       lidarrange::Tuple{Real,Real},
       savesecondtype::Bool
     ) -> cpro::CPro, clay::CLay, feature::Symbol, ts::Int
 
-Using the `sat` data measurements and the MATLAB session `ms`, extract CALIOP
-cloud profile (`cpro`) and/or layer data (`clay`) together with the atmospheric
-`feature` at flight level (`flightalt`) at the intersection for time step `tsat`
-± `satspan` timesteps. In addition, return the index `ts` of `tsat` within `clay`
-and `cpro` data.
+Using the `sat` data measurements within the overlap region and the MATLAB session
+`ms`, extract CALIOP cloud profile (`cpro`) and/or layer data (`clay`) together with
+the atmospheric `feature` at flight level (`flightalt`) for the data point closest
+to the calculated intersection `X` ± `satspan` timesteps. In addition, return the
+index `ts` within `cpro`/`clay` of the data point closest to `X`.
 When `savesecondtype` is set to `false`, only the data type (`CLay`/`CPro`) in `sat`
-is saved; if set to `true`, the corresponding data type is save if available.
+is saved; if set to `true`, the corresponding data type is saved if available.
 The lidar column data is saved for the height levels givin in the `lidarprofile` data
-and defined by the `lidarrange`.
+for the `lidarrange`.
 """
 function get_satdata(
   ms::mat.MSession,
   sat::SatData,
   X::Tuple{<:AbstractFloat, <:AbstractFloat},
-  overlap::UnitRange,
   satspan::Int,
   flightalt::Real,
   flightid::Union{Int,String},

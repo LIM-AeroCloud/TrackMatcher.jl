@@ -44,7 +44,7 @@ FlightDB(DBtype::String, folder::Union{String, Vector{String}}...; kwargs)
 ```
 
 ### kwargs
-- `altmin::Int=15_000`: minimum altitude threshold for which to consider flight data
+- `altmin::Int=5000`: minimum altitude threshold for which to consider flight data
 - `remarks=nothing`: any data or comments that can be attached to the metadata of `FlightDB`
 - `odelim::Union{Nothing,Char,String}=nothing`: specify the column delimiter in the text files of the online data
 
@@ -57,7 +57,8 @@ granule hdf file are stored in the `data` field of `SatData`. Only one of the `t
 cloud profile (`CPro`) or cloud layer (`CLay`) data can be used to construct `SatData`.
 The `metadata` holds a `Dict` with the `fileindex` pointing to a file name (including
 the absolute folder path). 
-__File names/position must not be changed in order for _TrackMatcher_ to work correctly.__
+__File names/directories must not be changed in order for _TrackMatcher_ to find intersections correctly.__
+__It is currently only possible to find intersections on the same system, where the data was loaded.__  
 Further information in the `metadata` include the `type` of the satellite data,
 the `date` range of the data, the time the database was `created`, the `loadtime`,
 and any `remarks` as additional data or comments.
@@ -66,7 +67,8 @@ and any `remarks` as additional data or comments.
 using the keyword `remarks`. The `folders` are scanned recursively for any hdf files
 and the `type` of the satellite data is determined by keywords `CLay` or `CPro` in
 the folder/file names. If both types exist in the `folders`, the data type is determined
-by the first 50 file names.
+by the majority in the first 50 file names. Alternatively, the sat data type can
+be forced with the keyword `type` set to a `Symbol` `:CPro` or `:CLay`.
 
 ```julia
 SatData(folders::String...; remarks=nothing)

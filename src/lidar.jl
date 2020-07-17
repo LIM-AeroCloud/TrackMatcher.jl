@@ -13,7 +13,7 @@ Return a `NamedTuple` with the following entries in the `lidarrange` (top, botto
 function get_lidarheights(lidarrange::Tuple{Real,Real})
   # Read CPro lidar altitude profile
   hfile = normpath(@__DIR__, "../data/CPro_Lidar_Altitudes_m.dat")
-  hprofile = CSV.read(hfile)
+  hprofile = CSV.File(hfile) |> df.DataFrame!
   # Consider only levels between max/min given in lidarrange
   itop = findfirst(hprofile.CPro .≤ lidarrange[1])
   ibottom = findlast(hprofile.CPro .≥ lidarrange[2])
@@ -37,7 +37,7 @@ end #function get_lidarheights
 
 
 """
-    function append_lidardata!(
+    append_lidardata!(
       vec::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
       ms::mat.MSession,
       variable::String,
@@ -49,13 +49,13 @@ end #function get_lidarheights
 Append the vector `vec` with CALIPSO lidar data of the `variable` using the MATLAB
 session `ms` to read the variable from an hdf file already opened in `ms` outside
 of `append_lidardata!`. Information about the lidar heigths used in `vec` are stored
-in `lidarprofile` together with information whether to use `coarse` levels (when set to
-`true`, otherwise fine levels are used).
+in `lidarprofile`. Further information whether to use `coarse` levels (when set to
+`true`, otherwise fine levels are used) is needed as input.
 `missingvalues` can be set to any value, which will be replaced with `missing`
 in `vec`.
 """
 function get_lidarcolumn(
-  vec::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
+  vect::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
   ms::mat.MSession,
   variable::String,
   lidarprofile::NamedTuple,
@@ -168,7 +168,7 @@ classification(FCF::UInt16)::Tuple{UInt16,UInt16} = FCF & 7, FCF << -9 & 7
 From the feature classification `ftype` and `fsub`type, return a descriptive `Symbol`
 explaining the feature classification type.
 """
-function feature_classification(ftype::UInt16, fsub::UInt16)::Symbol
+function feature_classification(ftype::UInt16, fsub::UInt16)
   if ftype == 0
     missing
   elseif ftype == 1
@@ -222,22 +222,24 @@ end
 
 
 """
-    atmosphericinfo(
-      sat::CPro,
-      hlevels::Vector{<:AbstractFloat},
-      alt::AbstractFloat,
-      isat::Int
-    )::Union{Missing,Symbol}
+		atmosphericinfo(
+			sat::CPro,
+			hlevels::Vector{<:AbstractFloat},
+			isat::Int,
+			flightalt::Real,
+			flightid::Union{Int,String}
+		)::Union{Missing,Symbol}
 
 From the `CPro` cloud profile data at data point `isat` in `Intersection`
 (index in the `DataFrame` of the intersection), return a `Symbol` with a human-readable
 feature classification.
 
-Use the `hlevels` in the lidar column data and the flight `alt`itude to determine
+Use the `hlevels` in the lidar column data and the `flightalt`itude to determine
 the atmospheric conditions (`feature`) at flight level at the intersection.
 
 `atmosphericinfo` returns a `missing` value, if no height level overlap between the
 flight altitude and the lidar levels was found or the feature array couldn't be accessed.
+On errors, `flightid` will be returned to identify the source of the error.
 """
 function atmosphericinfo(
   sat::CPro,
