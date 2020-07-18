@@ -1112,10 +1112,11 @@ struct Intersection
     metadata::XMetadata
   )
     # Check data
-    standardnames = ["id", "lat", "lon", "tdiff", "tflight", "tsat", "feature"]
+    standardnames = ["id", "lat", "lon", "alt", "tdiff", "tflight", "tsat", "feature"]
     standardtypes = [Vector{String}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
-      Vector{Dates.CompoundPeriod}, Vector{DateTime}, Vector{DateTime}, Vector{<:Union{Missing,Symbol}}]
-    bounds = (:lat => (-90,90), :lon => (-180,180))
+      Vector{<:AbstractFloat}, Vector{Dates.CompoundPeriod}, Vector{DateTime},
+      Vector{DateTime}, Vector{<:Union{Missing,Symbol}}]
+    bounds = (:lat => (-90,90), :lon => (-180,180), :alt => (0, Inf))
     checkcols!(data, standardnames, standardtypes, bounds, "Intersection.data")
     # Check tracked (measured data)
     standardnames = ["id", "flight", "CPro", "CLay"]
@@ -1150,8 +1151,8 @@ struct Intersection
     # Initialise DataFrames with Intersection data and monitor start time
     tstart = Dates.now()
     Xdata = DataFrame(id=String[], lat=AbstractFloat[], lon=AbstractFloat[],
-      tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[],
-      feature = Union{Missing,Symbol}[])
+      alt=AbstractFloat[], tdiff=Dates.CompoundPeriod[], tflight = DateTime[],
+      tsat = DateTime[], feature = Union{Missing,Symbol}[])
     track = DataFrame(id=String[], flight=FlightData[], CPro=CPro[], CLay=CLay[])
     accuracy = DataFrame(id=String[], intersection=AbstractFloat[], flightcoord=AbstractFloat[],
       satcoord=AbstractFloat[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])

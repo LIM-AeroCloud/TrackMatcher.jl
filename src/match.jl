@@ -50,8 +50,8 @@ function find_intersections(
 )
   # Initialise DataFrames for current flight
   Xdata = DataFrame(id=String[], lat=AbstractFloat[], lon=AbstractFloat[],
-    tdiff=Dates.CompoundPeriod[], tflight = DateTime[], tsat = DateTime[],
-    feature = Union{Missing,Symbol}[])
+    alt=AbstractFloat[], tdiff=Dates.CompoundPeriod[], tflight = DateTime[],
+    tsat = DateTime[], feature = Union{Missing,Symbol}[])
   track = DataFrame(id=String[], flight=FlightData[], CPro=CPro[], CLay=CLay[])
   accuracy = DataFrame(id=String[], intersection=AbstractFloat[], flightcoord=AbstractFloat[],
     satcoord=AbstractFloat[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
@@ -138,8 +138,8 @@ function find_intersections(
           counter += 1
           id = string(flight.metadata.source,-,flight.metadata.dbID,-,counter)
           # Save intersection data
-          push!(Xdata, (id=id, lat=Xf.lat, lon=Xf.lon, tdiff=dt,
-            tflight = tmf, tsat = tms, feature=feature))
+          push!(Xdata, (id=id, lat=Xf.lat, lon=Xf.lon, alt=Xflight.data.alt[ift],
+            tdiff=dt, tflight = tmf, tsat = tms, feature=feature))
           push!(track, (id=id, flight=Xflight, CPro=cpro, CLay = clay))
           # Save accuracies
           push!(accuracy, (id=id, intersection=dx, flightcoord=geo.distance(Xf,fxmeas),
@@ -148,8 +148,8 @@ function find_intersections(
           # Find most accurate solution
           dx < accuracy.intersection[dup] || continue
           # Save intersection data
-          Xdata[dup,:] = (id=Xdata.id[dup], lat=Xf.lat, lon=Xf.lon, tdiff=dt,
-            tflight = tmf, tsat = tms, feature=feature)
+          Xdata[dup,:] = (id=Xdata.id[dup], lat=Xf.lat, lon=Xf.lon, alt=Xflight.data.alt[ift],
+            tdiff=dt, tflight = tmf, tsat = tms, feature=feature)
           track[dup,:] = (id=Xdata.id[dup], flight=Xflight, CPro=cpro, CLay = clay)
           # Save accuracies
           accuracy[dup,:] = (id=Xdata.id[dup], intersection=dx, flightcoord=geo.distance(Xf,fxmeas),
