@@ -36,7 +36,8 @@ import MATLAB; const mat = MATLAB
 import Statistics; const stats = Statistics
 import ProgressMeter; const pm = ProgressMeter
 import Logging; const logg = Logging
-# Import structs from packages
+# Import structs and functions from packages
+import PCHIP: PCHIPdata, pchip, interpolate
 import DataFrames.DataFrame
 import Dates: DateTime, Date, Time
 import TimeZones.ZonedDateTime
@@ -1172,8 +1173,8 @@ struct Intersection
         overlap = findoverlap(flight, sat, maxtimediff)
         isempty(overlap) && continue
         # Interpolate trajectories using MATLAB's pchip routine
-        sattracks = interpolate_satdata(ms, sat, overlap, flight.metadata)
-        flighttracks = interpolate_flightdata(ms, flight, degsteps)
+        sattracks = interpolate_satdata(sat, overlap)
+        flighttracks = interpolate_flightdata(flight, degsteps)
         # Calculate intersections and store data and metadata in DataFrames
         currdata, currtrack, curraccuracy = find_intersections(ms, flight, flighttracks,
           sat, sattracks, maxtimediff, stepwidth, Xradius, lidarprofile, lidarrange,

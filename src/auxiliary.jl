@@ -126,26 +126,6 @@ end #function findflex
 
 
 """
-    Minterpolate(ms::mat.MSession, p::mat.MxArray) -> λ(i::Union{Real,Vector{<:AbstractFloat},StepRangeLen})
-
-From a MATLAB piecewise polynomial structure `p` and the corresponding MATLAB
-session `ms` return a λ function taking a Union{Real,Vector<:{AbstractFloat},StepRangeLen}
-as input to return the interpolated data of `p`.
-"""
-function Minterpolate(ms::mat.MSession, p::mat.MxArray)
-  """ Return the interpolated data of `i` using MATLAB's pchip algorithm"""
-  function (i::Union{Real,Vector{<:AbstractFloat},StepRangeLen})
-    # Send data to MATLAB
-    mat.put_variable(ms, :i, mat.mxarray(i)); mat.put_variable(ms, :p, p)
-    # Interpolate data with MATLAB
-    mat.eval_string(ms, "pp = ppval(p,i);")
-    # Retrieve interpolated data from MATLAB
-    mat.jvalue(mat.get_mvariable(ms, :pp))
-  end
-end
-
-
-"""
     checkcols!(
       data::DataFrame,
       standardnames::Vector{String},
