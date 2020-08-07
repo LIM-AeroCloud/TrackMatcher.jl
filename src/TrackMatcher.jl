@@ -1171,7 +1171,12 @@ struct Intersection
       try
         # Find sat tracks in the vicinity of flight tracks, where intersections are possible
         overlap = findoverlap(flight, sat, maxtimediff)
-        isempty(overlap) && continue
+        if isempty(overlap)
+          pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
+            (:featured, length(Xdata.id[.!ismissing.(Xdata.feature) .&
+            (Xdata.feature .≠ :no_signal) .& (Xdata.feature .≠ :clear)]))])
+          continue
+        end
         # Interpolate trajectories using MATLAB's pchip routine
         sattracks = interpolate_satdata(sat, overlap)
         flighttracks = interpolate_flightdata(flight, degsteps)
