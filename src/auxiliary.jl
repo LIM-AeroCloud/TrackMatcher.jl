@@ -170,7 +170,7 @@ function checkcols!(
   # Find unchecked columns
   opencols = findall(isequal(0), correctcols)
   # Find columns by type and bounds
-  findbytype!(correctcols, opencols, remainingcols, standardtypes, colbounds)
+  findbytype!(data, correctcols, opencols, remainingcols, standardtypes, colbounds)
   # Correct DataFrame to the right format
   correctDF!(data, correctcols, standardnames, essentialcols)
   return data
@@ -325,14 +325,15 @@ correct in a column. Issue a warning, if all data could be corrected by type
 (and previously name and position).
 """
 function findbytype!(
+  data::DataFrame,
   correctcols::Vector{Int},
   opencols::Vector{Int},
-  remianingcols::Vector{Int},
+  remainingcols::Vector{Int},
   standardtypes::Vector{<:Type},
   bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
 )
   isempty(findall(isequal(0), correctcols)) && return
-  for i in opencols, j in remianingcols
+  for i in opencols, j in remainingcols
     try typeof(data[!,j]) <: standardtypes[i] && correctcols[i] == 0 &&
       checkbounds!(correctcols, bounds, data, j, i, j)
     catch
