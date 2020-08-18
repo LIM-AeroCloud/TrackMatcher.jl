@@ -49,6 +49,9 @@ catch; logg.ConsoleLogger(stdout, logg.Debug)
 end
 logg.global_logger(logger)
 
+# Define LatLon as broadcastable object
+Broadcast.broadcastable(o::geo.LatLon) = Ref(o)
+
 
 ## Define own Metadata structs
 """
@@ -1177,7 +1180,7 @@ struct Intersection
             (Xdata.feature .≠ :no_signal) .& (Xdata.feature .≠ :clear)]))])
           continue
         end
-        # Interpolate trajectories using MATLAB's pchip routine
+        # Interpolate trajectories with PCHIP method
         sattracks = interpolate_satdata(sat, overlap)
         flighttracks = interpolate_flightdata(flight, degsteps)
         # Calculate intersections and store data and metadata in DataFrames
