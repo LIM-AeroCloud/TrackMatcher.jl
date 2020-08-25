@@ -51,7 +51,7 @@ Convert possible SentinelArrays from `CSV` to `Vector{<:Union{Missing, Type}}`.
 """
 function standardisecols!(df::DataFrame)
   for col in names(df)
-    df[!,col] = [el for el in df[!,col]]
+    df[!,col] = get_floatprecision(df[!,col])
     df[!,col] isa Vector{Bool} && (df[!,col] = BitVector(df[!,col]))
   end #loop over DataFrame columns
 end #function standardisecols
@@ -97,7 +97,7 @@ end #function remdup!
 Find inflection points in `x` and return a vector of named tuples with index ranges
 between inflection points and corresponding extrema.
 """
-function findflex(x::Union{Vector{<:Real},CSV.SentinelArrays.SentinelArray{<:Real}})
+function findflex(x::AbstractArray{<:Union{V, <:Real}} where V)
   # Save starting index
   flex = Int[1]
   # Loop over data points
@@ -271,7 +271,7 @@ function findbyname!(
     col ≠ nothing && typeof(data[!,name]) <: standardtypes[i] &&
       checkbounds!(correctcols, bounds, data, name, i, col)
   end
-  isempty(findall(isequal(0), correctcols)) && check == nothing &&
+  isempty(findall(isequal(0), correctcols)) && check === nothing &&
     @warn "all columns corrected based on column names"
 end #function findbyname!
 
@@ -564,6 +564,23 @@ function preptrack(flight::DataFrame)
 
   return flight, flex, useLON
 end #function preptrack
+
+
+"""
+    get_floatprecision(arr)
+
+Try to eliminate abstract types in `arr`.
+"""
+function get_floatprecision(arr)
+  if isempty(arr)
+    return arr
+  elseif eltype(arr) <: AbstractArray
+    el = get_floatprecision.(arr)
+    return [el...]
+  else
+    return [arr...]
+  end
+end
 
 
 """Convert feet to kilometers"""

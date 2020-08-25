@@ -321,5 +321,5 @@ interpolatedtrack(xdata::Vector{<:AbstractFloat}, stepwidth::Real) = xdata[1] < 
   collect(xdata[1]:stepwidth:xdata[end]) : collect(xdata[1]:-stepwidth:xdata[end])
 
 
-  """ Generate a function to interpolate x vectors from the current PCHIP struct """
-  interpolate(pc::PCHIPdata{<:AbstractFloat}) = x::Union{<:AbstractFloat,Vector{<:AbstractFloat}} -> interpolate(pc, x)
+""" Generate a function to interpolate x vectors from the current PCHIP struct """
+interpolate(pc::Polynomial{<:AbstractFloat}) = x::Union{<:AbstractFloat,Vector{<:AbstractFloat}} -> interpolate(pc, x)

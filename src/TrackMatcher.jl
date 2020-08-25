@@ -36,8 +36,9 @@ import MATLAB; const mat = MATLAB
 import Statistics; const stats = Statistics
 import ProgressMeter; const pm = ProgressMeter
 import Logging; const logg = Logging
+
 # Import structs and functions from packages
-import PCHIP: PCHIPdata, pchip, interpolate
+import PCHIP: Polynomial, pchip, interpolate
 import DataFrames.DataFrame
 import Dates: DateTime, Date, Time
 import TimeZones.ZonedDateTime
@@ -130,8 +131,8 @@ Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
       route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
       aircraft::Union{Missing,AbstractString},
       date::Vector{DateTime},
-      lat::Vector{<:Union{Missing,AbstractFloat}},
-      lon::Vector{<:Union{Missing,AbstractFloat}},
+      lat::Vector{<:Union{Missing,<:AbstractFloat}},
+      lon::Vector{<:Union{Missing,<:AbstractFloat}},
       useLON::Bool,
       flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}},
       source::AbstractString,
@@ -192,8 +193,8 @@ struct FlightMetadata
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
     aircraft::Union{Missing,AbstractString},
     date::Vector{DateTime},
-    lat::Vector{<:Union{Missing,AbstractFloat}},
-    lon::Vector{<:Union{Missing,AbstractFloat}},
+    lat::Vector{<:Union{Missing,<:AbstractFloat}},
+    lon::Vector{<:Union{Missing,<:AbstractFloat}},
     useLON::Bool,
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}},
     source::AbstractString,
@@ -339,7 +340,7 @@ XMetadata can be instantiated using a `Tuple` or `NamedTuple` for the `lidarrang
 """
 struct XMetadata
   maxtimediff::Int
-  stepwidth::AbstractFloat
+  stepwidth::Real
   Xradius::Real
   lidarrange::NamedTuple{(:top,:bottom),Tuple{Real,Real}}
   lidarprofile::NamedTuple
@@ -400,12 +401,12 @@ Aircraft data with fields
 The `DataFrame` of `data` has columns in the following order with the respective types:
 
 - `time::Vector{DateTime}`                        (time stamp of measurement)
-- `lat::Vector{<:Union{Missing,AbstractFloat}}`   (latitude in deg)
-- `lon::Vector{<:Union{Missing,AbstractFloat}}`   (longitude in deg)
-- `alt::Vector{<:Union{Missing,AbstractFloat}}`   (altitude in meters)
+- `lat::Vector{<:Union{Missing,<:AbstractFloat}}`   (latitude in deg)
+- `lon::Vector{<:Union{Missing,<:AbstractFloat}}`   (longitude in deg)
+- `alt::Vector{<:Union{Missing,<:AbstractFloat}}`   (altitude in meters)
 - `heading::Vector{<:Union{Missing,Int}}`         (heading/direction of the aircraft in deg)
 - `climb::Vector{<:Union{Missing,Int}}`           (climbing (positive)/sinking (negative values) rate in m/s)
-- `speed::Vector{<:Union{Missing,AbstractFloat}}` (velocity in m/s)
+- `speed::Vector{<:Union{Missing,<:AbstractFloat}}` (velocity in m/s)
 
 
 # Instantiation
@@ -416,7 +417,7 @@ The `DataFrame` of `data` has columns in the following order with the respective
       flightID::Union{Missing,AbstractString},
       aircraft::Union{Missing,AbstractString},
       route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
-      flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}},
+      flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,<:AbstractFloat,<:AbstractFloat}}}},
       useLON::Bool,
       source::String,
       file::AbstractString
@@ -447,10 +448,10 @@ struct FlightData
     standardtypes = [Union{DateTime,Vector{DateTime}},
       Vector{<:AbstractFloat},
       Vector{<:AbstractFloat},
-      Vector{<:Union{Missing,AbstractFloat}},
+      Vector{<:Union{Missing,<:AbstractFloat}},
       Vector{<:Union{Missing,Int}},
       Vector{<:Union{Missing,Int}},
-      Vector{<:Union{Missing,AbstractFloat}}]
+      Vector{<:Union{Missing,<:AbstractFloat}}]
     bounds = (:lat => (-90, 90), :lon => (-180, 180), :alt => (0,Inf),
       :heading => (0, 360), :speed => (0, Inf))
     checkcols!(data, standardnames, standardtypes, bounds,
@@ -629,8 +630,8 @@ The `DataFrame` of `data` has columns for the satellite time and position and in
 for data files with additional information:
 `
 - `time::Vector{DateTime}`                        (time stamp of measurement)
-- `lat::Vector{<:Union{Missing,AbstractFloat}}`   (latitude)
-- `lon::Vector{<:Union{Missing,AbstractFloat}}`   (longitude)
+- `lat::Vector{<:Union{Missing,<:AbstractFloat}}`   (latitude)
+- `lon::Vector{<:Union{Missing,<:AbstractFloat}}`   (longitude)
 - `fileindex::Vector{Int}`                        (index for filenames in `SatMetadata`)
 
 
@@ -728,9 +729,10 @@ struct SatData
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
       "\n▪ data ($(length(sattime)) data rows)\n  – time\n  – lat\n  – lon",
       "\n  – fileindex\n▪ metadata")
-    new(DataFrame(time=sattime, lat=[AbstractFloat[]; lat...],
-      lon=[AbstractFloat[]; lon...], fileindex=[Int[]; fileindex...]),
-      SatMetadata(satfiles, (start=tmin, stop=tmax), loadtime, remarks=remarks))
+    satdata = DataFrame(time=sattime, lat=[AbstractFloat[]; lat...],
+      lon=[AbstractFloat[]; lon...], fileindex=[Int[]; fileindex...])
+    standardisecols!(satdata)
+    new(satdata, SatMetadata(satfiles, (start=tmin, stop=tmax), loadtime, remarks=remarks))
   end #constructor 2 SatData
 end #struct SatData
 
@@ -780,12 +782,13 @@ struct CLay
   function CLay(data::DataFrame)
     standardnames = ["time", "lat", "lon",
       "layer", "feature", "OD", "IWP", "Ttop", "Htropo", "night", "averaging"]
-    standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
-      Vector{NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}},
+      standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
+      Vector{NamedTuple{(:top,:base),Tuple{T,T}}} where T<:Vector{<:AbstractFloat},
       Vector{Vector{Symbol}}, Vector{<:Vector{<:AbstractFloat}},
       Vector{<:Vector{<:Union{Missing,<:AbstractFloat}}}, Vector{<:Vector{<:AbstractFloat}},
       Vector{<:AbstractFloat}, BitVector, Vector{<:Vector{Int}}]
     bounds = (:lat => (-90,90), :lon => (-180,180))
+    standardisecols!(data)
     checkcols!(data, standardnames, standardtypes, bounds, "CLay")
     new(data)
   end #constructor 1 CLay
@@ -889,10 +892,10 @@ end #struct CLay
 
 
 """ External constructor for emtpy CLay struct """
-CLay() = CLay(DataFrame(time = DateTime[], lat = AbstractFloat[], lon = AbstractFloat[],
-  layer = NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}[],
-  feature = Vector{Symbol}[], OD = Vector{AbstractFloat}[], IWP = Vector{AbstractFloat}[],
-  Ttop = Vector{AbstractFloat}[], Htropo = AbstractFloat[], night = BitVector(),
+CLay() = CLay(DataFrame(time = DateTime[], lat = Float32[], lon = Float32[],
+  layer = NamedTuple{(:top,:base),Tuple{Vector{Float32},Vector{Float32}}}[],
+  feature = Vector{Symbol}[], OD = Vector{Float32}[], IWP = Vector{Float32}[],
+  Ttop = Vector{Float32}[], Htropo = Float32[], night = BitVector(),
   averaging = Vector{Int}[]))
 
 
@@ -930,7 +933,7 @@ struct CPro
   function CPro(data::DataFrame)
     standardnames = ["time", "lat", "lon", "feature", "EC532"]
     standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
-      Vector{<:Vector{<:Union{Missing,Symbol}}}, Vector{<:Vector{<:Union{Missing,<:AbstractFloat}}}]
+      Vector{<:Vector{<:Union{Missing,Symbol}}}, Vector{<:Vector{T}} where T<:Union{Missing,<:AbstractFloat}]
     bounds = (:lat => (-90,90), :lon => (-180,180))
     checkcols!(data, standardnames, standardtypes, bounds, "CPro")
     new(data)
@@ -995,8 +998,8 @@ end #struct CPro
 
 
 """ External constructor for emtpy CPro struct """
-CPro() = CPro(DataFrame(time = DateTime[], lat = AbstractFloat[], lon = AbstractFloat[],
-	feature = Vector{Symbol}[], EC532 = Vector{AbstractFloat}[]))
+CPro() = CPro(DataFrame(time = DateTime[], lat = Float32[], lon = Float32[],
+	feature = Vector{Symbol}[], EC532 = Vector{Float32}[]))
 
 
 ## Define structs related to intersection data
@@ -1121,6 +1124,7 @@ struct Intersection
       Vector{<:AbstractFloat}, Vector{Dates.CompoundPeriod}, Vector{DateTime},
       Vector{DateTime}, Vector{<:Union{Missing,Symbol}}]
     bounds = (:lat => (-90,90), :lon => (-180,180), :alt => (0, Inf))
+    standardisecols!(data)
     checkcols!(data, standardnames, standardtypes, bounds, "Intersection.data")
     # Check tracked (measured data)
     standardnames = ["id", "flight", "CPro", "CLay"]
@@ -1133,6 +1137,7 @@ struct Intersection
     standardtypes = [Vector{String}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
       Vector{<:AbstractFloat}, Vector{Dates.CompoundPeriod}, Vector{Dates.CompoundPeriod}]
     bounds = ()
+    standardisecols!(accuracy)
     checkcols!(accuracy, standardnames, standardtypes, bounds, "Intersection.accuracy",
       essentialcols = [1])
     new(data, tracked, accuracy, metadata)
@@ -1167,7 +1172,6 @@ struct Intersection
     # New MATLAB session
     ms = mat.MSession()
     # Loop over data from different datasets and interpolate track data and time, throw error on failure
-
     flightdata = [FlightData[]; [getfield(flights, f) for f in fieldnames(FlightDB)[1:end-1]]...]
     prog = pm.Progress(length(flightdata), "find intersections...")
     for flight in flightdata
@@ -1214,6 +1218,7 @@ struct Intersection
     @info string("Intersection data ($(length(Xdata[!,1])) matches) loaded in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
       "\n▪ data\n▪ tracked\n▪ accuracy\n▪ metadata")
+    standardisecols!(Xdata); standardisecols!(track); standardisecols!(accuracy)
     new(Xdata, track, accuracy, XMetadata(maxtimediff, stepwidth, Xradius,
       lidarrange, lidarprofile, sat.metadata.type, sat.metadata.date,
       flights.metadata.altmin, flights.metadata.date, tc, loadtime, remarks))
