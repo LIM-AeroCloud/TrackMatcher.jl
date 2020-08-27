@@ -97,7 +97,7 @@ end #function remdup!
 Find inflection points in `x` and return a vector of named tuples with index ranges
 between inflection points and corresponding extrema.
 """
-function findflex(x::AbstractArray{<:Union{V, <:Real}} where V)
+function findflex(x::AbstractArray{<:Union{V,T} where V where T})
   # Save starting index
   flex = Int[1]
   # Loop over data points
@@ -107,10 +107,11 @@ function findflex(x::AbstractArray{<:Union{V, <:Real}} where V)
       push!(flex, i)
     end
   end
+  T = eltype(x)
   # Save end index
   push!(flex, length(x))
   # Initialise a vector for ranges between flex points, and min/max values
-  ranges = NamedTuple{(:range, :min, :max), Tuple{UnitRange, AbstractFloat, AbstractFloat}}[]
+  ranges = NamedTuple{(:range, :min, :max), Tuple{UnitRange{Int}, T, T}}[]
   # Loop over saved inflection points
   for i = 2:length(flex)
     # Evaluate ascending/descending order of data and save extrema and range,
@@ -584,13 +585,24 @@ end
 
 
 """Convert feet to kilometers"""
-ft2km(ft::Union{Missing,Real}) = 0.0003048ft
+function ft2km(ft::T)::T  where T<:Union{Missing,AbstractFloat}
+    0.0003048ft
+end
+
 
 """Convert feet to meters"""
-ft2m(ft::Union{Missing,Real}) = 0.3048ft
+function ft2m(ft::T)::T  where T<:Union{Missing,AbstractFloat}
+    0.3048ft
+end
+
 
 """Convert feet/min to m/s"""
-ftpmin2mps(ftpmin::Union{Missing,Real}) = 0.00508ftpmin
+function ftpmin2mps(ftpmin::T)::T  where T<:Union{Missing,AbstractFloat}
+    0.00508ftpmin
+end
+
 
 """Convert knots to m/s"""
-knot2mps(knot::Union{Missing,Real}) = 1.852knot/3.6
+function knot2mps(knot::T)::T  where T<:Union{Missing,AbstractFloat}
+    1.852knot/3.6
+end

@@ -9,7 +9,7 @@ be saved to the `inventory` field in `FlightDB`.
 When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
 """
-function loadInventory(files::String...; altmin::Real=5_000)
+function loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5_000)
 
   # Initialise inventory file array and start MATLAB for PCHIP fitting
   inventory = FlightData[]
@@ -21,7 +21,8 @@ function loadInventory(files::String...; altmin::Real=5_000)
     # Load data
     flights = CSV.File(file, datarow=3, footerskip=2, ignoreemptylines=true,
       silencewarnings=true, threaded=parallel, dateformat="HH:MM:SS.sssm",
-      select = [1:11;16]) |> df.DataFrame!
+      types = Dict("LATITUDE" => Float, "LONGITUDE" => Float, "ALTITUDE" => Float,
+      "SPEED" => Float), select = [1:11;16]) |> df.DataFrame!
     # Monitor progress for progress bar
     pm.next!(prog, showvalues = [(:file,splitext(basename(file))[1])])
 
@@ -34,8 +35,8 @@ function loadInventory(files::String...; altmin::Real=5_000)
     flights.SPEED = knot2mps.(flights.SPEED)
 
     # Initialise loop over file
-    flightdata = DataFrame(time = DateTime[], lat = AbstractFloat[], lon = AbstractFloat[],
-      alt = AbstractFloat[], speed = AbstractFloat[])
+    flightdata = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
+      alt = Float[], speed = Float[])
     FID = flights.FLIGHT_ID[1]
 
     # Loop over all data points
@@ -46,8 +47,8 @@ function loadInventory(files::String...; altmin::Real=5_000)
         if length(flightdata.time) ≤ 1
           FID = flights.FLIGHT_ID[i]
           # Empty possible entry
-          flightdata = DataFrame(time = DateTime[], lat = AbstractFloat[], lon = AbstractFloat[],
-            alt = AbstractFloat[], speed = AbstractFloat[])
+          flightdata = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
+            alt = Float[], speed = Float[])
           continue
         end
         # Determine predominant flight direction, inflection points, and remove duplicate entries
@@ -57,8 +58,8 @@ function loadInventory(files::String...; altmin::Real=5_000)
         push!(inventory, FlightData(flightdata, FID,
           missing, missing, missing, flex, useLON, "VOLPE AEDT", file))
         # Empty data vectors
-        flightdata = DataFrame(time = DateTime[], lat = AbstractFloat[], lon = AbstractFloat[],
-          alt = AbstractFloat[], speed = AbstractFloat[])
+        flightdata = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
+          alt = Float[], speed = Float[])
         FID = flights.FLIGHT_ID[i]
       end # saving FlightData
       # Filter altitude threshold
@@ -86,7 +87,7 @@ be saved to the `archive` field in `FlightDB`.
 When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
 """
-function loadArchive(files::String...; altmin::Real=5_000)
+function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_000)
   # Initialise archive file array
   archive = FlightData[]
   parallel = VERSION ≥ v"1.3" ? true : false
@@ -94,7 +95,7 @@ function loadArchive(files::String...; altmin::Real=5_000)
   prog = pm.Progress(length(files), "load archive...")
   for file in files
     # Load data from csv file into standardised DataFrame
-    flights = readArchive(file, parallel)
+    flights = readArchive(file, parallel, Float)
     # Unit conversions
     flights.alt = ft2m.(flights.alt)
     flights.speed = knot2mps.(flights.speed)
@@ -103,9 +104,9 @@ function loadArchive(files::String...; altmin::Real=5_000)
 
     # Initialise loop over file
     FID = flights.dbID[1]; n = 1
-    flightdata = DataFrame(time = DateTime[], lat = AbstractFloat[]; lon = AbstractFloat[],
-      alt = Union{Missing,AbstractFloat}[], speed = Union{Missing,AbstractFloat}[],
-      climb = Union{Missing,AbstractFloat}[], heading = Union{Missing,Int}[])
+    flightdata = DataFrame(time = DateTime[], lat = Float[]; lon = Float[],
+      alt = Union{Missing,Float}[], speed = Union{Missing,Float}[],
+      climb = Union{Missing,Float}[], heading = Union{Missing,Int}[])
 
     # Loop over all data points
     for i = 1:length(flights.time)
@@ -116,9 +117,9 @@ function loadArchive(files::String...; altmin::Real=5_000)
           n = i
           FID = flights.dbID[n]
           # Empty possible entry
-          flightdata = DataFrame(time = DateTime[], lat = AbstractFloat[]; lon = AbstractFloat[],
-            alt = Union{Missing,AbstractFloat}[], speed = Union{Missing,AbstractFloat}[],
-            climb = Union{Missing,AbstractFloat}[], heading = Union{Missing,Int}[])
+          flightdata = DataFrame(time = DateTime[], lat = Float[]; lon = Float[],
+            alt = Union{Missing,Float}[], speed = Union{Missing,Float}[],
+            climb = Union{Missing,Float}[], heading = Union{Missing,Int}[])
           continue
         end
         # Determine predominant flight direction, inflection points, and remove duplicate entries
@@ -130,9 +131,9 @@ function loadArchive(files::String...; altmin::Real=5_000)
           dest=flights.dest[n]), flex, useLON, "FlightAware", file))
 
         # Reset temporary data arrays
-        flightdata = DataFrame(time = DateTime[], lat = AbstractFloat[]; lon = AbstractFloat[],
-          alt = Union{Missing,AbstractFloat}[], speed = Union{Missing,AbstractFloat}[],
-          climb = Union{Missing,AbstractFloat}[], heading = Union{Missing,Int}[])
+        flightdata = DataFrame(time = DateTime[], lat = Float[]; lon = Float[],
+          alt = Union{Missing,Float}[], speed = Union{Missing,Float}[],
+          climb = Union{Missing,Float}[], heading = Union{Missing,Int}[])
         # Set Flight ID and position to next flight
         n = i
         FID = flights.dbID[n]
@@ -144,11 +145,11 @@ function loadArchive(files::String...; altmin::Real=5_000)
           flights.lon[i], flights.alt[i], flights.speed[i],
           flights.climb[i], flights.heading[i]])
       end
-      # Monitor progress for progress bar
-      pm.next!(prog, showvalues = [(:file,splitext(basename(file))[1])])
-    end #loop over files
-    pm.finish!(prog)
-  end
+    end #loop over current flight
+    # Monitor progress for progress bar
+    pm.next!(prog, showvalues = [(:file,splitext(basename(file))[1])])
+  end #loop over files
+  pm.finish!(prog)
 
   return archive
 end #function loadArchive
@@ -167,7 +168,7 @@ Default is `nothing`, which means auto-detection of the delimiter is used.
 When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
 """
-function loadOnlineData(files::String...; altmin::Real=5_000,
+function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=5_000,
   delim::Union{Nothing,Char,String}=nothing)
   # Initialise inventory file array
   # parallel = VERSION ≥ v"1.3" ? true : false
@@ -177,8 +178,8 @@ function loadOnlineData(files::String...; altmin::Real=5_000,
   for file in files
     # Read flight data
     flight = CSV.File(file, delim=delim, ignoreemptylines=true, normalizenames=true,
-      silencewarnings=true, threaded=false, types=Dict(:Latitude => Float32,
-      :Longitude => Float32, :feet => String, :kts => Float32, :Course => String,
+      silencewarnings=true, threaded=false, types=Dict(:Latitude => Float,
+      :Longitude => Float, :feet => String, :kts => Float, :Course => String,
       :Rate => String), drop = ["mph", "Reporting_Facility"]) |> df.DataFrame!
     # Convert knots to m/s
     flight.kts = knot2mps.(flight.kts)
@@ -231,15 +232,15 @@ function loadOnlineData(files::String...; altmin::Real=5_000,
     # Initialise time vector
     flighttime = ZonedDateTime[]
     # Initialise vectors for altitude, heading and climb to convert from strings to Int
-    altitude = Union{Missing,AbstractFloat}[]
+    altitude = Union{Missing,Float}[]
     heading = Union{Missing,Int}[]
-    climbingrate = Union{Missing,AbstractFloat}[]
+    climbingrate = Union{Missing,Float}[]
     # Loop over times
     for i=length(flight[!,1]):-1:1
-      alt = try ft2m(parse(Float32, join([n for n in flight.alt[i]
+      alt = try ft2m(parse(Float, join([n for n in flight.alt[i]
         if isnumeric(n) || n == '.'])))
       catch; missing;  end
-      climb = try ftpmin2mps(parse(Float32, join([n for n in flight.climb[i]
+      climb = try ftpmin2mps(parse(Float, join([n for n in flight.climb[i]
         if isnumeric(n) || n == '.' || n == '-'])))
       catch; missing;  end
       head = try parse(Int, join([n for n in flight.heading[i]
@@ -313,12 +314,13 @@ Read FlightAware archived data from a csv `file` and return content as DataFrame
 Using Julia version 1.3 or higher, `parallel` can be set to `true` to speed up file reading.
 The routine works for several FlightAware archive versions.
 """
-function readArchive(file, parallel)
+function readArchive(file, parallel, Float=Float32)
   # Read file
   flightdata = CSV.File(file, datarow=2, normalizenames=true, ignoreemptylines=true,
     silencewarnings=true, threaded=parallel, dateformat="m/d/y H:M:S",
-    types = Dict(:Altitude_feet_ => Float32, :Groundspeed_knots_ => Float32,
-    :Altitude_ft_ => Float32, :Groundspeed_kts_ => Float32),
+    types = Dict(:Latitude => Float, :Longitude => Float, :Altitude_feet_ => Float,
+    :Altitude_ft_ => Float, :Groundspeed_knots_ => Float, :Groundspeed_kts_ => Float,
+    :Rate => Float),
     drop = ["Direction", "Facility_Name", "Facility_Description", "Estimated"])
   ## Get column order and define column names
   # Get column names of current file

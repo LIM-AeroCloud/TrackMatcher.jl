@@ -154,14 +154,14 @@ Or construct `FlightMetadata` by directly handing over every field:
       file::AbstractString
     ) -> struct FlightMetadata
 """
-struct FlightMetadata
+struct FlightMetadata{T<:AbstractFloat}
   dbID::Union{Int,AbstractString}
   flightID::Union{Missing,AbstractString}
-  route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}}
+  route::Union{Missing,NamedTuple{(:orig,:dest),Tuple{AbstractString,AbstractString}}}
   aircraft::Union{Missing,AbstractString}
   date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
-  area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,AbstractFloat}}
-  flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}}
+  area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,T}}
+  flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}}
   useLON::Bool
   source::AbstractString
   file::AbstractString
@@ -173,14 +173,14 @@ struct FlightMetadata
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
     aircraft::Union{Missing,AbstractString},
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
-    area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,AbstractFloat}},
-    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}},
+    area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,T}} where T<:AbstractFloat,
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}} where T<:AbstractFloat},
     useLON::Bool,
     source::AbstractString,
     file::AbstractString
   )
-
-    new(dbID, flightID, route, aircraft, date, area, flex, useLON, source, file)
+    T = typeof(flex.latmin)
+    new{T}(dbID, flightID, route, aircraft, date, area, flex, useLON, source, file)
   end #constructor 1 FlightMetadata
 
   """
@@ -196,18 +196,18 @@ struct FlightMetadata
     lat::Vector{<:Union{Missing,<:AbstractFloat}},
     lon::Vector{<:Union{Missing,<:AbstractFloat}},
     useLON::Bool,
-    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}},
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}} where T<:AbstractFloat,
     source::AbstractString,
     file::AbstractString
   )
-
-    elonmax = isempty(lon[lon.≥0]) ? NaN : maximum(lon[lon.≥0])
-    elonmin = isempty(lon[lon.≥0]) ? NaN : minimum(lon[lon.≥0])
-    wlonmax = isempty(lon[lon.<0]) ? NaN : maximum(lon[lon.<0])
-    wlonmin = isempty(lon[lon.<0]) ? NaN : minimum(lon[lon.<0])
+    T = eltype(lat)
+    elonmax = isempty(lon[lon.≥0]) ? T(NaN) : maximum(lon[lon.≥0])
+    elonmin = isempty(lon[lon.≥0]) ? T(NaN) : minimum(lon[lon.≥0])
+    wlonmax = isempty(lon[lon.<0]) ? T(NaN) : maximum(lon[lon.<0])
+    wlonmin = isempty(lon[lon.<0]) ? T(NaN) : minimum(lon[lon.<0])
     area = (latmin=minimum(lat), latmax=maximum(lat),
       elonmin=elonmin, elonmax=elonmax, wlonmin=wlonmin, wlonmax=wlonmax)
-    new(dbID, flightID, route, aircraft, (start=date[1], stop=date[end]), area,
+    new{T}(dbID, flightID, route, aircraft, (start=date[1], stop=date[end]), area,
       flex, useLON, source, file)
   end #constructor 2 FlightMetadata
 end #struct FlightMetadata
@@ -436,7 +436,7 @@ Or construct by directly handing over every field:
 
 Checks exist that the order, names, and types of the `data` `DataFrame` are correct.
 """
-struct FlightData
+struct FlightData{T<:AbstractFloat}
   data::DataFrame
   metadata::FlightMetadata
 
@@ -446,17 +446,17 @@ struct FlightData
     # Column checks and warnings
     standardnames = ["time", "lat", "lon", "alt", "heading", "climb", "speed"]
     standardtypes = [Union{DateTime,Vector{DateTime}},
-      Vector{<:AbstractFloat},
-      Vector{<:AbstractFloat},
+      Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
       Vector{<:Union{Missing,<:AbstractFloat}},
       Vector{<:Union{Missing,Int}},
-      Vector{<:Union{Missing,Int}},
+      Vector{<:Union{Missing,<:AbstractFloat}},
       Vector{<:Union{Missing,<:AbstractFloat}}]
     bounds = (:lat => (-90, 90), :lon => (-180, 180), :alt => (0,Inf),
       :heading => (0, 360), :speed => (0, Inf))
     checkcols!(data, standardnames, standardtypes, bounds,
       metadata.source, metadata.dbID)
-    new(data,metadata)
+    T = eltype(data.lon)
+    new{T}(data,metadata)
   end #constructor 1 FlightData
 
   """ Modified constructor with variable checks and some automated calculation of fields """
@@ -466,12 +466,11 @@ struct FlightData
     flightID::Union{Missing,AbstractString},
     aircraft::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
-    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}},
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}} where T<:AbstractFloat}},
     useLON::Bool,
     source::String,
     file::AbstractString
   )
-
     # Check dataframe columns of flight data; fill missing columns with missing values
     t = getproperty(flightdata, :time)
     t = t isa Vector{ZonedDateTime} ? [zt.utc_datetime for zt in t] : t
@@ -484,10 +483,11 @@ struct FlightData
       [missing for i in t]
     speed = df.hasproperty(flightdata, :speed) ? df.getproperty(flightdata, :speed) :
       [missing for i in t]
+    T = eltype(lon)
     metadata = FlightMetadata(dbID,flightID,route,aircraft,t,lat,lon,useLON,flex,source,file)
 
     # Instatiate new FlightData
-    new(DataFrame(time=t,lat=lat,lon=lon,alt=alt,heading=heading,climb=climb,speed=speed),metadata)
+    new{T}(DataFrame(time=t,lat=lat,lon=lon,alt=alt,heading=heading,climb=climb,speed=speed),metadata)
   end #constructor 2 FlightData
 end #struct FlightData
 
@@ -563,7 +563,7 @@ struct FlightDB
   Modified constructor creating the database from an identifer of the
   database type and the respective folder path for that database.
   """
-  function FlightDB(DBtype::String, folder::String...;
+  function FlightDB(DBtype::String, folder::String...; Float::DataType = Float32,
     altmin::Real=5_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
 
     # Save time of database creation
@@ -583,18 +583,18 @@ struct FlightDB
     for i in i1
       findfiles!(ifiles, folder[i], ".csv")
     end
-    inventory = loadInventory(ifiles..., altmin=altmin)
+    inventory = loadInventory(ifiles...; Float=Float, altmin=altmin)
     # FlightAware commercial archive
     ifiles = String[]
     for i in i2
       findfiles!(ifiles, folder[i], ".csv")
     end
-    archive = loadArchive(ifiles..., altmin=altmin)
+    archive = loadArchive(ifiles...; Float=Float, altmin=altmin)
     ifiles = String[]
     for i in i3
       findfiles!(ifiles, folder[i], ".txt", ".dat")
     end
-    onlineData = loadOnlineData(ifiles..., altmin=altmin, delim=odelim)
+    onlineData = loadOnlineData(ifiles...; Float=Float, altmin=altmin, delim=odelim)
     tmin = minimum([[f.metadata.date.start for f in inventory];
       [f.metadata.date.start for f in archive];
       [f.metadata.date.start for f in onlineData]])
