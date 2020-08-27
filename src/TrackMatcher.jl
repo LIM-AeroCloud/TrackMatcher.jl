@@ -592,15 +592,19 @@ struct FlightDB
     archive = loadArchive(ifiles...; Float=Float, altmin=altmin)
     ifiles = String[]
     for i in i3
-      findfiles!(ifiles, folder[i], ".txt", ".dat")
+      findfiles!(ifiles, folder[i], ".tsv", ".txt", ".dat")
     end
     onlineData = loadOnlineData(ifiles...; Float=Float, altmin=altmin, delim=odelim)
-    tmin = minimum([[f.metadata.date.start for f in inventory];
-      [f.metadata.date.start for f in archive];
-      [f.metadata.date.start for f in onlineData]])
-    tmax = maximum([[f.metadata.date.stop for f in inventory];
-      [f.metadata.date.stop for f in archive];
-      [f.metadata.date.stop for f in onlineData]])
+    tmin, tmax = if isempty([inventory; archive; onlineData])
+      tstart, tstart
+    else
+      minimum([[f.metadata.date.start for f in inventory];
+        [f.metadata.date.start for f in archive];
+        [f.metadata.date.start for f in onlineData]]),
+      maximum([[f.metadata.date.stop for f in inventory];
+        [f.metadata.date.stop for f in archive];
+        [f.metadata.date.stop for f in onlineData]])
+    end
 
     tend = Dates.now()
     tc = tz.ZonedDateTime(tend, tz.localzone())
