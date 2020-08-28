@@ -79,7 +79,8 @@ end #function remdup!
 
 
 """
-    findflex(x::Vector{<:Real}) -> Vector{ NamedTuple{(:range, :min, :max), Tuple{UnitRange, AbstractFloat, AbstractFloat}}}
+    findflex(x::AbstractArray{<:Union{V,T} where V where T})
+      -> Vector{ NamedTuple{(:range, :min, :max), Tuple{UnitRange, T, T}}} where T<:AbstractFloat
 
 Find inflection points in `x` and return a vector of named tuples with index ranges
 between inflection points and corresponding extrema.
@@ -452,7 +453,8 @@ end #function get_flightdata
       flightid::Union{Int,String},
       lidarprofile::NamedTuple,
       lidarrange::Tuple{Real,Real},
-      savesecondtype::Bool
+      savesecondtype::Bool,
+      Float::DataType=Float32
     ) -> cpro::CPro, clay::CLay, feature::Symbol, ts::Int
 
 Using the `sat` data measurements within the overlap region and the MATLAB session
@@ -463,7 +465,8 @@ index `ts` within `cpro`/`clay` of the data point closest to `X`.
 When `savesecondtype` is set to `false`, only the data type (`CLay`/`CPro`) in `sat`
 is saved; if set to `true`, the corresponding data type is saved if available.
 The lidar column data is saved for the height levels givin in the `lidarprofile` data
-for the `lidarrange`.
+for the `lidarrange`. Floating point numbers are saved with single precision or
+as defined by `Float`.
 """
 function get_satdata(
   ms::mat.MSession,

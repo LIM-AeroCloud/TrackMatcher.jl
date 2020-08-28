@@ -13,7 +13,8 @@
       lidarrange::Tuple{Real,Real},
       flightspan::Int,
       satspan::Int,
-      savesecondsattype::Bool
+      savesecondsattype::Bool,
+      Float::DataType=Float32
     ) -> Xdata::DataFrame, track::DataFrame, accuracy::DataFrame
 
 Using interpolated `flighttracks` and `sattracks`,
@@ -32,6 +33,9 @@ sat track points in the overlap region of both tracks. To be an intersection,
 the minimum distance of the interpolated track points must be below a threshold `dmin`.
 For duplicate intersection finds within an `Xradius`, only the one with the highest
 accuracy (lowest `dmin`) is saved.
+
+All floating point numbers are saved with single precision unless otherwise
+specified by `Float`.
 """
 function find_intersections(
   ms::mat.MSession,

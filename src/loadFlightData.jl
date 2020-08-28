@@ -6,8 +6,9 @@
 From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `inventory` field in `FlightDB`.
 
-When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
+When the `Vector{FlightData{T}}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
+Floating point numbers in `Flightdata` are of type `T`, by default `Float32`.
 """
 function loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5_000)
 
@@ -84,8 +85,9 @@ end #function loadInventory
 From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `archive` field in `FlightDB`.
 
-When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
+When the `Vector{FlightData{T}}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
+Floating point numbers in `Flightdata` are of type `T`, by default `Float32`.
 """
 function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_000)
   # Initialise archive file array
@@ -165,8 +167,9 @@ be saved to the `onlineData` field in `FlightDB`.
 The `delim`iter of the data in the input file can be specified by a string or character.
 Default is `nothing`, which means auto-detection of the delimiter is used.
 
-When the `Vector{FlightData}` is constructed, data can be filtered by a minimum
+When the `Vector{FlightData{T}}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
+Floating point numbers in `Flightdata` are of type `T`, by default `Float32`.
 """
 function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=5_000,
   delim::Union{Nothing,Char,String}=nothing)
@@ -307,12 +310,13 @@ end #function loadOnlineData
 
 
 """
-    readArchive(file, parallel) -> DataFrame
+    readArchive(file, parallel, Float=Float32) -> DataFrame
 
 Read FlightAware archived data from a csv `file` and return content as DataFrame.
 
 Using Julia version 1.3 or higher, `parallel` can be set to `true` to speed up file reading.
-The routine works for several FlightAware archive versions.
+The routine works for several FlightAware archive versions. Floating point numbers
+are read with single precision or as defined by kwarg `Float`.
 """
 function readArchive(file, parallel, Float=Float32)
   # Read file

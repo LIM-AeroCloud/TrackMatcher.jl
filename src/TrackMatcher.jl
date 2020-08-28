@@ -56,7 +56,7 @@ Broadcast.broadcastable(o::geo.LatLon) = Ref(o)
 
 ## Define own Metadata structs
 """
-# struct FlightMetadata
+# struct FlightMetadata{T<:AbstractFloat}
 
 Immutable struct to hold metadata for `FlightData` of the `FlightDB` with fields
 
@@ -70,6 +70,9 @@ Immutable struct to hold metadata for `FlightData` of the `FlightDB` with fields
 - `useLON::Bool`
 - `source::AbstractString`
 - `file::AbstractString`
+
+By default, all `AbstractFloat` are set to Float32 but can be set to any other precision
+in `FlightDB` with the kwarg `Float`.
 
 ## dbID
 Database ID – integer counter for `inventory`,
@@ -392,7 +395,7 @@ end #struct XMetaData
 
 ## Define structs related to flight data
 """
-# struct FlightData
+# struct FlightData{T<:AbstractFloat}
 
 Aircraft data with fields
 - `data::DataFrame`
@@ -407,6 +410,9 @@ The `DataFrame` of `data` has columns in the following order with the respective
 - `heading::Vector{<:Union{Missing,Int}}`         (heading/direction of the aircraft in deg)
 - `climb::Vector{<:Union{Missing,Int}}`           (climbing (positive)/sinking (negative values) rate in m/s)
 - `speed::Vector{<:Union{Missing,<:AbstractFloat}}` (velocity in m/s)
+
+By default, all AbstractFloat are set to `Float32`, but can be set to any other
+precision in `FlightDB` by the kwarg `Float`.
 
 
 # Instantiation
@@ -529,15 +535,22 @@ online data with the keyword `odelim`. Use any character or string as delimiter.
 By default (`odelim=nothing`), auto-detection is used.
 
     FlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
-      altmin::Real=5_000, remarks=nothing, odelim::Union{Nothing,Char,String}=nothing)
+      Float::DataType=Float32, altmin::Real=5_000, remarks=nothing,
+      odelim::Union{Nothing,Char,String}=nothing)
 
 `DBtype` can be identified with:
 - `1` or `i`: VOLPE AEDT inventory
 - `2` or `a`: FlightAware archived data (commercially available)
 - `3` or `o`: flightaware.com online data
 
-Or instatiate directly with the fields of `FlightDB`, where the correct database
-type is checked, and wrong datasets are removed in every field.
+By default, all values are read in as `Float32`, but can be set to any other
+precision by the `Float` kwarg; `altmin` set the minimum threshold above which
+flight tracking points are considered. Set the delimiter of the input files with
+kwarg `odelim`, if delimiters are any character different from whitespace. Any
+`remarks` can be attached to `FlightDB`.
+
+Alternatively, instatiate directly with the fields of `FlightDB`, where the correct
+database type is checked, and wrong datasets are removed in every field.
 """
 struct FlightDB
   inventory::Vector{FlightData}
@@ -641,13 +654,15 @@ for data files with additional information:
 
 # Instantiation
 
-    SatData(folders::String...; type::Symbol=:undef, remarks=nothing) -> struct SatData
+    SatData(folders::String...; Float::DataType=Float32, type::Symbol=:undef,
+      remarks=nothing) -> struct SatData
 
 Construct `SatData` from any number of absolute or relative folder paths given as string.
 SatData searches for hdf files in all folders recursively and determines the data type
 (`CLay` or `CPro`) from the file names of the first 50 files unless the type is specified
 with a Symbol `:CLay` or `:CPro` by the keyword argument `type`. Only one type of satellite
-data can be stored in `SatData`.
+data can be stored in `SatData`. By default, all values are read in as `Float32`,
+but can be set to any other precision by the `Float` kwarg.
 """
 struct SatData
   data::DataFrame
@@ -772,11 +787,12 @@ CALIOP cloud layer `data` stored in a `DataFrame` with columns:
 # Instantiation
 
     CLay(ms::mat.MSession, files::Vector{String},
-      lidarrange::Tuple{Real,Real}=(15_000,-Inf), altmin::Real=5_000) -> struct CLay
+      lidarrange::Tuple{Real,Real}=(15_000,-Inf), altmin::Real=5000, Float::DataType=Float32)
 
 Construct `CLay` from a list of file names (including directories) and a running
-MATLAB session `ms` and save data in the `lidarrange` if layers are within the bounds
-of `lidarrange` and above flight `altmin` threshold.
+MATLAB session `ms` and save data, if layers are within the bounds
+of `lidarrange` and above flight `altmin` threshold. By default, all values are
+saved as `Float32`, but can be set to any other precision by the `Float` kwarg.
 
 Or construct `CLay` by directly handing over the `DataFrame` where the names, order,
 and types of each columns are checked and attempted to correct:
@@ -925,7 +941,8 @@ CALIOP cloud profile `data` stored in a `DataFrame` with columns:
 Construct `CPro` from a list of file names (including directories) and a running
 MATLAB session `ms`. CPro data is only stored in the vicinity of intersections for
 the designated `sattime`. Column data is stored height-resolved as defined by the
-`lidarprofile`.
+`lidarprofile`. By default, all values are stored as `Float32`, but can be set to
+any other precision by the `Float` kwarg.
 
 Or construct `CPro` by directly handing over the `DataFrame` where the names, order,
 and types of each columns are checked and attempted to correct:
@@ -1073,6 +1090,7 @@ Measures about the accuracy of the intersection calculations and the quality of 
       lidarrange::Tuple{Real,Real}=(15_000,-Inf),
       stepwidth::Real=1000,
       Xradius::Real=20_000,
+      Float::DataType=Float32,
       remarks=nothing
     ) -> struct Intersection
 
@@ -1096,6 +1114,8 @@ data saved to the struct:
   in meters (partially internally converted to degrees at equator)
 - `Xradius::Real=20_000`: radius in meters within which multiple finds of an
   intersection are disregarded and only the most accurate is counted
+- `Float::DataType=Float32`: Set the precision of floating point numbers
+  (single precision by default)
 - `remarks=nothing`: any data or remarks attached to the metadata
 
 Or construct `Intersection` by directly handing over the different `DataFrame`s where the names, order,
