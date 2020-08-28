@@ -45,19 +45,6 @@ end # function findfiles!
 
 
 """
-    standardisecols!(df::DataFrame)
-
-Convert possible SentinelArrays from `CSV` to `Vector{<:Union{Missing, Type}}`.
-"""
-function standardisecols!(df::DataFrame)
-  for col in names(df)
-    df[!,col] = get_floatprecision(df[!,col])
-    df[!,col] isa Vector{Bool} && (df[!,col] = BitVector(df[!,col]))
-  end #loop over DataFrame columns
-end #function standardisecols
-
-
-"""
     remdup!(data::DataFrame, useLON::Bool)
 
 Remove entries with duplicate x and y (`lat`/`lon` or `lon`/`lat`) values from
@@ -487,7 +474,8 @@ function get_satdata(
   flightid::Union{Int,String},
   lidarprofile::NamedTuple,
   lidarrange::Tuple{Real,Real},
-  savesecondtype::Bool
+  savesecondtype::Bool,
+  Float::DataType=Float32
 )
   # Retrieve DataFrame at Intersection ± 15 time steps
   timespan, fileindex = find_timespan(sat.data, X, satspan)
@@ -501,10 +489,10 @@ function get_satdata(
   end
 
   # Get CPro/CLay data from near the intersection
-  clay = sat.metadata.type == :CLay ? CLay(ms, primfiles, lidarrange, flightalt) :
-    CLay(ms, secfiles, lidarrange, flightalt)
-  cpro = sat.metadata.type == :CPro ? CPro(ms, primfiles, timespan, lidarprofile) :
-    CPro(ms, secfiles, timespan, lidarprofile)
+  clay = sat.metadata.type == :CLay ? CLay(ms, primfiles, lidarrange, flightalt, Float) :
+    CLay(ms, secfiles, lidarrange, flightalt, Float)
+  cpro = sat.metadata.type == :CPro ? CPro(ms, primfiles, timespan, lidarprofile, Float) :
+    CPro(ms, secfiles, timespan, lidarprofile, Float)
   clay = extract_timespan(clay, timespan)
   cpro = extract_timespan(cpro, timespan)
 

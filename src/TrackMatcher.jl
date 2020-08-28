@@ -663,7 +663,12 @@ struct SatData
     new(data, metadata)
   end #constructor 1 SatData
 
-  function SatData(folders::String...; type::Symbol=:undef, remarks=nothing)
+  function SatData(
+    folders::String...;
+    Float::DataType=Float32,
+    type::Symbol=:undef,
+    remarks=nothing
+  )
     tstart = Dates.now()
     # Scan folders for HDF4 files
     files = String[]
@@ -683,13 +688,13 @@ struct SatData
     wrongtype > 0 &&
       @warn "$wrongtype files with wrong satellite type detected; data skipped"
     # Create empty struct, if no data files were found
-    isempty(satfiles) && return SatData()
+    isempty(satfiles) && return SatData(Float)
     # Start MATLAB session
     ms = mat.MSession()
     # Initialise arrays
     utc = Vector{Vector{DateTime}}(undef, length(satfiles))
-    lat = Vector{Vector{AbstractFloat}}(undef, length(satfiles))
-    lon = Vector{Vector{AbstractFloat}}(undef, length(satfiles))
+    lat = Vector{Vector{Float}}(undef, length(satfiles))
+    lon = Vector{Vector{Float}}(undef, length(satfiles))
     fileindex = Vector{Vector{Int}}(undef, length(satfiles))
     # Loop over files
     prog = pm.Progress(length(satfiles), "load sat data...")
@@ -710,7 +715,7 @@ struct SatData
       catch
         # Skip data on failure and warn
         @warn "read error in CALIPSO granule; data skipped"  granule = splitext(basename(file))[1]
-        DateTime[], AbstractFloat[], AbstractFloat[], Int[]
+        DateTime[], Float[], Float[], Int[]
       end
       # Monitor progress for progress bar
       pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
@@ -720,7 +725,7 @@ struct SatData
     # Close MATLAB session
     mat.close(ms)
     # Calculate time span of satellite data
-    sattime = [DateTime[]; utc...]
+    sattime = [utc...;]
     # Find data range
     tmin = minimum(sattime)
     tmax = maximum(sattime)
@@ -733,17 +738,16 @@ struct SatData
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
       "\n▪ data ($(length(sattime)) data rows)\n  – time\n  – lat\n  – lon",
       "\n  – fileindex\n▪ metadata")
-    satdata = DataFrame(time=sattime, lat=[AbstractFloat[]; lat...],
-      lon=[AbstractFloat[]; lon...], fileindex=[Int[]; fileindex...])
-    standardisecols!(satdata)
+    satdata = DataFrame(time=sattime, lat=[lat...;],
+      lon=[lon...;], fileindex=[fileindex...;])
     new(satdata, SatMetadata(satfiles, (start=tmin, stop=tmax), loadtime, remarks=remarks))
   end #constructor 2 SatData
 end #struct SatData
 
 
 """ External constructor for emtpy SatData struct """
-SatData() = SatData(DataFrame(time=DateTime[], lat=AbstractFloat[],
-  lon=AbstractFloat[], fileindex=Int[]), SatMetadata(Dict{Int,String}(), :undef,
+SatData(Float::DataType=Float32) = SatData(DataFrame(time=DateTime[], lat=Float[],
+  lon=Float[], fileindex=Int[]), SatMetadata(Dict{Int,String}(), :undef,
   (start=Dates.now(), stop=Dates.now()), Dates.now(),
   Dates.canonicalize(Dates.CompoundPeriod())))
 
@@ -792,7 +796,6 @@ struct CLay
       Vector{<:Vector{<:Union{Missing,<:AbstractFloat}}}, Vector{<:Vector{<:AbstractFloat}},
       Vector{<:AbstractFloat}, BitVector, Vector{<:Vector{Int}}]
     bounds = (:lat => (-90,90), :lon => (-180,180))
-    standardisecols!(data)
     checkcols!(data, standardnames, standardtypes, bounds, "CLay")
     new(data)
   end #constructor 1 CLay
@@ -802,21 +805,21 @@ struct CLay
   in the `lidarrange` (top to bottom), if data is above `altmin`.
   """
   function CLay(ms::mat.MSession, files::Vector{String},
-    lidarrange::Tuple{Real,Real}=(15_000,-Inf), altmin::Real=5000)
+    lidarrange::Tuple{Real,Real}=(15_000,-Inf), altmin::Real=5000, Float::DataType=Float32)
     # Return default empty struct if files are empty
-    isempty(files) && return CLay()
+    isempty(files) && return CLay(Float)
     # Initialise arrays
     # essential data
     utc = Vector{Vector{DateTime}}(undef, length(files))
-    lat = Vector{Vector{AbstractFloat}}(undef, length(files))
-    lon = Vector{Vector{AbstractFloat}}(undef, length(files))
+    lat = Vector{Vector{Float}}(undef, length(files))
+    lon = Vector{Vector{Float}}(undef, length(files))
     # non-essential data
-    layers = Vector{Vector{NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}}}(undef, length(files))
+    layers = Vector{Vector{NamedTuple{(:top,:base),Tuple{Vector{Float},Vector{Float}}}}}(undef, length(files))
     feature = Vector{Vector{Vector{Symbol}}}(undef,length(files))
-    OD = Vector{Vector{Vector{AbstractFloat}}}(undef,length(files))
-    IWP = Vector{Vector{Vector{Union{Missing,<:AbstractFloat}}}}(undef,length(files))
-    Ttop = Vector{Vector{Vector{AbstractFloat}}}(undef,length(files))
-    Htropo = Vector{Vector{AbstractFloat}}(undef, length(files))
+    OD = Vector{Vector{Vector{Float}}}(undef,length(files))
+    IWP = Vector{Vector{Vector{Union{Missing,Float}}}}(undef,length(files))
+    Ttop = Vector{Vector{Vector{Float}}}(undef,length(files))
+    Htropo = Vector{Vector{Float}}(undef, length(files))
     night = Vector{BitVector}(undef, length(files))
     averaging = Vector{Vector{Vector{Int}}}(undef,length(files))
     # Convert mininmum flight altitude to meters
@@ -856,18 +859,18 @@ struct CLay
       mat.eval_string(ms, "clear average\ntry\naverage = hdfread(file, 'Horizontal_Averaging');\nend")
       horav = mat.jarray(mat.get_mvariable(ms, :average))
       # Loop over data and convert to TrackMatcher format
-      layer = Vector{NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}}(undef,length(utc[i]))
+      layer = Vector{NamedTuple{(:top,:base),Tuple{Vector{Float},Vector{Float}}}}(undef,length(utc[i]))
       feat = Vector{Vector{Symbol}}(undef,length(utc[i]))
-      optdepth = Vector{Vector{<:AbstractFloat}}(undef,length(utc[i]))
-      icewater = Vector{Vector{Union{Missing,<:AbstractFloat}}}(undef,length(utc[i]))
-      toptemp = Vector{Vector{<:AbstractFloat}}(undef,length(utc[i]))
+      optdepth = Vector{Vector{Float}}(undef,length(utc[i]))
+      icewater = Vector{Vector{Union{Missing,Float}}}(undef,length(utc[i]))
+      toptemp = Vector{Vector{Float}}(undef,length(utc[i]))
       average = Vector{Vector{Int}}(undef,length(utc[i]))
       for n = 1:length(utc[i])
         l = findall((basealt[n,:] .> 0) .& (topalt[n,:] .> 0) .& (basealt[n,:] .< lidarrange[1]) .&
           (topalt[n,:] .> lidarrange[2]) .& (topalt[n,:] .> altmin))
         layer[n], feat[n], optdepth[n], toptemp[n], icewater[n], average[n] = if isempty(l)
-          (top = AbstractFloat[], base = AbstractFloat[]), Symbol[],
-          AbstractFloat[], AbstractFloat[], AbstractFloat[], Int[]
+          (top = Float[], base = Float[]), Symbol[],
+          Float[], Float[], Float[], Int[]
         else
           l = findall((basealt[n,:] .> 0) .& (topalt[n,:] .> 0) .& (basealt[n,:] .< lidarrange[1]) .&
             (topalt[n,:] .> lidarrange[2]))
@@ -884,11 +887,10 @@ struct CLay
     end #loop over files
 
     # Construct and standardise data
-    data = DataFrame(time=[[]; utc...], lat=[[]; lat...], lon=[[]; lon...],
-      layer=[[]; layers...], feature=[[]; feature...], OD=[[]; OD...],
-      IWP=[[]; IWP...], Ttop=[[]; Ttop...], Htropo = [[]; Htropo...],
-      night = [[]; night...], averaging = [[]; averaging...])
-    standardisecols!(data)
+    data = DataFrame(time=[utc...;], lat=[lat...;], lon=[lon...;],
+      layer=[layers...;], feature=[feature...;], OD=[OD...;],
+      IWP=[IWP...;], Ttop=[Ttop...;], Htropo = [Htropo...;],
+      night = [night...;], averaging = [averaging...;])
     # Save time, lat/lon arrays in CLay struct
     new(data)
   end #constructor 2 CLay
@@ -896,10 +898,10 @@ end #struct CLay
 
 
 """ External constructor for emtpy CLay struct """
-CLay() = CLay(DataFrame(time = DateTime[], lat = Float32[], lon = Float32[],
-  layer = NamedTuple{(:top,:base),Tuple{Vector{Float32},Vector{Float32}}}[],
-  feature = Vector{Symbol}[], OD = Vector{Float32}[], IWP = Vector{Float32}[],
-  Ttop = Vector{Float32}[], Htropo = Float32[], night = BitVector(),
+CLay(Float::DataType=Float32) = CLay(DataFrame(time = DateTime[], lat = Float[], lon = Float[],
+  layer = NamedTuple{(:top,:base),Tuple{Vector{Float},Vector{Float}}}[],
+  feature = Vector{Symbol}[], OD = Vector{Float}[], IWP = Vector{Float}[],
+  Ttop = Vector{Float}[], Htropo = Float[], night = BitVector(),
   averaging = Vector{Int}[]))
 
 
@@ -937,7 +939,7 @@ struct CPro
   function CPro(data::DataFrame)
     standardnames = ["time", "lat", "lon", "feature", "EC532"]
     standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
-      Vector{<:Vector{<:Union{Missing,Symbol}}}, Vector{<:Vector{T}} where T<:Union{Missing,<:AbstractFloat}]
+      Vector{<:Vector{<:Union{Missing,Symbol}}}, Vector{<:Vector{<:Union{Missing,<:AbstractFloat}}}]
     bounds = (:lat => (-90,90), :lon => (-180,180))
     checkcols!(data, standardnames, standardtypes, bounds, "CPro")
     new(data)
@@ -948,14 +950,14 @@ struct CPro
   using MATLAB session `ms` and `lidarprofile` data, if data is above `altmin`.
   """
   function CPro(ms::mat.MSession, files::Vector{String}, sattime::Vector{DateTime},
-    lidarprofile::NamedTuple)
+    lidarprofile::NamedTuple, Float::DataType=Float32)
     # Return default empty struct if files are empty
-    isempty(files) && return CPro()
+    isempty(files) && return CPro(Float)
     # Initialise arrays
     # essential data
     utc = Vector{Vector{DateTime}}(undef, length(files))
-    lat = Vector{Vector{AbstractFloat}}(undef, length(files))
-    lon = Vector{Vector{AbstractFloat}}(undef, length(files))
+    lat = Vector{Vector{Float}}(undef, length(files))
+    lon = Vector{Vector{Float}}(undef, length(files))
     # non-essential data
     fcf = Vector{Vector{Vector{<:Union{Missing,UInt16}}}}(undef, length(files))
     ec532 = Vector{Vector{Vector{<:Union{Missing,Float32}}}}(undef, length(files))
@@ -978,10 +980,10 @@ struct CPro
     end #loop over files
 
     # Rearrange time vector and get time range
-    utc = [DateTime[]; utc...]
+    utc = [utc...;]
     idx = [findfirst(utc .== t) for t in sattime]
     # Rearrange FCF vector and convert to symbols
-    fcf = [Vector{<:Union{Missing,UInt16}}[]; fcf...]
+    fcf = [fcf...;]
     avd =  Vector{Vector{Union{Missing,Symbol}}}(undef, length(fcf))
     for i = 1:length(fcf)
       vect = Vector{Union{Missing,Symbol}}(undef, length(fcf[i]))
@@ -992,9 +994,8 @@ struct CPro
       avd[i] = vect
     end
     # Construct and standardise data
-    data = DataFrame(time=utc[idx], lat=[[]; lat...][idx], lon=[[]; lon...][idx],
-      feature=avd[idx], EC532=[[]; ec532...][idx])
-    standardisecols!(data)
+    data = DataFrame(time=utc[idx], lat=[lat...;][idx], lon=[lon...;][idx],
+      feature=avd[idx], EC532=[ec532...;][idx])
     # Save time, lat/lon arrays, and feature classification flags (FCF) in CPro struct
     new(data)
   end #constructor 2 CPro
@@ -1002,9 +1003,8 @@ end #struct CPro
 
 
 """ External constructor for emtpy CPro struct """
-CPro() = CPro(DataFrame(time = DateTime[], lat = Float32[], lon = Float32[],
-	feature = Vector{Symbol}[], EC532 = Vector{Float32}[]))
-
+CPro(Float::DataType=Float32) = CPro(DataFrame(time = DateTime[], lat = Float[], lon = Float[],
+	feature = Vector{Symbol}[], EC532 = Vector{Float}[]))
 
 ## Define structs related to intersection data
 
@@ -1128,7 +1128,6 @@ struct Intersection
       Vector{<:AbstractFloat}, Vector{Dates.CompoundPeriod}, Vector{DateTime},
       Vector{DateTime}, Vector{<:Union{Missing,Symbol}}]
     bounds = (:lat => (-90,90), :lon => (-180,180), :alt => (0, Inf))
-    standardisecols!(data)
     checkcols!(data, standardnames, standardtypes, bounds, "Intersection.data")
     # Check tracked (measured data)
     standardnames = ["id", "flight", "CPro", "CLay"]
@@ -1141,7 +1140,6 @@ struct Intersection
     standardtypes = [Vector{String}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
       Vector{<:AbstractFloat}, Vector{Dates.CompoundPeriod}, Vector{Dates.CompoundPeriod}]
     bounds = ()
-    standardisecols!(accuracy)
     checkcols!(accuracy, standardnames, standardtypes, bounds, "Intersection.accuracy",
       essentialcols = [1])
     new(data, tracked, accuracy, metadata)
@@ -1159,24 +1157,25 @@ struct Intersection
     lidarrange::Tuple{Real,Real}=(15_000,-Inf),
     stepwidth::Real=1000,
     Xradius::Real=20_000,
+    Float::DataType=Float32,
     remarks=nothing
   )
     # Initialise DataFrames with Intersection data and monitor start time
     tstart = Dates.now()
-    Xdata = DataFrame(id=String[], lat=AbstractFloat[], lon=AbstractFloat[],
-      alt=AbstractFloat[], tdiff=Dates.CompoundPeriod[], tflight = DateTime[],
+    Xdata = DataFrame(id=String[], lat=Float[], lon=Float[],
+      alt=Float[], tdiff=Dates.CompoundPeriod[], tflight = DateTime[],
       tsat = DateTime[], feature = Union{Missing,Symbol}[])
     track = DataFrame(id=String[], flight=FlightData[], CPro=CPro[], CLay=CLay[])
-    accuracy = DataFrame(id=String[], intersection=AbstractFloat[], flightcoord=AbstractFloat[],
-      satcoord=AbstractFloat[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
+    accuracy = DataFrame(id=String[], intersection=Float[], flightcoord=Float[],
+      satcoord=Float[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
     # Get lidar altitude levels
-    lidarprofile = get_lidarheights(lidarrange)
+    lidarprofile = get_lidarheights(lidarrange, Float)
     # Save stepwidth in degrees at equator using Earth's equatorial circumference to convert
     degsteps  = stepwidth*360/40_075_017
     # New MATLAB session
     ms = mat.MSession()
     # Loop over data from different datasets and interpolate track data and time, throw error on failure
-    flightdata = [FlightData[]; [getfield(flights, f) for f in fieldnames(FlightDB)[1:end-1]]...]
+    flightdata = [[getfield(flights, f) for f in fieldnames(FlightDB)[1:end-1]]...;]
     prog = pm.Progress(length(flightdata), "find intersections...")
     for flight in flightdata
       try
@@ -1194,7 +1193,7 @@ struct Intersection
         # Calculate intersections and store data and metadata in DataFrames
         currdata, currtrack, curraccuracy = find_intersections(ms, flight, flighttracks,
           sat, sattracks, maxtimediff, stepwidth, Xradius, lidarprofile, lidarrange,
-          flightspan, satspan, savesecondsattype)
+          flightspan, satspan, savesecondsattype,Float)
         append!(Xdata, currdata); append!(track, currtrack)
         append!(accuracy, curraccuracy)
       catch err
@@ -1222,7 +1221,6 @@ struct Intersection
     @info string("Intersection data ($(length(Xdata[!,1])) matches) loaded in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
       "\n▪ data\n▪ tracked\n▪ accuracy\n▪ metadata")
-    standardisecols!(Xdata); standardisecols!(track); standardisecols!(accuracy)
     new(Xdata, track, accuracy, XMetadata(maxtimediff, stepwidth, Xradius,
       lidarrange, lidarprofile, sat.metadata.type, sat.metadata.date,
       flights.metadata.altmin, flights.metadata.date, tc, loadtime, remarks))

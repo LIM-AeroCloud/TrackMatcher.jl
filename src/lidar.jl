@@ -10,10 +10,10 @@ Return a `NamedTuple` with the following entries in the `lidarrange` (top, botto
 - `ibottom`: index in the original data array of the last selected bottom height
 - `i30`: vector index of the first altitude level with 30m intervals
 """
-function get_lidarheights(lidarrange::Tuple{Real,Real})
+function get_lidarheights(lidarrange::Tuple{Real,Real}, Float::DataType=Float32)
   # Read CPro lidar altitude profile
   hfile = normpath(@__DIR__, "../data/CPro_Lidar_Altitudes_m.dat")
-  hprofile = CSV.File(hfile) |> df.DataFrame!
+  hprofile = CSV.File(hfile, type=Float) |> df.DataFrame!
   # Consider only levels between max/min given in lidarrange
   itop = findfirst(hprofile.CPro .≤ lidarrange[1])
   ibottom = findlast(hprofile.CPro .≥ lidarrange[2])
