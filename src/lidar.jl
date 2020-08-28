@@ -1,7 +1,7 @@
 # Functions related to processing CALIOP data
 
 """
-    get_lidarheights(lidarrange::Tuple{Real,Real}) -> NamedTuple
+    get_lidarheights(lidarrange::Tuple{Real,Real}, Float::DataType=Float32) -> NamedTuple
 
 Return a `NamedTuple` with the following entries in the `lidarrange` (top, bottom):
 - `coarse`: altitude levels of the CALIOP lidar data as defined in the metadata of the hdf files
@@ -9,11 +9,14 @@ Return a `NamedTuple` with the following entries in the `lidarrange` (top, botto
 - `itop`: index in the original data array of the first selected top height
 - `ibottom`: index in the original data array of the last selected bottom height
 - `i30`: vector index of the first altitude level with 30m intervals
+
+Height levels in fiels `coarse` and `fine` are saved in single precision unless
+otherwise specified by `Float`.
 """
-function get_lidarheights(lidarrange::Tuple{Real,Real})
+function get_lidarheights(lidarrange::Tuple{Real,Real}, Float::DataType=Float32)
   # Read CPro lidar altitude profile
   hfile = normpath(@__DIR__, "../data/CPro_Lidar_Altitudes_m.dat")
-  hprofile = CSV.File(hfile) |> df.DataFrame!
+  hprofile = CSV.File(hfile, type=Float) |> df.DataFrame!
   # Consider only levels between max/min given in lidarrange
   itop = findfirst(hprofile.CPro .≤ lidarrange[1])
   ibottom = findlast(hprofile.CPro .≥ lidarrange[2])

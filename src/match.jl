@@ -13,7 +13,8 @@
       lidarrange::Tuple{Real,Real},
       flightspan::Int,
       satspan::Int,
-      savesecondsattype::Bool
+      savesecondsattype::Bool,
+      Float::DataType=Float32
     ) -> Xdata::DataFrame, track::DataFrame, accuracy::DataFrame
 
 Using interpolated `flighttracks` and `sattracks`,
@@ -32,6 +33,9 @@ sat track points in the overlap region of both tracks. To be an intersection,
 the minimum distance of the interpolated track points must be below a threshold `dmin`.
 For duplicate intersection finds within an `Xradius`, only the one with the highest
 accuracy (lowest `dmin`) is saved.
+
+All floating point numbers are saved with single precision unless otherwise
+specified by `Float`.
 """
 function find_intersections(
   ms::mat.MSession,
@@ -46,7 +50,8 @@ function find_intersections(
   lidarrange::Tuple{Real,Real},
   flightspan::Int,
   satspan::Int,
-  savesecondsattype::Bool
+  savesecondsattype::Bool,
+  Float::DataType=Float32
 )
   # Initialise DataFrames for current flight
   Xdata = DataFrame(id=String[], lat=AbstractFloat[], lon=AbstractFloat[],
@@ -135,7 +140,8 @@ function find_intersections(
         # Extract the DataFrame rows of the sat/flight data near the intersection
         Xflight, ift = get_flightdata(flight, X, flightspan)
         cpro, clay, feature, ist = get_satdata(ms, sat, X, satspan,
-          Xflight.data.alt[ift], Xflight.metadata.dbID, lidarprofile, lidarrange, savesecondsattype)
+          Xflight.data.alt[ift], Xflight.metadata.dbID, lidarprofile, lidarrange,
+          savesecondsattype, Float)
         Xsat = sat.metadata.type == :CPro ? cpro.data : clay.data
         # Calculate accuracies
         fxmeas = geo.LatLon(Xflight.data.lat[ift], Xflight.data.lon[ift])
@@ -321,5 +327,5 @@ interpolatedtrack(xdata::Vector{<:AbstractFloat}, stepwidth::Real) = xdata[1] < 
   collect(xdata[1]:stepwidth:xdata[end]) : collect(xdata[1]:-stepwidth:xdata[end])
 
 
-  """ Generate a function to interpolate x vectors from the current PCHIP struct """
-  interpolate(pc::PCHIPdata{<:AbstractFloat}) = x::Union{<:AbstractFloat,Vector{<:AbstractFloat}} -> interpolate(pc, x)
+""" Generate a function to interpolate x vectors from the current PCHIP struct """
+interpolate(pc::Polynomial{<:AbstractFloat}) = x::Union{<:AbstractFloat,Vector{<:AbstractFloat}} -> interpolate(pc, x)

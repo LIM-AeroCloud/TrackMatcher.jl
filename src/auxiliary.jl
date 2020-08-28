@@ -45,19 +45,6 @@ end # function findfiles!
 
 
 """
-    standardisecols!(df::DataFrame)
-
-Convert possible SentinelArrays from `CSV` to `Vector{<:Union{Missing, Type}}`.
-"""
-function standardisecols!(df::DataFrame)
-  for col in names(df)
-    df[!,col] = [el for el in df[!,col]]
-    df[!,col] isa Vector{Bool} && (df[!,col] = BitVector(df[!,col]))
-  end #loop over DataFrame columns
-end #function standardisecols
-
-
-"""
     remdup!(data::DataFrame, useLON::Bool)
 
 Remove entries with duplicate x and y (`lat`/`lon` or `lon`/`lat`) values from
@@ -92,12 +79,13 @@ end #function remdup!
 
 
 """
-    findflex(x::Vector{<:Real}) -> Vector{ NamedTuple{(:range, :min, :max), Tuple{UnitRange, AbstractFloat, AbstractFloat}}}
+    findflex(x::AbstractArray{<:Union{V,T} where V where T})
+      -> Vector{ NamedTuple{(:range, :min, :max), Tuple{UnitRange, T, T}}} where T<:AbstractFloat
 
 Find inflection points in `x` and return a vector of named tuples with index ranges
 between inflection points and corresponding extrema.
 """
-function findflex(x::Union{Vector{<:Real},CSV.SentinelArrays.SentinelArray{<:Real}})
+function findflex(x::AbstractArray{<:Union{V,T} where V where T})
   # Save starting index
   flex = Int[1]
   # Loop over data points
@@ -107,10 +95,11 @@ function findflex(x::Union{Vector{<:Real},CSV.SentinelArrays.SentinelArray{<:Rea
       push!(flex, i)
     end
   end
+  T = eltype(x)
   # Save end index
   push!(flex, length(x))
   # Initialise a vector for ranges between flex points, and min/max values
-  ranges = NamedTuple{(:range, :min, :max), Tuple{UnitRange, AbstractFloat, AbstractFloat}}[]
+  ranges = NamedTuple{(:range, :min, :max), Tuple{UnitRange{Int}, T, T}}[]
   # Loop over saved inflection points
   for i = 2:length(flex)
     # Evaluate ascending/descending order of data and save extrema and range,
@@ -271,7 +260,7 @@ function findbyname!(
     col ≠ nothing && typeof(data[!,name]) <: standardtypes[i] &&
       checkbounds!(correctcols, bounds, data, name, i, col)
   end
-  isempty(findall(isequal(0), correctcols)) && check == nothing &&
+  isempty(findall(isequal(0), correctcols)) && check === nothing &&
     @warn "all columns corrected based on column names"
 end #function findbyname!
 
@@ -464,7 +453,8 @@ end #function get_flightdata
       flightid::Union{Int,String},
       lidarprofile::NamedTuple,
       lidarrange::Tuple{Real,Real},
-      savesecondtype::Bool
+      savesecondtype::Bool,
+      Float::DataType=Float32
     ) -> cpro::CPro, clay::CLay, feature::Symbol, ts::Int
 
 Using the `sat` data measurements within the overlap region and the MATLAB session
@@ -475,7 +465,8 @@ index `ts` within `cpro`/`clay` of the data point closest to `X`.
 When `savesecondtype` is set to `false`, only the data type (`CLay`/`CPro`) in `sat`
 is saved; if set to `true`, the corresponding data type is saved if available.
 The lidar column data is saved for the height levels givin in the `lidarprofile` data
-for the `lidarrange`.
+for the `lidarrange`. Floating point numbers are saved with single precision or
+as defined by `Float`.
 """
 function get_satdata(
   ms::mat.MSession,
@@ -486,7 +477,8 @@ function get_satdata(
   flightid::Union{Int,String},
   lidarprofile::NamedTuple,
   lidarrange::Tuple{Real,Real},
-  savesecondtype::Bool
+  savesecondtype::Bool,
+  Float::DataType=Float32
 )
   # Retrieve DataFrame at Intersection ± 15 time steps
   timespan, fileindex = find_timespan(sat.data, X, satspan)
@@ -500,10 +492,10 @@ function get_satdata(
   end
 
   # Get CPro/CLay data from near the intersection
-  clay = sat.metadata.type == :CLay ? CLay(ms, primfiles, lidarrange, flightalt) :
-    CLay(ms, secfiles, lidarrange, flightalt)
-  cpro = sat.metadata.type == :CPro ? CPro(ms, primfiles, timespan, lidarprofile) :
-    CPro(ms, secfiles, timespan, lidarprofile)
+  clay = sat.metadata.type == :CLay ? CLay(ms, primfiles, lidarrange, flightalt, Float) :
+    CLay(ms, secfiles, lidarrange, flightalt, Float)
+  cpro = sat.metadata.type == :CPro ? CPro(ms, primfiles, timespan, lidarprofile, Float) :
+    CPro(ms, secfiles, timespan, lidarprofile, Float)
   clay = extract_timespan(clay, timespan)
   cpro = extract_timespan(cpro, timespan)
 
@@ -566,14 +558,42 @@ function preptrack(flight::DataFrame)
 end #function preptrack
 
 
+"""
+    get_floatprecision(arr)
+
+Try to eliminate abstract types in `arr`.
+"""
+function get_floatprecision(arr)
+  if isempty(arr)
+    return arr
+  elseif eltype(arr) <: AbstractArray
+    el = get_floatprecision.(arr)
+    return [el...]
+  else
+    return [arr...]
+  end
+end
+
+
 """Convert feet to kilometers"""
-ft2km(ft::Union{Missing,Real}) = 0.0003048ft
+function ft2km(ft::T)::T  where T<:Union{Missing,AbstractFloat}
+    0.0003048ft
+end
+
 
 """Convert feet to meters"""
-ft2m(ft::Union{Missing,Real}) = 0.3048ft
+function ft2m(ft::T)::T  where T<:Union{Missing,AbstractFloat}
+    0.3048ft
+end
+
 
 """Convert feet/min to m/s"""
-ftpmin2mps(ftpmin::Union{Missing,Real}) = 0.00508ftpmin
+function ftpmin2mps(ftpmin::T)::T  where T<:Union{Missing,AbstractFloat}
+    0.00508ftpmin
+end
+
 
 """Convert knots to m/s"""
-knot2mps(knot::Union{Missing,Real}) = 1.852knot/3.6
+function knot2mps(knot::T)::T  where T<:Union{Missing,AbstractFloat}
+    1.852knot/3.6
+end
