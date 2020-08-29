@@ -954,10 +954,13 @@ struct CPro
 
   """ unmodified constructor """
   function CPro(data::DataFrame)
-    standardnames = ["time", "lat", "lon", "feature", "EC532"]
+    standardnames = ["time", "lat", "lon", "feature", "EC532", "Htropo", "temp", "pressure"]
     standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
-      Vector{<:Vector{<:Union{Missing,Symbol}}}, Vector{<:Vector{<:Union{Missing,<:AbstractFloat}}}]
-    bounds = (:lat => (-90,90), :lon => (-180,180))
+      Vector{<:Vector{<:Union{Missing,Symbol}}}, Vector{<:Vector{<:Union{Missing,<:AbstractFloat}}},
+      Vector{<:AbstractFloat}, Vector{<:Vector{<:Union{Missing,<:AbstractFloat}}},
+      Vector{<:Vector{<:Union{Missing,<:AbstractFloat}}}]
+    bounds = (:lat => (-90,90), :lon => (-180,180), :Htropo => (4000,22_000),
+      :temp => (-120,60), :pressure => (1,1086))
     checkcols!(data, standardnames, standardtypes, bounds, "CPro")
     new(data)
   end #constructor 1 CPro
@@ -975,9 +978,12 @@ struct CPro
     utc = Vector{Vector{DateTime}}(undef, length(files))
     lat = Vector{Vector{Float}}(undef, length(files))
     lon = Vector{Vector{Float}}(undef, length(files))
-    # non-essential data
     fcf = Vector{Vector{Vector{<:Union{Missing,UInt16}}}}(undef, length(files))
-    ec532 = Vector{Vector{Vector{<:Union{Missing,Float32}}}}(undef, length(files))
+    # non-essential data
+    ec532 = Vector{Vector{Vector{<:Union{Missing,Float}}}}(undef, length(files))
+    Htropo = Vector{Vector{Float}}(undef, length(files))
+    temp = Vector{Vector{Vector{<:Union{Missing,Float}}}}(undef, length(files))
+    pres = Vector{Vector{Vector{<:Union{Missing,Float}}}}(undef, length(files))
     # Loop over files with cloud profile data
     for (i, file) in enumerate(files)
       ## Retrieve cloud profile data; assumes faulty files are filtered by SatData
@@ -990,10 +996,16 @@ struct CPro
       lon[i] = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
       mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
       lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
-      # Extract feature classification flags
       fcf[i] = get_lidarcolumn(fcf, ms, "Atmospheric_Volume_Description", lidarprofile)
+      # Extract non-essential data
       ec532[i] = get_lidarcolumn(ec532, ms, "Extinction_Coefficient_532", lidarprofile,
         true, missingvalues = -9999)
+      temp[i] = get_lidarcolumn(temp, ms, "Temperature", lidarprofile,
+        true, missingvalues = -9999)
+      pres[i] = get_lidarcolumn(pres, ms, "Pressure", lidarprofile,
+        true, missingvalues = -9999)
+      mat.eval_string(ms, "clear Htropo\ntry\nHtropo = hdfread(file, 'Tropopause_Height');\nend")
+      Htropo[i] = 1000vec(mat.jarray(mat.get_mvariable(ms, :Htropo)))
     end #loop over files
 
     # Rearrange time vector and get time range
@@ -1012,7 +1024,8 @@ struct CPro
     end
     # Construct and standardise data
     data = DataFrame(time=utc[idx], lat=[lat...;][idx], lon=[lon...;][idx],
-      feature=avd[idx], EC532=[ec532...;][idx])
+      feature=avd[idx], EC532=[ec532...;][idx], Htropo = [Htropo...;][idx],
+      temp=[temp...;][idx], pressure = [pres...;][idx])
     # Save time, lat/lon arrays, and feature classification flags (FCF) in CPro struct
     new(data)
   end #constructor 2 CPro
@@ -1021,7 +1034,8 @@ end #struct CPro
 
 """ External constructor for emtpy CPro struct """
 CPro(Float::DataType=Float32) = CPro(DataFrame(time = DateTime[], lat = Float[], lon = Float[],
-	feature = Vector{Symbol}[], EC532 = Vector{Float}[]))
+  feature = Vector{Symbol}[], EC532 = Vector{Float}[], Htropo = Float[], temp = Vector{Float}[],
+  pressure = Vector{Float}[]))
 
 ## Define structs related to intersection data
 
