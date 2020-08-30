@@ -40,12 +40,12 @@ end #function get_lidarheights
 
 
 """
-    append_lidardata!(
-      vec::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
+    function get_lidarcolumn(
+      vect::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
       ms::mat.MSession,
       variable::String,
       lidarprofile::NamedTuple,
-      coarse::Bool = false;
+      coarse::Bool = true;
       missingvalues = missing
     ) where T
 
@@ -62,7 +62,7 @@ function get_lidarcolumn(
   ms::mat.MSession,
   variable::String,
   lidarprofile::NamedTuple,
-  coarse::Bool = false;
+  coarse::Bool = true;
   missingvalues = missing
 ) where T
   # Read variable from hdf file with MATLAB
