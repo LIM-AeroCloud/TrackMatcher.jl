@@ -55,7 +55,6 @@ function loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5
         # Determine predominant flight direction, inflection points, and remove duplicate entries
         flightdata, flex, useLON = preptrack(flightdata)
         # Save the FlightData in the inventory vector
-        standardisecols!(flightdata)
         push!(inventory, FlightData(flightdata, FID,
           missing, missing, missing, flex, useLON, "VOLPE AEDT", file))
         # Empty data vectors
@@ -127,7 +126,6 @@ function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_0
         # Determine predominant flight direction, inflection points, and remove duplicate entries
         flightdata, flex, useLON = preptrack(flightdata)
         # Save the FlightData in the archive vector
-        standardisecols!(flightdata)
         push!(archive, FlightData(flightdata, FID, flights.flightID[n],
           flights.type[n], (orig=flights.orig[n],
           dest=flights.dest[n]), flex, useLON, "FlightAware", file))
@@ -297,7 +295,6 @@ function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=
     flight, flex, useLON = preptrack(flight)
 
     # Save data as FlightData
-    standardisecols!(flight)
     push!(archive, FlightData(flight, replace(filename, "_" => "/"), flightID,
       missing, (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
     # Monitor progress for progress bar
