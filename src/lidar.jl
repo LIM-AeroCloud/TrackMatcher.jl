@@ -58,13 +58,13 @@ in `lidarprofile`. Further information whether to use `coarse` levels (when set 
 in `vec`.
 """
 function get_lidarcolumn(
-  vect::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
+  T::DataType,
   ms::mat.MSession,
   variable::String,
-  lidarprofile::NamedTuple,
-  coarse::Bool = true;
+  lidarprofile::NamedTuple;
+  coarse::Bool = true,
   missingvalues = missing
-) where T
+)
   # Read variable from hdf file with MATLAB
 	mat.eval_string(ms, "try\nvar = hdfread(file, '$variable');\nend")
 	var = mat.jarray(mat.get_mvariable(ms, :var))
@@ -88,7 +88,7 @@ function get_lidarcolumn(
 			v
     else
       # Save row vector for refined heights data after transforming missing values
-      v = convert(Vector{Union{Missing,T}}, var[i,lidarprofile.itop:lidarprofile.ibottom])
+      v = convert(Matrix{Union{Missing,T}}, var[i,lidarprofile.itop:lidarprofile.ibottom,:])
       v[v.==missingvalues] .= missing
   		v = Vector{T}(undef,length(lidarprofile.fine))
   		v[1:lidarprofile.i30-1] = var[i,lidarprofile.itop:lidarprofile.itop+lidarprofile.i30-2,1]
