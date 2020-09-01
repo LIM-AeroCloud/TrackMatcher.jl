@@ -474,6 +474,7 @@ function get_satdata(
   X::Tuple{<:AbstractFloat, <:AbstractFloat},
   satspan::Int,
   flightalt::Real,
+  altmin::Real,
   flightid::Union{Int,String},
   lidarprofile::NamedTuple,
   lidarrange::Tuple{Real,Real},
@@ -492,8 +493,8 @@ function get_satdata(
   end
 
   # Get CPro/CLay data from near the intersection
-  clay = sat.metadata.type == :CLay ? CLay(ms, primfiles, lidarrange, flightalt, Float) :
-    CLay(ms, secfiles, lidarrange, flightalt, Float)
+  clay = sat.metadata.type == :CLay ? CLay(ms, primfiles, lidarrange, altmin, Float) :
+    CLay(ms, secfiles, lidarrange, altmin, Float)
   cpro = sat.metadata.type == :CPro ? CPro(ms, primfiles, timespan, lidarprofile, Float) :
     CPro(ms, secfiles, timespan, lidarprofile, Float)
   clay = extract_timespan(clay, timespan)
@@ -508,7 +509,6 @@ function get_satdata(
   feature = sat.metadata.type == :CPro ?
     atmosphericinfo(primdata, lidarprofile.fine, ts, flightalt, flightid) :
     atmosphericinfo(primdata, flightalt, ts)
-
   return cpro, clay, feature, ts
 end #function get_satdata
 

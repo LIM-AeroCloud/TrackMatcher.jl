@@ -3,6 +3,7 @@
       ms::mat.MSession,
       flight::FlightData,
       flighttracks::Vector,
+      altmin::Real,
       sat::SatData,
       sattracks::Vector,
       overlap::Vector{UnitRange},
@@ -20,9 +21,10 @@
 Using interpolated `flighttracks` and `sattracks`,
 add new spatial and temporal coordinates of all intersections of the current flight
 with satellite tracks to `Xdata`, if the overpass of the aircraft and the satellite
-at the intersection is within `maxtimediff` minutes. Additionally, save the measured
-`flight` and `sat` `tracked` data near the intersection (±`flightspan`/±`satspan`
-datapoints of the intersection) and information about the `accuracy`.
+at the intersection is within `maxtimediff` minutes and above `altmin` in meters.
+Additionally, save the measured `flight` and `sat` `tracked` data near the intersection
+(±`flightspan`/±`satspan` datapoints of the intersection) and information about the
+`accuracy`.
 
 When `savesecondsattype` is set to true, the additional satellite data type not
 used to derive the intersections from the `SatData` is stored as well in `Intersection`.
@@ -41,6 +43,7 @@ function find_intersections(
   ms::mat.MSession,
   flight::FlightData,
   flighttracks::Vector,
+  altmin::Real,
   sat::SatData,
   sattracks::Vector,
   maxtimediff::Int,
@@ -139,9 +142,8 @@ function find_intersections(
       if dup === nothing || dx < accuracy.intersection[dup]
         # Extract the DataFrame rows of the sat/flight data near the intersection
         Xflight, ift = get_flightdata(flight, X, flightspan)
-        cpro, clay, feature, ist = get_satdata(ms, sat, X, satspan,
-          Xflight.data.alt[ift], Xflight.metadata.dbID, lidarprofile, lidarrange,
-          savesecondsattype, Float)
+        cpro, clay, feature, ist = get_satdata(ms, sat, X, satspan, Xflight.data.alt[ift],
+          altmin, Xflight.metadata.dbID, lidarprofile, lidarrange, savesecondsattype, Float)
         Xsat = sat.metadata.type == :CPro ? cpro.data : clay.data
         # Calculate accuracies
         fxmeas = geo.LatLon(Xflight.data.lat[ift], Xflight.data.lon[ift])

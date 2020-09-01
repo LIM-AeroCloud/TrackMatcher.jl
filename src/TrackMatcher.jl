@@ -839,7 +839,7 @@ struct CLay
     night = Vector{BitVector}(undef, length(files))
     averaging = Vector{Vector{Vector{Int}}}(undef,length(files))
     # Convert mininmum flight altitude to meters
-    altmin = ft2km(altmin)
+    altmin = ft2km(Float(altmin))
     # Loop over files
     for (i, file) in enumerate(files)
       ## Retrieve cloud layer data; assumes faulty files are filtered by SatData
@@ -1245,9 +1245,9 @@ struct Intersection
         sattracks = interpolate_satdata(sat, overlap)
         flighttracks = interpolate_flightdata(flight, degsteps)
         # Calculate intersections and store data and metadata in DataFrames
-        currdata, currtrack, curraccuracy = find_intersections(ms, flight, flighttracks,
-          sat, sattracks, maxtimediff, stepwidth, Xradius, lidarprofile, lidarrange,
-          flightspan, satspan, savesecondsattype,Float)
+        currdata, currtrack, curraccuracy = find_intersections(ms, flight,
+          flighttracks, flights.metadata.altmin, sat, sattracks, maxtimediff, stepwidth, Xradius,
+          lidarprofile, lidarrange, flightspan, satspan, savesecondsattype,Float)
         append!(Xdata, currdata); append!(track, currtrack)
         append!(accuracy, curraccuracy)
       catch err

@@ -283,9 +283,10 @@ function atmosphericinfo(
   alt::AbstractFloat,
   isat::Int
 )::Union{Missing,Symbol}
+  top, base = sat.data.layer[isat]
   feature = try
-    for (i, (top, base)) in enumerate(sat.data.layer[isat])
-      if base ≤ alt ≤ top
+    for i = 1:length(top)
+      if base[i] ≤ alt ≤ top[i]
         return sat.data.feature[isat][i]
       end
     end
