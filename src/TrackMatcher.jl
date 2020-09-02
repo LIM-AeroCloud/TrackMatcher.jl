@@ -31,7 +31,7 @@ import DataFrames; const df = DataFrames
 import CSV
 import Dates
 import TimeZones; const tz = TimeZones
-import Geodesy; const geo = Geodesy
+import Distances; const dist = Distances
 import MATLAB; const mat = MATLAB
 import Statistics; const stats = Statistics
 import ProgressMeter; const pm = ProgressMeter
@@ -43,15 +43,11 @@ import DataFrames.DataFrame
 import Dates: DateTime, Date, Time
 import TimeZones.ZonedDateTime
 
-
 # Define Logger with log level
 logger = try logg.SimpleLogger(logfile, logg.Debug)
 catch; logg.ConsoleLogger(stdout, logg.Debug)
 end
 logg.global_logger(logger)
-
-# Define LatLon as broadcastable object
-Broadcast.broadcastable(o::geo.LatLon) = Ref(o)
 
 
 ## Define own Metadata structs

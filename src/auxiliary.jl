@@ -392,9 +392,8 @@ The `sat` data may be smaller than the `dataspan` at the edges of the `sat` `Dat
 function find_timespan(sat::DataFrame, X::Tuple{<:AbstractFloat, <:AbstractFloat},
   dataspan::Int=15)
   # Find index in sat data array with minimum distance to analytic intersection solutin
-  Xlatlon = geo.LatLon(X...)
-  coords = geo.LatLon.(sat.lat, sat.lon)
-  imin = argmin([geo.distance(coord, Xlatlon) for coord in coords])
+  coords = ((sat.lat[i], sat.lon[i]) for i = 1:size(sat,1))
+  imin = argmin(dist.haversine.(coords, [X], earthradius(X[1])))
   # Find first/last index of span acknowledging bounds of the data array
   t1 = max(1, min(imin-dataspan, length(sat.time)))
   t2 = min(length(sat.time), imin+dataspan)
@@ -427,19 +426,19 @@ to `flightdata` and return it together with the `index` in `flightdata` of the t
 closest to `X`.
 """
 function get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:AbstractFloat}, flightspan::Int)
-  # Convert to LatLon structs
-  Xlatlon = geo.LatLon(X...)
-  coords = geo.LatLon.(flight.data.lat, flight.data.lon)
+  # Generate coordinate pairs from lat/lon columns
+  coords = ((flight.data.lat[i], flight.data.lon[i]) for i = 1:size(flight.data,1))
   # Find the index (DataFrame row) of the intersection in the flight data
-  imin = argmin([geo.distance(coord, Xlatlon) for coord in coords])
+  imin = argmin(dist.haversine.(coords, [X], earthradius(X[1])))
   # Construct FlightData at Intersection
   t1 = max(1, min(imin-flightspan, length(flight.data.time)))
   t2 = min(length(flight.data.time), imin+flightspan)
   # t2 = t-timespan > length(data[:,1]) ? 0 : t2
   flightdata = FlightData(flight.data[t1:t2,:], flight.metadata)
 
-  return flightdata, argmin([geo.distance(coord, Xlatlon)
-    for coord in geo.LatLon.(flightdata.data.lat, flightdata.data.lon)])
+  flightcoords = ((flightdata.data.lat[i], flightdata.data.lon[i])
+    for i = 1:size(flightdata.data, 1))
+  return flightdata, argmin(dist.haversine.(flightcoords, [X], earthradius(X[1])))
 end #function get_flightdata
 
 
@@ -502,8 +501,8 @@ function get_satdata(
 
   # Define primary data and index of intersection in primary data
   primdata = sat.metadata.type == :CPro ? cpro : clay
-  ts = argmin([geo.distance(coord, geo.LatLon(X...))
-    for coord in geo.LatLon.(primdata.data.lat, primdata.data.lon)])
+  coords = ((primdata.data.lat[i], primdata.data.lon[i]) for i = 1:size(primdata.data, 1))
+  ts = argmin(dist.haversine.(coords, [X], earthradius(X[1])))
 
   # Get feature classification
   feature = sat.metadata.type == :CPro ?
@@ -559,19 +558,14 @@ end #function preptrack
 
 
 """
-    get_floatprecision(arr)
+    earthradius(lat::T) -> R::T
 
-Try to eliminate abstract types in `arr`.
+Calculate the Earth's radius `R` in dependence of the current `lat`itude
+condidering the ellipsoidal shape of the Earth due to the rotational flattening.
 """
-function get_floatprecision(arr)
-  if isempty(arr)
-    return arr
-  elseif eltype(arr) <: AbstractArray
-    el = get_floatprecision.(arr)
-    return [el...]
-  else
-    return [arr...]
-  end
+function earthradius(lat::T)::T where T<:AbstractFloat
+  req, rpol = 6378137, 6356752
+  √(((req^2*cosd(lat))^2 + (rpol^2*sind(lat))^2) / ((req*cosd(lat))^2 + (rpol*sind(lat))^2))
 end
 
 
