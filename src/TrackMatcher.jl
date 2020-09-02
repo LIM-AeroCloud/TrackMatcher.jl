@@ -1207,6 +1207,8 @@ struct Intersection
     lidarrange::Tuple{Real,Real}=(15_000,-Inf),
     stepwidth::Real=1000,
     Xradius::Real=20_000,
+    epsilon::Real=-1,
+    tolerance::Real=-1,
     Float::DataType=Float32,
     remarks=nothing
   )
@@ -1222,6 +1224,9 @@ struct Intersection
     lidarprofile = get_lidarheights(lidarrange, Float)
     # Save stepwidth in degrees at equator using Earth's equatorial circumference to convert
     degsteps  = stepwidth*360/40_075_017
+    # Calculate default tolerances
+    epsilon == -1 && (epsilon = 2stepwidth)
+    tolerance == -1 && (tolerance = stepwidth)
     # New MATLAB session
     ms = mat.MSession()
     # Loop over data from different datasets and interpolate track data and time, throw error on failure
@@ -1242,8 +1247,9 @@ struct Intersection
         flighttracks = interpolate_flightdata(flight, degsteps)
         # Calculate intersections and store data and metadata in DataFrames
         currdata, currtrack, curraccuracy = find_intersections(ms, flight,
-          flighttracks, flights.metadata.altmin, sat, sattracks, maxtimediff, stepwidth, Xradius,
-          lidarprofile, lidarrange, flightspan, satspan, savesecondsattype,Float)
+          flighttracks, flights.metadata.altmin, sat, sattracks, maxtimediff,
+          Xradius, epsilon, tolerance, lidarprofile, lidarrange,
+          flightspan, satspan, savesecondsattype,Float)
         append!(Xdata, currdata); append!(track, currtrack)
         append!(accuracy, curraccuracy)
       catch err

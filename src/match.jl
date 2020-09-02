@@ -47,8 +47,9 @@ function find_intersections(
   sat::SatData,
   sattracks::Vector,
   maxtimediff::Int,
-  dmin::Real,
   Xradius::Real,
+  epsilon::Real,
+  tolerance::Real,
   lidarprofile::NamedTuple,
   lidarrange::Tuple{Real,Real},
   flightspan::Int,
@@ -104,6 +105,7 @@ function find_intersections(
       # Determine intersection between the 2 point pairs analytically by linear interpolation
       f1, f2 = Float64.(fcoord[m1]), Float64.(fcoord[m2])
       s1, s2 = Float64.(scoord[m1]), Float64.(scoord[m2])
+      dist.haversine(f1, s1, earthradius(f1[1])) < epsilon || break
       X = (((f1[1]*f2[2] - f1[2]*f2[1]) * (s1[1] - s2[1]) - (f1[1] - f2[1]) *
         (s1[1]*s2[2] - s1[2]*s2[1])) / ((f1[1] - f2[1])*(s1[2] - s2[2]) -
         (f1[2] - f2[2])*(s1[1] - s2[1])), ((f1[1]*f2[2] - f1[2]*f2[1]) *
@@ -123,7 +125,7 @@ function find_intersections(
         break
       end
       dx = dist.haversine(Xf, Xs, earthradius(Xf[1]))
-      dx < dmin || break # ignore solutions outside tolerance
+      dx < tolerance || break # ignore solutions outside tolerance
       # Determine time difference between aircraf/satellite at intersection
       tmf = flight.metadata.useLON ? timesec(ft.time(X[2])) : timesec(ft.time(X[1]))
       tms = timesec(st.time(X[1]))
