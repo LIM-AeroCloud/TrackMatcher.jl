@@ -513,19 +513,23 @@ end #function get_satdata
 
 
 """
-    timesec(t::Real) -> DateTime
+    interpolate_time(data::DataFrame, X::Tuple{T,T}  where T<:AbstractFloat) -> DateTime
 
-From a UNIX DateTime, return a DateTime rounded to the second
+Return the linearly interpolated time at `X` (a lat/lon coordinate pair)
+to the `data` in a DataFrame with a `time`, `lat`, and `lon` column.
+
+Time is linearly interpolated between the 2 closest points to `X`.
 """
-timesec(t::Real) = round(Dates.unix2datetime(t), Dates.Second)
-
-
-"""
-    timesec(t::Union{DateTime,ZonedDateTime}) -> DateTime
-
-Round a `DateTime` or `ZonedDateTime` to the second.
-"""
-timesec(t::Union{DateTime,ZonedDateTime}) = round(t, Dates.Second)
+function interpolate_time(data::DataFrame, X::Tuple{T,T}  where T<:AbstractFloat)
+  # Calculate distances for each coordinate pair to X
+  d = dist.haversine.(((φ, λ) for (φ, λ) in zip(data.lat, data.lon)), [X], earthradius(X[1]))
+  index = closest_points(d)
+  d = dist.haversine((data.lat[index[1]], data.lon[index[1]]),
+    (data.lat[index[2]], data.lon[index[2]]), earthradius(data.lat[index[1]]))
+  ds = dist.haversine((data.lat[index[1]], data.lon[index[1]]), X, earthradius(data.lat[index[1]]))
+  dt = data.time[index[2]] - data.time[index[1]]
+  round(data.time[index[1]] + Dates.Millisecond(round(ds/d*dt.value)), Dates.Second)
+end #function interpolate_time
 
 
 """
@@ -555,6 +559,29 @@ function preptrack(flight::DataFrame)
 
   return flight, flex, useLON
 end #function preptrack
+
+
+"""
+    closest_points(arr::Vector{T}) where T<:AbstractFloat -> Tuple{Int,Int}
+
+Return the indices of the elements in `arr` with the minimum value and the adjacent
+next larger value.
+
+Vector `arr` consists of distances between coinciding coordinate pairs of different tracks.
+"""
+function closest_points(arr::Vector{T}) where T<:AbstractFloat
+  m1 = argmin(arr)
+  m2 = if m1 == 1
+    2
+  elseif m1 == length(arr)
+    m1 - 1
+  elseif arr[m1-1] < arr[m1+1]
+    m1-1
+  else
+    m1+1
+  end
+  return m1, m2
+end #function closest_points
 
 
 """

@@ -92,16 +92,7 @@ function find_intersections(
     # Loop over track segment until all intersections within precision are found
     while length(fcoord) > 1
       # Find minimal distance and second least adjacent distance
-      m1 = argmin(d)
-      m2 = if m1 == 1
-        2
-      elseif m1 == length(d)
-        m1 - 1
-      elseif d[m1-1] < d[m1+1]
-        m1-1
-      else
-        m1+1
-      end
+      m1, m2 = closest_points(d)
       # Determine intersection between the 2 point pairs analytically by linear interpolation
       f1, f2 = Float64.(fcoord[m1]), Float64.(fcoord[m2])
       s1, s2 = Float64.(scoord[m1]), Float64.(scoord[m2])
@@ -127,8 +118,8 @@ function find_intersections(
       dx = dist.haversine(Xf, Xs, earthradius(Xf[1]))
       dx < tolerance || break # ignore solutions outside tolerance
       # Determine time difference between aircraf/satellite at intersection
-      tmf = flight.metadata.useLON ? timesec(ft.time(X[2])) : timesec(ft.time(X[1]))
-      tms = timesec(st.time(X[1]))
+      tmf = interpolate_time(flight.data, X)
+      tms = interpolate_time(sat.data, X)
       dt = Dates.canonicalize(Dates.CompoundPeriod(tms-tmf))
       # Consider only intersections within allowed time span
       abs(tmf - tms) < Dates.Minute(maxtimediff) || break
