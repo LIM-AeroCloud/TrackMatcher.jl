@@ -259,13 +259,10 @@ function interpolate_satdata(
   for r in overlap
     # Interpolate track data with PCHIP
     ps = pchip(sat.data.lat[r.range], sat.data.lon[r.range])
-    # Convert times to UNIX times for interpolation
-    unixtime = Dates.datetime2unix.(sat.data.time[r.range])
-    pt = pchip(sat.data.lat[r.range], unixtime)
     # Re-convert UNIX time values to DateTimes
-    # Save the interpolation functions for track and time data for the current dataset
+    # Save the interpolation functions for track data for the current dataset
     # together with the min/max of the latitude (allowed x value range)
-    push!(idata, (track=interpolate(ps), time=interpolate(pt), min=r.min, max=r.max))
+    push!(idata, (track=interpolate(ps), min=r.min, max=r.max))
   end #loop over sat ranges
 
   # Return a vector with interpolation functions for each dataset
@@ -293,17 +290,13 @@ function interpolate_flightdata(flight::FlightData, stepwidth::Real)
     yi = interpolate.(pf, xi)
     # Consider only data segments with more than one data point
     length(xi) > 1 || continue
-    # Convert times to UNIX times and interpolate with PCHIP
-    unixtime = Dates.datetime2unix.(flight.data.time[f.range])
-    pt = pchip(x[f.range], unixtime)
-    ti = Dates.unix2datetime.(interpolate.(pt, xi))
     # Save the interpolated data to a vector
     if flight.metadata.useLON
-      push!(flightdata, (lat = yi, lon =  xi, t = ti, track = interpolate(pf), time = interpolate(pt),
+      push!(flightdata, (lat = yi, lon =  xi, track = interpolate(pf),
         min = minimum(flight.data.lat[f.range]), max = maximum(flight.data.lat[f.range])))
     else
-      push!(flightdata, (lat = xi, lon =  yi, t = ti,
-        track = interpolate(pf), time = interpolate(pt), min = f.min, max = f.max))
+      push!(flightdata, (lat = xi, lon =  yi, track = interpolate(pf),
+        min = f.min, max = f.max))
     end
   end
 
