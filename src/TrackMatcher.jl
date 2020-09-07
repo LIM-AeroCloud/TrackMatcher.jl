@@ -1207,8 +1207,8 @@ struct Intersection
     lidarrange::Tuple{Real,Real}=(15_000,-Inf),
     stepwidth::Real=1000,
     Xradius::Real=20_000,
-    epsilon::Real=-1,
-    tolerance::Real=-1,
+    epsilon::Real=NaN,
+    tolerance::Real=NaN,
     Float::DataType=Float32,
     remarks=nothing
   )
@@ -1225,8 +1225,8 @@ struct Intersection
     # Save stepwidth in degrees at equator using Earth's equatorial circumference to convert
     degsteps  = stepwidth*360/40_075_017
     # Calculate default tolerances
-    epsilon == -1 && (epsilon = 2stepwidth)
-    tolerance == -1 && (tolerance = stepwidth)
+    isnan(epsilon) && (epsilon = 2stepwidth)
+    isnan(tolerance) && (tolerance = stepwidth)
     # New MATLAB session
     ms = mat.MSession()
     # Loop over data from different datasets and interpolate track data and time, throw error on failure
