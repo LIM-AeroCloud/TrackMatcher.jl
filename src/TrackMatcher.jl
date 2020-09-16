@@ -1249,7 +1249,7 @@ struct Intersection
         currdata, currtrack, curraccuracy = find_intersections(ms, flight,
           flighttracks, flights.metadata.altmin, sat, sattracks, maxtimediff,
           Xradius, epsilon, tolerance, lidarprofile, lidarrange,
-          flightspan, satspan, savesecondsattype,Float)
+          flightspan, satspan, savesecondsattype, Float)
         append!(Xdata, currdata); append!(track, currtrack)
         append!(accuracy, curraccuracy)
       catch err

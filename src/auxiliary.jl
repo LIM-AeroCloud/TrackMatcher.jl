@@ -56,12 +56,12 @@ function remdup!(data::DataFrame, useLON::Bool)
   x, y = useLON ? (:lon, :lat) : (:lat, :lon)
   # Initialise
   i = 1
-  iEnd = length(data[!,x])
+  iEnd = size(data, 1)
   # Loop over entries in vector
   while i < iEnd
     j = i + 1 # index for next consecutive line
-    while j ≤ iEnd && data[i, x] ≈ data[j, x]
-      if data[j-1, y] ≈ data[j, y]
+    while j ≤ iEnd && isapprox(data[i, x], data[j, x], atol = eps(data[j, x]))
+      if isapprox(data[j-1, y], data[j, y], atol = eps(data[j, y]))
         # Delete datarow, if x and y are identical
         delete!(data, j-1)
         # Decrease the counter for the end of the arrays
@@ -492,10 +492,24 @@ function get_satdata(
   end
 
   # Get CPro/CLay data from near the intersection
-  clay = sat.metadata.type == :CLay ? CLay(ms, primfiles, lidarrange, altmin, Float) :
-    CLay(ms, secfiles, lidarrange, altmin, Float)
-  cpro = sat.metadata.type == :CPro ? CPro(ms, primfiles, timespan, lidarprofile, Float) :
-    CPro(ms, secfiles, timespan, lidarprofile, Float)
+  clay = if sat.metadata.type == :CLay
+    CLay(ms, primfiles, lidarrange, altmin, Float)
+  else
+    try CLay(ms, secfiles, lidarrange, altmin, Float)
+    catch
+      println(); @warn "could not load additional layer data" flightid
+      CLay()
+    end
+  end
+  cpro = if sat.metadata.type == :CPro
+    CPro(ms, primfiles, timespan, lidarprofile, Float)
+  else
+    try CPro(ms, secfiles, timespan, lidarprofile, Float)
+    catch
+      println(); @warn "could not load additional profile data" flightid
+      CPro()
+    end
+  end
   clay = extract_timespan(clay, timespan)
   cpro = extract_timespan(cpro, timespan)
 
