@@ -31,7 +31,7 @@ import DataFrames; const df = DataFrames
 import CSV
 import Dates
 import TimeZones; const tz = TimeZones
-import Geodesy; const geo = Geodesy
+import Distances; const dist = Distances
 import MATLAB; const mat = MATLAB
 import Statistics; const stats = Statistics
 import ProgressMeter; const pm = ProgressMeter
@@ -43,15 +43,11 @@ import DataFrames.DataFrame
 import Dates: DateTime, Date, Time
 import TimeZones.ZonedDateTime
 
-
 # Define Logger with log level
 logger = try logg.SimpleLogger(logfile, logg.Debug)
 catch; logg.ConsoleLogger(stdout, logg.Debug)
 end
 logg.global_logger(logger)
-
-# Define LatLon as broadcastable object
-Broadcast.broadcastable(o::geo.LatLon) = Ref(o)
 
 
 ## Define own Metadata structs
@@ -1211,6 +1207,8 @@ struct Intersection
     lidarrange::Tuple{Real,Real}=(15_000,-Inf),
     stepwidth::Real=1000,
     Xradius::Real=20_000,
+    epsilon::Real=NaN,
+    tolerance::Real=NaN,
     Float::DataType=Float32,
     remarks=nothing
   )
@@ -1226,6 +1224,9 @@ struct Intersection
     lidarprofile = get_lidarheights(lidarrange, Float)
     # Save stepwidth in degrees at equator using Earth's equatorial circumference to convert
     degsteps  = stepwidth*360/40_075_017
+    # Calculate default tolerances
+    isnan(epsilon) && (epsilon = 2stepwidth)
+    isnan(tolerance) && (tolerance = stepwidth)
     # New MATLAB session
     ms = mat.MSession()
     # Loop over data from different datasets and interpolate track data and time, throw error on failure
@@ -1246,8 +1247,9 @@ struct Intersection
         flighttracks = interpolate_flightdata(flight, degsteps)
         # Calculate intersections and store data and metadata in DataFrames
         currdata, currtrack, curraccuracy = find_intersections(ms, flight,
-          flighttracks, flights.metadata.altmin, sat, sattracks, maxtimediff, stepwidth, Xradius,
-          lidarprofile, lidarrange, flightspan, satspan, savesecondsattype,Float)
+          flighttracks, flights.metadata.altmin, sat, sattracks, maxtimediff,
+          Xradius, epsilon, tolerance, lidarprofile, lidarrange,
+          flightspan, satspan, savesecondsattype, Float)
         append!(Xdata, currdata); append!(track, currtrack)
         append!(accuracy, curraccuracy)
       catch err

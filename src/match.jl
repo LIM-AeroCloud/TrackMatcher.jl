@@ -47,8 +47,9 @@ function find_intersections(
   sat::SatData,
   sattracks::Vector,
   maxtimediff::Int,
-  dmin::Real,
   Xradius::Real,
+  epsilon::Real,
+  tolerance::Real,
   lidarprofile::NamedTuple,
   lidarrange::Tuple{Real,Real},
   flightspan::Int,
@@ -76,66 +77,55 @@ function find_intersections(
     slon = st.track(ilat)
 
     # Calculate coordinate pairs of sat/flight data
-    fcoord = geo.LatLon[]
+    fcoord, radius = Tuple{Float,Float}[], Float[]
     for (lat, lon) in zip(ilat, flon)
-      push!(fcoord, geo.LatLon(lat, lon))
+      push!(fcoord, (lat, lon))
+      push!(radius, earthradius(lat))
     end
-    scoord = geo.LatLon[]
+    scoord = Tuple{Float,Float}[]
     for (lat, lon) in zip(ilat, slon)
-      push!(scoord, geo.LatLon(lat, lon))
+      push!(scoord, (lat, lon))
     end
 
     # Calculate distances between each coordinate pair
-    d = geo.distance.(fcoord, scoord)
+    d = dist.haversine.(fcoord, scoord, radius)
     # Loop over track segment until all intersections within precision are found
     while length(fcoord) > 1
       # Find minimal distance and second least adjacent distance
-      m1 = argmin(d)
-      m2 = if m1 == 1
-        2
-      elseif m1 == length(d)
-        m1 - 1
-      elseif d[m1-1] < d[m1+1]
-        m1-1
-      else
-        m1+1
-      end
+      m1, m2 = closest_points(d)
       # Determine intersection between the 2 point pairs analytically by linear interpolation
-      X = (((fcoord[m1].lat*fcoord[m2].lon - fcoord[m1].lon*fcoord[m2].lat) *
-        (scoord[m1].lat - scoord[m2].lat) - (fcoord[m1].lat - fcoord[m2].lat) *
-        (scoord[m1].lat*scoord[m2].lon - scoord[m1].lon*scoord[m2].lat)) /
-        ((fcoord[m1].lat - fcoord[m2].lat)*(scoord[m1].lon - scoord[m2].lon) -
-        (fcoord[m1].lon - fcoord[m2].lon)*(scoord[m1].lat - scoord[m2].lat)),
-        ((fcoord[m1].lat*fcoord[m2].lon - fcoord[m1].lon*fcoord[m2].lat) *
-        (scoord[m1].lon - scoord[m2].lon) - (fcoord[m1].lon - fcoord[m2].lon) *
-        (scoord[m1].lat*scoord[m2].lon - scoord[m1].lon*scoord[m2].lat)) /
-        ((fcoord[m1].lat - fcoord[m2].lat)*(scoord[m1].lon - scoord[m2].lon) -
-        (fcoord[m1].lon - fcoord[m2].lon)*(scoord[m1].lat - scoord[m2].lat)))
+      f1, f2 = Float64.(fcoord[m1]), Float64.(fcoord[m2])
+      s1, s2 = Float64.(scoord[m1]), Float64.(scoord[m2])
+      dist.haversine(f1, s1, earthradius(f1[1])) < epsilon || break
+      X = (((f1[1]*f2[2] - f1[2]*f2[1]) * (s1[1] - s2[1]) - (f1[1] - f2[1]) *
+        (s1[1]*s2[2] - s1[2]*s2[1])) / ((f1[1] - f2[1])*(s1[2] - s2[2]) -
+        (f1[2] - f2[2])*(s1[1] - s2[1])), ((f1[1]*f2[2] - f1[2]*f2[1]) *
+        (s1[2] - s2[2]) - (f1[2] - f2[2]) * (s1[1]*s2[2] - s1[2]*s2[1])) /
+        ((f1[1] - f2[1])*(s1[2] - s2[2]) - (f1[2] - f2[2])*(s1[1] - s2[1])))
       # Filter mismatches and unreasonable analytic solutions
       any(isnan.(X)) && break
       -90 .≤ X[1] .≤ 90 || break
       -180 .≤ X[2] .≤ 180 || break
       # Determine intersection from flight/satellite point of view and deviation
-      Xf = try flight.metadata.useLON ?
-        geo.LatLon(ft.track(X[2]), X[2]) : geo.LatLon(X[1], ft.track(X[1]))
+      Xf = try flight.metadata.useLON ? (ft.track(X[2]), X[2]) : (X[1], ft.track(X[1]))
       catch
         break
       end
-      Xs = try geo.LatLon(X[1], st.track(X[1]))
+      Xs = try (X[1], st.track(X[1]))
       catch
         break
       end
-      dx = geo.distance(Xf, Xs)
-      dx < dmin || break # ignore solutions outside tolerance
+      dx = dist.haversine(Xf, Xs, earthradius(Xf[1]))
+      dx < tolerance || break # ignore solutions outside tolerance
       # Determine time difference between aircraf/satellite at intersection
-      tmf = flight.metadata.useLON ? timesec(ft.time(X[2])) : timesec(ft.time(X[1]))
-      tms = timesec(st.time(X[1]))
+      tmf = interpolate_time(flight.data, X)
+      tms = interpolate_time(sat.data, X)
       dt = Dates.canonicalize(Dates.CompoundPeriod(tms-tmf))
       # Consider only intersections within allowed time span
       abs(tmf - tms) < Dates.Minute(maxtimediff) || break
       # Look at previous intersections at the coordinates within Xradius
-      dup = findfirst([geo.distance(Xf, geo.LatLon(Xdata[i,[:lat,:lon]]...))
-        for i = 1:length(Xdata.id)] .< Xradius)
+      dup = findfirst(dist.haversine.([Xf], ((Xdata.lat[i], Xdata.lon[i])
+        for i = 1:size(Xdata, 1)), earthradius(Xf[1])) .< Xradius)
       # Only save the most accurate intersection calculation within an Xradius
       # of the current intersection, i.e. only continue, if current intersection
       # is more accurate or new (not within Xradius)
@@ -146,9 +136,9 @@ function find_intersections(
           altmin, Xflight.metadata.dbID, lidarprofile, lidarrange, savesecondsattype, Float)
         Xsat = sat.metadata.type == :CPro ? cpro.data : clay.data
         # Calculate accuracies
-        fxmeas = geo.LatLon(Xflight.data.lat[ift], Xflight.data.lon[ift])
+        fxmeas = (Xflight.data.lat[ift], Xflight.data.lon[ift])
         ftmeas = Dates.canonicalize(Dates.CompoundPeriod(tmf - Xflight.data.time[ift]))
-        sxmeas = geo.LatLon(Xsat.lat[ist], Xsat.lon[ist])
+        sxmeas = (Xsat.lat[ist], Xsat.lon[ist])
         stmeas = Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.time[ist]))
 
         if dup === nothing # new data
@@ -156,22 +146,26 @@ function find_intersections(
           counter += 1
           id = string(flight.metadata.source,-,flight.metadata.dbID,-,counter)
           # Save intersection data
-          push!(Xdata, (id=id, lat=Xf.lat, lon=Xf.lon, alt=Xflight.data.alt[ift],
+          push!(Xdata, (id=id, lat=Xf[1], lon=Xf[2], alt=Xflight.data.alt[ift],
             tdiff=dt, tflight = tmf, tsat = tms, feature=feature))
           push!(track, (id=id, flight=Xflight, CPro=cpro, CLay = clay))
           # Save accuracies
-          push!(accuracy, (id=id, intersection=dx, flightcoord=geo.distance(Xf,fxmeas),
-            satcoord=geo.distance(Xs, sxmeas), flighttime=ftmeas, sattime=stmeas))
+          push!(accuracy, (id=id, intersection=dx,
+            flightcoord=dist.haversine(Xf,fxmeas,earthradius(Xf[1])),
+            satcoord=dist.haversine(Xs, sxmeas, earthradius(Xs[1])),
+            flighttime=ftmeas, sattime=stmeas))
         else # more exact intersection calculations
           # Find most accurate solution
           dx < accuracy.intersection[dup] || break
           # Save intersection data
-          Xdata[dup,:] = (id=Xdata.id[dup], lat=Xf.lat, lon=Xf.lon, alt=Xflight.data.alt[ift],
+          Xdata[dup,:] = (id=Xdata.id[dup], lat=Xf[1], lon=Xf[2], alt=Xflight.data.alt[ift],
             tdiff=dt, tflight = tmf, tsat = tms, feature=feature)
           track[dup,:] = (id=Xdata.id[dup], flight=Xflight, CPro=cpro, CLay = clay)
           # Save accuracies
-          accuracy[dup,:] = (id=Xdata.id[dup], intersection=dx, flightcoord=geo.distance(Xf,fxmeas),
-            satcoord=geo.distance(Xs, sxmeas), flighttime=ftmeas, sattime=stmeas)
+          accuracy[dup,:] = (id=Xdata.id[dup], intersection=dx,
+            flightcoord=dist.haversine(Xf,fxmeas,earthradius(Xf[1])),
+            satcoord=dist.haversine(Xs, sxmeas, earthradius(Xs[1])),
+            flighttime=ftmeas, sattime=stmeas)
         end
       end
       # Reduce distance, flight, and sat coordinates by current indices, used for analytic solution of X
@@ -179,9 +173,9 @@ function find_intersections(
       deleteat!(scoord, sort([m1,m2]))
       deleteat!(fcoord, sort([m1,m2]))
       # Remove further entries within Xradius of the current intersection find
-      d = d[geo.distance.(geo.LatLon(X...),fcoord) .> Xradius]
-      scoord = scoord[geo.distance.(geo.LatLon(X...),fcoord) .> Xradius]
-      fcoord = fcoord[geo.distance.(geo.LatLon(X...),fcoord) .> Xradius]
+      d = d[dist.haversine.([X],fcoord,earthradius(X[1])) .> Xradius]
+      scoord = scoord[dist.haversine.([X],fcoord,earthradius(X[1])) .> Xradius]
+      fcoord = fcoord[dist.haversine.([X],fcoord,earthradius(X[1])) .> Xradius]
     end #loop finding intersections in track segment
   end #loop over flight and sat tracks
 
@@ -265,13 +259,10 @@ function interpolate_satdata(
   for r in overlap
     # Interpolate track data with PCHIP
     ps = pchip(sat.data.lat[r.range], sat.data.lon[r.range])
-    # Convert times to UNIX times for interpolation
-    unixtime = Dates.datetime2unix.(sat.data.time[r.range])
-    pt = pchip(sat.data.lat[r.range], unixtime)
     # Re-convert UNIX time values to DateTimes
-    # Save the interpolation functions for track and time data for the current dataset
+    # Save the interpolation functions for track data for the current dataset
     # together with the min/max of the latitude (allowed x value range)
-    push!(idata, (track=interpolate(ps), time=interpolate(pt), min=r.min, max=r.max))
+    push!(idata, (track=interpolate(ps), min=r.min, max=r.max))
   end #loop over sat ranges
 
   # Return a vector with interpolation functions for each dataset
@@ -299,17 +290,13 @@ function interpolate_flightdata(flight::FlightData, stepwidth::Real)
     yi = interpolate.(pf, xi)
     # Consider only data segments with more than one data point
     length(xi) > 1 || continue
-    # Convert times to UNIX times and interpolate with PCHIP
-    unixtime = Dates.datetime2unix.(flight.data.time[f.range])
-    pt = pchip(x[f.range], unixtime)
-    ti = Dates.unix2datetime.(interpolate.(pt, xi))
     # Save the interpolated data to a vector
     if flight.metadata.useLON
-      push!(flightdata, (lat = yi, lon =  xi, t = ti, track = interpolate(pf), time = interpolate(pt),
+      push!(flightdata, (lat = yi, lon =  xi, track = interpolate(pf),
         min = minimum(flight.data.lat[f.range]), max = maximum(flight.data.lat[f.range])))
     else
-      push!(flightdata, (lat = xi, lon =  yi, t = ti,
-        track = interpolate(pf), time = interpolate(pt), min = f.min, max = f.max))
+      push!(flightdata, (lat = xi, lon =  yi, track = interpolate(pf),
+        min = f.min, max = f.max))
     end
   end
 
