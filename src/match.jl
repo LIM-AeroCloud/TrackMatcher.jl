@@ -143,7 +143,11 @@ function find_intersections(
         stmeas = Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.time[ist]))
         # Exclude data with long distances to nearest flight measurement
         flightdist = dist.haversine(Xf,fxmeas,earthradius(Xf[1]))
-        flightdist > expdist && break
+        if flightdist > expdist
+          @info("maximum distance of intersection to next track point exceeded; data excluded",
+            flight.metadata.dbID)
+          break
+        end
 
         if dup === nothing # new data
           # Construct ID of current Intersection

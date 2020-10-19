@@ -44,8 +44,8 @@ import Dates: DateTime, Date, Time
 import TimeZones.ZonedDateTime
 
 # Define Logger with log level
-logger = try logg.SimpleLogger(logfile, logg.Debug)
-catch; logg.ConsoleLogger(stdout, logg.Debug)
+logger = try logg.SimpleLogger(logfile, logg.Info)
+catch; logg.ConsoleLogger(stdout, logg.Info)
 end
 logg.global_logger(logger)
 
