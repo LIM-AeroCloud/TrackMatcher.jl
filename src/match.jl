@@ -54,6 +54,7 @@ function find_intersections(
   lidarrange::Tuple{Real,Real},
   flightspan::Int,
   satspan::Int,
+  expdist::Real,
   savesecondsattype::Bool,
   Float::DataType=Float32
 )
@@ -140,6 +141,9 @@ function find_intersections(
         ftmeas = Dates.canonicalize(Dates.CompoundPeriod(tmf - Xflight.data.time[ift]))
         sxmeas = (Xsat.lat[ist], Xsat.lon[ist])
         stmeas = Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.time[ist]))
+        # Exclude data with long distances to nearest flight measurement
+        flightdist = dist.haversine(Xf,fxmeas,earthradius(Xf[1]))
+        flightdist > expdist && break
 
         if dup === nothing # new data
           # Construct ID of current Intersection
@@ -150,8 +154,7 @@ function find_intersections(
             tdiff=dt, tflight = tmf, tsat = tms, feature=feature))
           push!(track, (id=id, flight=Xflight, CPro=cpro, CLay = clay))
           # Save accuracies
-          push!(accuracy, (id=id, intersection=dx,
-            flightcoord=dist.haversine(Xf,fxmeas,earthradius(Xf[1])),
+          push!(accuracy, (id=id, intersection=dx, flightcoord=flightdist,
             satcoord=dist.haversine(Xs, sxmeas, earthradius(Xs[1])),
             flighttime=ftmeas, sattime=stmeas))
         else # more exact intersection calculations
@@ -162,8 +165,7 @@ function find_intersections(
             tdiff=dt, tflight = tmf, tsat = tms, feature=feature)
           track[dup,:] = (id=Xdata.id[dup], flight=Xflight, CPro=cpro, CLay = clay)
           # Save accuracies
-          accuracy[dup,:] = (id=Xdata.id[dup], intersection=dx,
-            flightcoord=dist.haversine(Xf,fxmeas,earthradius(Xf[1])),
+          accuracy[dup,:] = (id=Xdata.id[dup], intersection=dx, flightcoord=flightdist,
             satcoord=dist.haversine(Xs, sxmeas, earthradius(Xs[1])),
             flighttime=ftmeas, sattime=stmeas)
         end
@@ -195,7 +197,8 @@ the end of the flight.
 function findoverlap(flight::FlightData, sat::SatData, maxtimediff::Int)
 
   # Initialise
-  overlap = NamedTuple{(:range, :min, :max),Tuple{UnitRange, Real, Real}}[]; t1 = t2 = nothing
+  overlap = NamedTuple{(:range, :min, :max),Tuple{UnitRange, Real, Real}}[]
+  t1 = t2 = nothing
   ## Retrieve sat data in the range ±maxtimediff minutes before and after the flight
   # Set time span
   t1 = findfirst(sat.data.time .≥ flight.data.time[1] - Dates.Minute(maxtimediff))

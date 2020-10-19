@@ -1209,6 +1209,7 @@ struct Intersection
     Xradius::Real=20_000,
     epsilon::Real=NaN,
     tolerance::Real=NaN,
+    expdist::Real=100_000,
     Float::DataType=Float32,
     remarks=nothing
   )
@@ -1223,7 +1224,7 @@ struct Intersection
     # Get lidar altitude levels
     lidarprofile = get_lidarheights(lidarrange, Float)
     # Save stepwidth in degrees at equator using Earth's equatorial circumference to convert
-    degsteps  = stepwidth*360/40_075_017
+    degsteps = stepwidth*360/40_075_017
     # Calculate default tolerances
     isnan(epsilon) && (epsilon = 2stepwidth)
     isnan(tolerance) && (tolerance = stepwidth)
@@ -1249,7 +1250,7 @@ struct Intersection
         currdata, currtrack, curraccuracy = find_intersections(ms, flight,
           flighttracks, flights.metadata.altmin, sat, sattracks, maxtimediff,
           Xradius, epsilon, tolerance, lidarprofile, lidarrange,
-          flightspan, satspan, savesecondsattype, Float)
+          flightspan, satspan, expdist, savesecondsattype, Float)
         append!(Xdata, currdata); append!(track, currtrack)
         append!(accuracy, curraccuracy)
       catch err
