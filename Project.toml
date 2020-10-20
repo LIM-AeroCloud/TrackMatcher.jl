@@ -1,8 +1,8 @@
 name = "TrackMatcher"
 uuid = "2cc584ca-dc9e-11e9-3e2d-1d1fc79f0777"
 authors = ["Peter Bräuer <pb866.git@gmail.com>"]
-julia = "≥1.0"
-version = "0.3.0-DEV"
+julia = "≥1.5"
+version = "0.4.0-DEV"
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
