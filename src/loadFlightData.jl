@@ -14,14 +14,13 @@ function loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5
 
   # Initialise inventory file array and start MATLAB for PCHIP fitting
   inventory = FlightData[]
-  parallel = VERSION ≥ v"1.3" ? true : false
 
   # Loop over files
   prog = pm.Progress(2length(files), "load inventory...")
   for file in files
     # Load data
     flights = CSV.File(file, datarow=3, footerskip=2, ignoreemptylines=true,
-      silencewarnings=true, threaded=parallel, dateformat="HH:MM:SS.sssm",
+      silencewarnings=true, threaded=true, dateformat="HH:MM:SS.sssm",
       types = Dict("LATITUDE" => Float, "LONGITUDE" => Float, "ALTITUDE" => Float,
       "SPEED" => Float), select = [1:11;16]) |> df.DataFrame!
     # Monitor progress for progress bar
@@ -91,12 +90,11 @@ Floating point numbers in `Flightdata` are of type `T`, by default `Float32`.
 function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_000)
   # Initialise archive file array
   archive = FlightData[]
-  parallel = VERSION ≥ v"1.3" ? true : false
   # Loop over database files
   prog = pm.Progress(length(files), "load archive...")
   for file in files
     # Load data from csv file into standardised DataFrame
-    flights = readArchive(file, parallel, Float)
+    flights = readArchive(file, Float)
     # Unit conversions
     flights.alt = ft2m.(flights.alt)
     flights.speed = knot2mps.(flights.speed)
@@ -172,7 +170,6 @@ Floating point numbers in `Flightdata` are of type `T`, by default `Float32`.
 function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=5_000,
   delim::Union{Nothing,Char,String}=nothing)
   # Initialise inventory file array
-  # parallel = VERSION ≥ v"1.3" ? true : false
   archive = FlightData[]
   # Loop over files with online data
   prog = pm.Progress(length(files), "load online data...")
@@ -257,27 +254,9 @@ function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=
         date -= Dates.Day(1)
       end
       # Derive time from time string
-      t = if VERSION ≥ v"1.3"
-        # Use AM/PM format for Julia > version 1.3
-        Time(flight.time[i][5:end], "I:M:S p")
-      else
-        # Calculate time manually otherwise
-        t = Time(flight.time[i][5:12], "H:M:S")
-        if flight.time[i][end-1:end] == "PM" && !(Dates.hour(t)==12)
-          t += Dates.Hour(12)
-        elseif flight.time[i][end-1:end] == "AM" && Dates.hour(t)==12
-          t -= Dates.Hour(12)
-        else
-          t
-        end
-      end
+      t = Time(flight.time[i][5:end], "I:M:S p")
       # Save data that needed tweaking of current time step
-      if VERSION ≥ v"1.1"
-        pushfirst!(flighttime, ZonedDateTime(DateTime(date, t), timezone))
-      else
-        pushfirst!(flighttime, ZonedDateTime(DateTime(Dates.yearmonthday(date)...,
-          Dates.hour(t), Dates.minute(t), Dates.second(t)), timezone))
-      end
+      pushfirst!(flighttime, ZonedDateTime(DateTime(date, t), timezone))
       pushfirst!(altitude, alt); pushfirst!(climbingrate, climb); pushfirst!(heading, head)
     end #loop of flight
 
@@ -311,14 +290,13 @@ end #function loadOnlineData
 
 Read FlightAware archived data from a csv `file` and return content as DataFrame.
 
-Using Julia version 1.3 or higher, `parallel` can be set to `true` to speed up file reading.
 The routine works for several FlightAware archive versions. Floating point numbers
 are read with single precision or as defined by kwarg `Float`.
 """
-function readArchive(file, parallel, Float=Float32)
+function readArchive(file, Float=Float32)
   # Read file
   flightdata = CSV.File(file, datarow=2, normalizenames=true, ignoreemptylines=true,
-    silencewarnings=true, threaded=parallel, dateformat="m/d/y H:M:S",
+    silencewarnings=true, threaded=true, dateformat="m/d/y H:M:S",
     types = Dict(:Latitude => Float, :Longitude => Float, :Altitude_feet_ => Float,
     :Altitude_ft_ => Float, :Groundspeed_knots_ => Float, :Groundspeed_kts_ => Float,
     :Rate => Float),
