@@ -45,19 +45,6 @@ end # function findfiles!
 
 
 """
-    standardisecols!(df::DataFrame)
-
-Convert possible SentinelArrays from `CSV` to `Vector{<:Union{Missing, Type}}`.
-"""
-function standardisecols!(df::DataFrame)
-  for col in names(df)
-    df[!,col] = [el for el in df[!,col]]
-    df[!,col] isa Vector{Bool} && (df[!,col] = BitVector(df[!,col]))
-  end #loop over DataFrame columns
-end #function standardisecols
-
-
-"""
     remdup!(data::DataFrame, useLON::Bool)
 
 Remove entries with duplicate x and y (`lat`/`lon` or `lon`/`lat`) values from
@@ -69,12 +56,12 @@ function remdup!(data::DataFrame, useLON::Bool)
   x, y = useLON ? (:lon, :lat) : (:lat, :lon)
   # Initialise
   i = 1
-  iEnd = length(data[!,x])
+  iEnd = size(data, 1)
   # Loop over entries in vector
   while i < iEnd
     j = i + 1 # index for next consecutive line
-    while j ≤ iEnd && data[i, x] ≈ data[j, x]
-      if data[j-1, y] ≈ data[j, y]
+    while j ≤ iEnd && isapprox(data[i, x], data[j, x], atol = eps(data[j, x]))
+      if isapprox(data[j-1, y], data[j, y], atol = eps(data[j, y]))
         # Delete datarow, if x and y are identical
         delete!(data, j-1)
         # Decrease the counter for the end of the arrays
@@ -92,12 +79,13 @@ end #function remdup!
 
 
 """
-    findflex(x::Vector{<:Real}) -> Vector{ NamedTuple{(:range, :min, :max), Tuple{UnitRange, AbstractFloat, AbstractFloat}}}
+    findflex(x::AbstractArray{<:Union{V,T} where V where T})
+      -> Vector{ NamedTuple{(:range, :min, :max), Tuple{UnitRange, T, T}}} where T<:AbstractFloat
 
 Find inflection points in `x` and return a vector of named tuples with index ranges
 between inflection points and corresponding extrema.
 """
-function findflex(x::Union{Vector{<:Real},CSV.SentinelArrays.SentinelArray{<:Real}})
+function findflex(x::AbstractArray{<:Union{V,T} where V where T})
   # Save starting index
   flex = Int[1]
   # Loop over data points
@@ -107,10 +95,11 @@ function findflex(x::Union{Vector{<:Real},CSV.SentinelArrays.SentinelArray{<:Rea
       push!(flex, i)
     end
   end
+  T = eltype(x)
   # Save end index
   push!(flex, length(x))
   # Initialise a vector for ranges between flex points, and min/max values
-  ranges = NamedTuple{(:range, :min, :max), Tuple{UnitRange, AbstractFloat, AbstractFloat}}[]
+  ranges = NamedTuple{(:range, :min, :max), Tuple{UnitRange{Int}, T, T}}[]
   # Loop over saved inflection points
   for i = 2:length(flex)
     # Evaluate ascending/descending order of data and save extrema and range,
@@ -123,26 +112,6 @@ function findflex(x::Union{Vector{<:Real},CSV.SentinelArrays.SentinelArray{<:Rea
   # Return all ranges between flex points together with the corresponding extrema
   return Tuple(ranges)
 end #function findflex
-
-
-"""
-    Minterpolate(ms::mat.MSession, p::mat.MxArray) -> λ(i::Union{Real,Vector{<:AbstractFloat},StepRangeLen})
-
-From a MATLAB piecewise polynomial structure `p` and the corresponding MATLAB
-session `ms` return a λ function taking a Union{Real,Vector<:{AbstractFloat},StepRangeLen}
-as input to return the interpolated data of `p`.
-"""
-function Minterpolate(ms::mat.MSession, p::mat.MxArray)
-  """ Return the interpolated data of `i` using MATLAB's pchip algorithm"""
-  function (i::Union{Real,Vector{<:AbstractFloat},StepRangeLen})
-    # Send data to MATLAB
-    mat.put_variable(ms, :i, mat.mxarray(i)); mat.put_variable(ms, :p, p)
-    # Interpolate data with MATLAB
-    mat.eval_string(ms, "pp = ppval(p,i);")
-    # Retrieve interpolated data from MATLAB
-    mat.jvalue(mat.get_mvariable(ms, :pp))
-  end
-end
 
 
 """
@@ -190,7 +159,7 @@ function checkcols!(
   # Find unchecked columns
   opencols = findall(isequal(0), correctcols)
   # Find columns by type and bounds
-  findbytype!(correctcols, opencols, remainingcols, standardtypes, colbounds)
+  findbytype!(data, correctcols, opencols, remainingcols, standardtypes, colbounds)
   # Correct DataFrame to the right format
   correctDF!(data, correctcols, standardnames, essentialcols)
   return data
@@ -291,7 +260,7 @@ function findbyname!(
     col ≠ nothing && typeof(data[!,name]) <: standardtypes[i] &&
       checkbounds!(correctcols, bounds, data, name, i, col)
   end
-  isempty(findall(isequal(0), correctcols)) && check == nothing &&
+  isempty(findall(isequal(0), correctcols)) && check === nothing &&
     @warn "all columns corrected based on column names"
 end #function findbyname!
 
@@ -345,14 +314,15 @@ correct in a column. Issue a warning, if all data could be corrected by type
 (and previously name and position).
 """
 function findbytype!(
+  data::DataFrame,
   correctcols::Vector{Int},
   opencols::Vector{Int},
-  remianingcols::Vector{Int},
+  remainingcols::Vector{Int},
   standardtypes::Vector{<:Type},
   bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
 )
   isempty(findall(isequal(0), correctcols)) && return
-  for i in opencols, j in remianingcols
+  for i in opencols, j in remainingcols
     try typeof(data[!,j]) <: standardtypes[i] && correctcols[i] == 0 &&
       checkbounds!(correctcols, bounds, data, j, i, j)
     catch
@@ -422,9 +392,8 @@ The `sat` data may be smaller than the `dataspan` at the edges of the `sat` `Dat
 function find_timespan(sat::DataFrame, X::Tuple{<:AbstractFloat, <:AbstractFloat},
   dataspan::Int=15)
   # Find index in sat data array with minimum distance to analytic intersection solutin
-  Xlatlon = geo.LatLon(X...)
-  coords = geo.LatLon.(sat.lat, sat.lon)
-  imin = argmin([geo.distance(coord, Xlatlon) for coord in coords])
+  coords = ((sat.lat[i], sat.lon[i]) for i = 1:size(sat,1))
+  imin = argmin(dist.haversine.(coords, [X], earthradius(X[1])))
   # Find first/last index of span acknowledging bounds of the data array
   t1 = max(1, min(imin-dataspan, length(sat.time)))
   t2 = min(length(sat.time), imin+dataspan)
@@ -457,19 +426,19 @@ to `flightdata` and return it together with the `index` in `flightdata` of the t
 closest to `X`.
 """
 function get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:AbstractFloat}, flightspan::Int)
-  # Convert to LatLon structs
-  Xlatlon = geo.LatLon(X...)
-  coords = geo.LatLon.(flight.data.lat, flight.data.lon)
+  # Generate coordinate pairs from lat/lon columns
+  coords = ((flight.data.lat[i], flight.data.lon[i]) for i = 1:size(flight.data,1))
   # Find the index (DataFrame row) of the intersection in the flight data
-  imin = argmin([geo.distance(coord, Xlatlon) for coord in coords])
+  imin = argmin(dist.haversine.(coords, [X], earthradius(X[1])))
   # Construct FlightData at Intersection
   t1 = max(1, min(imin-flightspan, length(flight.data.time)))
   t2 = min(length(flight.data.time), imin+flightspan)
   # t2 = t-timespan > length(data[:,1]) ? 0 : t2
   flightdata = FlightData(flight.data[t1:t2,:], flight.metadata)
 
-  return flightdata, argmin([geo.distance(coord, Xlatlon)
-    for coord in geo.LatLon.(flightdata.data.lat, flightdata.data.lon)])
+  flightcoords = ((flightdata.data.lat[i], flightdata.data.lon[i])
+    for i = 1:size(flightdata.data, 1))
+  return flightdata, argmin(dist.haversine.(flightcoords, [X], earthradius(X[1])))
 end #function get_flightdata
 
 
@@ -483,7 +452,8 @@ end #function get_flightdata
       flightid::Union{Int,String},
       lidarprofile::NamedTuple,
       lidarrange::Tuple{Real,Real},
-      savesecondtype::Bool
+      savesecondtype::Bool,
+      Float::DataType=Float32
     ) -> cpro::CPro, clay::CLay, feature::Symbol, ts::Int
 
 Using the `sat` data measurements within the overlap region and the MATLAB session
@@ -494,7 +464,8 @@ index `ts` within `cpro`/`clay` of the data point closest to `X`.
 When `savesecondtype` is set to `false`, only the data type (`CLay`/`CPro`) in `sat`
 is saved; if set to `true`, the corresponding data type is saved if available.
 The lidar column data is saved for the height levels givin in the `lidarprofile` data
-for the `lidarrange`.
+for the `lidarrange`. Floating point numbers are saved with single precision or
+as defined by `Float`.
 """
 function get_satdata(
   ms::mat.MSession,
@@ -502,10 +473,12 @@ function get_satdata(
   X::Tuple{<:AbstractFloat, <:AbstractFloat},
   satspan::Int,
   flightalt::Real,
+  altmin::Real,
   flightid::Union{Int,String},
   lidarprofile::NamedTuple,
   lidarrange::Tuple{Real,Real},
-  savesecondtype::Bool
+  savesecondtype::Bool,
+  Float::DataType=Float32
 )
   # Retrieve DataFrame at Intersection ± 15 time steps
   timespan, fileindex = find_timespan(sat.data, X, satspan)
@@ -519,41 +492,58 @@ function get_satdata(
   end
 
   # Get CPro/CLay data from near the intersection
-  clay = sat.metadata.type == :CLay ? CLay(ms, primfiles, lidarrange, flightalt) :
-    CLay(ms, secfiles, lidarrange, flightalt)
-  cpro = sat.metadata.type == :CPro ? CPro(ms, primfiles, timespan, lidarprofile) :
-    CPro(ms, secfiles, timespan, lidarprofile)
+  clay = if sat.metadata.type == :CLay
+    CLay(ms, primfiles, lidarrange, altmin, Float)
+  else
+    try CLay(ms, secfiles, lidarrange, altmin, Float)
+    catch
+      println(); @warn "could not load additional layer data" flightid
+      CLay()
+    end
+  end
+  cpro = if sat.metadata.type == :CPro
+    CPro(ms, primfiles, timespan, lidarprofile, Float)
+  else
+    try CPro(ms, secfiles, timespan, lidarprofile, Float)
+    catch
+      println(); @warn "could not load additional profile data" flightid
+      CPro()
+    end
+  end
   clay = extract_timespan(clay, timespan)
   cpro = extract_timespan(cpro, timespan)
 
   # Define primary data and index of intersection in primary data
   primdata = sat.metadata.type == :CPro ? cpro : clay
-  ts = argmin([geo.distance(coord, geo.LatLon(X...))
-    for coord in geo.LatLon.(primdata.data.lat, primdata.data.lon)])
+  coords = ((primdata.data.lat[i], primdata.data.lon[i]) for i = 1:size(primdata.data, 1))
+  ts = argmin(dist.haversine.(coords, [X], earthradius(X[1])))
 
   # Get feature classification
   feature = sat.metadata.type == :CPro ?
     atmosphericinfo(primdata, lidarprofile.fine, ts, flightalt, flightid) :
     atmosphericinfo(primdata, flightalt, ts)
-
   return cpro, clay, feature, ts
 end #function get_satdata
 
 
 """
-    timesec(t::Real) -> DateTime
+    interpolate_time(data::DataFrame, X::Tuple{T,T}  where T<:AbstractFloat) -> DateTime
 
-From a UNIX DateTime, return a DateTime rounded to the second
+Return the linearly interpolated time at `X` (a lat/lon coordinate pair)
+to the `data` in a DataFrame with a `time`, `lat`, and `lon` column.
+
+Time is linearly interpolated between the 2 closest points to `X`.
 """
-timesec(t::Real) = round(Dates.unix2datetime(t), Dates.Second)
-
-
-"""
-    timesec(t::Union{DateTime,ZonedDateTime}) -> DateTime
-
-Round a `DateTime` or `ZonedDateTime` to the second.
-"""
-timesec(t::Union{DateTime,ZonedDateTime}) = round(t, Dates.Second)
+function interpolate_time(data::DataFrame, X::Tuple{T,T}  where T<:AbstractFloat)
+  # Calculate distances for each coordinate pair to X
+  d = dist.haversine.(((φ, λ) for (φ, λ) in zip(data.lat, data.lon)), [X], earthradius(X[1]))
+  index = closest_points(d)
+  d = dist.haversine((data.lat[index[1]], data.lon[index[1]]),
+    (data.lat[index[2]], data.lon[index[2]]), earthradius(data.lat[index[1]]))
+  ds = dist.haversine((data.lat[index[1]], data.lon[index[1]]), X, earthradius(data.lat[index[1]]))
+  dt = data.time[index[2]] - data.time[index[1]]
+  round(data.time[index[1]] + Dates.Millisecond(round(ds/d*dt.value)), Dates.Second)
+end #function interpolate_time
 
 
 """
@@ -585,14 +575,60 @@ function preptrack(flight::DataFrame)
 end #function preptrack
 
 
+"""
+    closest_points(arr::Vector{T}) where T<:AbstractFloat -> Tuple{Int,Int}
+
+Return the indices of the elements in `arr` with the minimum value and the adjacent
+next larger value.
+
+Vector `arr` consists of distances between coinciding coordinate pairs of different tracks.
+"""
+function closest_points(arr::Vector{T}) where T<:AbstractFloat
+  m1 = argmin(arr)
+  m2 = if m1 == 1
+    2
+  elseif m1 == length(arr)
+    m1 - 1
+  elseif arr[m1-1] < arr[m1+1]
+    m1-1
+  else
+    m1+1
+  end
+  return m1, m2
+end #function closest_points
+
+
+"""
+    earthradius(lat::T) -> R::T
+
+Calculate the Earth's radius `R` in dependence of the current `lat`itude
+condidering the ellipsoidal shape of the Earth due to the rotational flattening.
+"""
+function earthradius(lat::T)::T where T<:AbstractFloat
+  req, rpol = 6378137, 6356752
+  √(((req^2*cosd(lat))^2 + (rpol^2*sind(lat))^2) / ((req*cosd(lat))^2 + (rpol*sind(lat))^2))
+end
+
+
 """Convert feet to kilometers"""
-ft2km(ft::Union{Missing,Real}) = 0.0003048ft
+function ft2km(ft::T)::T  where T<:Union{Missing,AbstractFloat}
+    0.0003048ft
+end
+
 
 """Convert feet to meters"""
-ft2m(ft::Union{Missing,Real}) = 0.3048ft
+function ft2m(ft::T)::T  where T<:Union{Missing,AbstractFloat}
+    0.3048ft
+end
+
 
 """Convert feet/min to m/s"""
-ftpmin2mps(ftpmin::Union{Missing,Real}) = 0.00508ftpmin
+function ftpmin2mps(ftpmin::T)::T  where T<:Union{Missing,AbstractFloat}
+    0.00508ftpmin
+end
+
 
 """Convert knots to m/s"""
-knot2mps(knot::Union{Missing,Real}) = 1.852knot/3.6
+function knot2mps(knot::T)::T  where T<:Union{Missing,AbstractFloat}
+    1.852knot/3.6
+end

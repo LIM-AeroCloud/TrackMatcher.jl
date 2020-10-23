@@ -1,7 +1,7 @@
 # Functions related to processing CALIOP data
 
 """
-    get_lidarheights(lidarrange::Tuple{Real,Real}) -> NamedTuple
+    get_lidarheights(lidarrange::Tuple{Real,Real}, Float::DataType=Float32) -> NamedTuple
 
 Return a `NamedTuple` with the following entries in the `lidarrange` (top, bottom):
 - `coarse`: altitude levels of the CALIOP lidar data as defined in the metadata of the hdf files
@@ -9,11 +9,14 @@ Return a `NamedTuple` with the following entries in the `lidarrange` (top, botto
 - `itop`: index in the original data array of the first selected top height
 - `ibottom`: index in the original data array of the last selected bottom height
 - `i30`: vector index of the first altitude level with 30m intervals
+
+Height levels in fiels `coarse` and `fine` are saved in single precision unless
+otherwise specified by `Float`.
 """
-function get_lidarheights(lidarrange::Tuple{Real,Real})
+function get_lidarheights(lidarrange::Tuple{Real,Real}, Float::DataType=Float32)
   # Read CPro lidar altitude profile
   hfile = normpath(@__DIR__, "../data/CPro_Lidar_Altitudes_m.dat")
-  hprofile = CSV.File(hfile) |> df.DataFrame!
+  hprofile = CSV.File(hfile, type=Float) |> df.DataFrame!
   # Consider only levels between max/min given in lidarrange
   itop = findfirst(hprofile.CPro .≤ lidarrange[1])
   ibottom = findlast(hprofile.CPro .≥ lidarrange[2])
@@ -31,18 +34,18 @@ function get_lidarheights(lidarrange::Tuple{Real,Real})
 	end
 
   # Return original and refined altitude profiles and important indices
-  return (coarse = levels, fine = hfine, itop = itop == nothing ? 0 : itop,
-		ibottom = ibottom == nothing ? 0 : ibottom, i30 = h30m == nothing ? 0 : h30m)
+  return (coarse = levels, fine = hfine, itop = itop === nothing ? 0 : itop,
+		ibottom = ibottom === nothing ? 0 : ibottom, i30 = h30m === nothing ? 0 : h30m)
 end #function get_lidarheights
 
 
 """
-    append_lidardata!(
-      vec::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
+    function get_lidarcolumn(
+      vect::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
       ms::mat.MSession,
       variable::String,
       lidarprofile::NamedTuple,
-      coarse::Bool = false;
+      coarse::Bool = true;
       missingvalues = missing
     ) where T
 
@@ -55,13 +58,13 @@ in `lidarprofile`. Further information whether to use `coarse` levels (when set 
 in `vec`.
 """
 function get_lidarcolumn(
-  vect::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
+  T::DataType,
   ms::mat.MSession,
   variable::String,
-  lidarprofile::NamedTuple,
-  coarse::Bool = false;
+  lidarprofile::NamedTuple;
+  coarse::Bool = true,
   missingvalues = missing
-) where T
+)
   # Read variable from hdf file with MATLAB
 	mat.eval_string(ms, "try\nvar = hdfread(file, '$variable');\nend")
 	var = mat.jarray(mat.get_mvariable(ms, :var))
@@ -85,7 +88,7 @@ function get_lidarcolumn(
 			v
     else
       # Save row vector for refined heights data after transforming missing values
-      v = convert(Vector{Union{Missing,T}}, var[i,lidarprofile.itop:lidarprofile.ibottom])
+      v = convert(Matrix{Union{Missing,T}}, var[i,lidarprofile.itop:lidarprofile.ibottom,:])
       v[v.==missingvalues] .= missing
   		v = Vector{T}(undef,length(lidarprofile.fine))
   		v[1:lidarprofile.i30-1] = var[i,lidarprofile.itop:lidarprofile.itop+lidarprofile.i30-2,1]
@@ -280,9 +283,10 @@ function atmosphericinfo(
   alt::AbstractFloat,
   isat::Int
 )::Union{Missing,Symbol}
+  top, base = sat.data.layer[isat]
   feature = try
-    for (i, (top, base)) in enumerate(sat.data.layer[isat])
-      if base ≤ alt ≤ top
+    for i = 1:length(top)
+      if base[i] ≤ alt ≤ top[i]
         return sat.data.feature[isat][i]
       end
     end
