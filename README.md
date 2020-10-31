@@ -15,7 +15,7 @@ package manager with:
 
 ```julia
 julia> ]
-pkg> add https://github.com/pb866/TrackMatcher.jl.git
+pkg> add https://github.com/LIM-AeroCloud/TrackMatcher.jl.git
 pkg> instantiate
 ```
 
@@ -23,7 +23,7 @@ pkg> instantiate
 Usage
 -----
 
-In essence, 3 `TrackMatcher` structs are needed to load essential flight and satellite data, and find intersection in the stored track data. A full overview is given in the [WIKI](https://github.com/pb866/TrackMatcher.jl/wiki) and this README is only meant as a quick reminder of the most important functions.
+In essence, 3 `TrackMatcher` structs are needed to load essential flight and satellite data, and find intersection in the stored track data. A full overview is given in the [WIKI](https://github.com/LIM-AeroCloud/TrackMatcher.jl/wiki) and this README is only meant as a quick reminder of the most important functions.
 
 
 Loading flight data
@@ -35,7 +35,7 @@ Loading flight data
 2. FlightAware archived data (`a` or `2`)
 3. flightaware.com online data (`o` or `3`)
 
-A convenience constructor for `FlightDB` exists needing only the database type listed in a string with the letters or numbers as indicated in the list above and the directories of the main database folders. Those folders are searched recursively for the respective data files. More than one folder path can be listed for all the database types.
+A convenience constructor for `FlightDB` exists needing only the database types listed in a string with the letters or numbers as indicated in the list above and the directories of the main database folders. Those folders are searched recursively for the respective data files. More than one folder path can be listed for all the database types.
 The order in the list is free, but the order of folders must correspond to the order
 of dataset identifiers in `DBtype`:
 
@@ -44,6 +44,7 @@ FlightDB(DBtype::String, folder::Union{String, Vector{String}}...; kwargs)
 ```
 
 ### kwargs
+- `Float::DataType=Float32`: Set the default precision of floating point numbers for flight data
 - `altmin::Int=5000`: minimum altitude threshold for which to consider flight data
 - `remarks=nothing`: any data or comments that can be attached to the metadata of `FlightDB`
 - `odelim::Union{Nothing,Char,String}=nothing`: specify the column delimiter in the text files of the online data
@@ -64,15 +65,20 @@ the `date` range of the data, the time the database was `created`, the `loadtime
 and any `remarks` as additional data or comments.
 
 `SatData` can be instatiated, by giving any number of folder strings and any remarks
-using the keyword `remarks`. The `folders` are scanned recursively for any hdf files
+using the keyword `remarks`. The `folders` are scanned recursively for any hdf file
 and the `type` of the satellite data is determined by keywords `CLay` or `CPro` in
 the folder/file names. If both types exist in the `folders`, the data type is determined
 by the majority in the first 50 file names. Alternatively, the sat data type can
 be forced with the keyword `type` set to a `Symbol` `:CPro` or `:CLay`.
 
 ```julia
-SatData(folders::String...; remarks=nothing)
+SatData(folders::String...; kwargs...)
 ```
+
+### kwargs
+- `Float::DataType=Float32`: Set the default precision of floating point numbers for satellite data
+- `type::Symbol=:undef`: Set the satellite data type to layer (`CLay`) or profile (`CPro`) data
+- `remarks=nothing`: any data or comments that can be attached to the metadata of `SatData`
 
 ---
 > :information_source: **NOTE**
@@ -100,17 +106,7 @@ __except for the keywords `CLay`/`CPro` swapped.__
 Find intersections by instatiating the `Intersection` struct with:
 
 ```julia
-Intersection(
-  flights::FlightDB, 
-  sat::SatData, 
-  savesecondsattype::Bool=false;
-  maxtimediff::Int=30, 
-  flightspan::Int=0, 
-  satspan::Int=15, 
-  lidarrange::Tuple{Real,Real}=(15_000,-Inf),
-  stepwidth::AbstractFloat=1000, 
-  Xradius::Real=20_000, 
-  remarks=nothing)
+Intersection(flights::FlightDB, sat::SatData, savesecondsattype::Bool=false; kwargs...)
 ```
 
 ### kwargs
@@ -125,4 +121,10 @@ Intersection(
 - `Xradius::Real=20_000`: Radius in meters, in which multiple intersection finds are
   assumed to correspond to the same intersection and only the intersection with the
   minimum delay between flight and sat overpass is saved
+- `epsilon::Real=2stepwidth`: maximum distance threshold below which any two corresponding 
+  flight/satellite track points are considered for finding an analytic solution of a possible intersection
+- `tolerance::Real=stepwidth`: maximum precision threshold for intersections; only intersections with a precision 
+  below the `tolerance` threshold are considered as intersection
+- `expdist::Real=Inf`: maximum threshold for the distance of a found intersection to the nearest measured track point
+- `Float::DataType=Float32`: default precision of floating point numbers for intersection data
 - `remarks=nothing`: any data or comments that can be attached to the metadata of `Intersection`
