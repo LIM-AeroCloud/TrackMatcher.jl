@@ -260,7 +260,7 @@ function findbyname!(
     col ≠ nothing && typeof(data[!,name]) <: standardtypes[i] &&
       checkbounds!(correctcols, bounds, data, name, i, col)
   end
-  isempty(findall(isequal(0), correctcols)) && check === nothing &&
+  isempty(findall(isequal(0), correctcols)) && isnothing(check) &&
     @warn "all columns corrected based on column names"
 end #function findbyname!
 

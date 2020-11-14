@@ -34,8 +34,8 @@ function get_lidarheights(lidarrange::Tuple{Real,Real}, Float::DataType=Float32)
 	end
 
   # Return original and refined altitude profiles and important indices
-  return (coarse = levels, fine = hfine, itop = itop === nothing ? 0 : itop,
-		ibottom = ibottom === nothing ? 0 : ibottom, i30 = h30m === nothing ? 0 : h30m)
+  return (coarse = levels, fine = hfine, itop = isnothing(itop) ? 0 : itop,
+		ibottom = isnothing(ibottom) ? 0 : ibottom, i30 = isnothing(h30m) ? 0 : h30m)
 end #function get_lidarheights
 
 
