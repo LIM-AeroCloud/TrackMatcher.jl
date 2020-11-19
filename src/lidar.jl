@@ -41,21 +41,22 @@ end #function get_lidarheights
 
 """
     function get_lidarcolumn(
-      vect::Vector{<:Vector{<:Vector{<:Union{Missing,T}}}},
+      T::DataType,
       ms::mat.MSession,
       variable::String,
-      lidarprofile::NamedTuple,
-      coarse::Bool = true;
+      lidarprofile::NamedTuple;
+      coarse::Bool = true,
       missingvalues = missing
-    ) where T
+    )
 
 Append the vector `vec` with CALIPSO lidar data of the `variable` using the MATLAB
 session `ms` to read the variable from an hdf file already opened in `ms` outside
 of `append_lidardata!`. Information about the lidar heigths used in `vec` are stored
 in `lidarprofile`. Further information whether to use `coarse` levels (when set to
 `true`, otherwise fine levels are used) is needed as input.
-`missingvalues` can be set to any value, which will be replaced with `missing`
-in `vec`.
+Ensure output is a vector with element type `T`. Missing values marked in the input
+data with certain values/key words can be flagged by the `missingvalues` keyword
+argument and are replaced by `missing` in `vec`.
 """
 function get_lidarcolumn(
   T::DataType,

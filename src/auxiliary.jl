@@ -1,5 +1,48 @@
 ### Helper functions
 
+## Storage of intersection data
+"""
+    addX!(Xdata, track, accuracy, Xf, id, dx, dt, Xradius, Xflight,
+      cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas)
+
+Append DataFrames `Xdata`, `tracks`, and `accuracy` by data from `Xf`, `id`,
+`dx`, `dt`, `Xflight`, `cpro`, `clay`, `tmf`, `tms`, `ift`, `feature`, `fxmeas`,
+`ftmeas`, `sxmeas`, and `stmeas`. If an intersection already exists with `Xradius`
+in `Xdata`, use the more accurate intersection with the lowest `accuracy.intersection`.
+"""
+function addX!(Xdata, track, accuracy, Xf, id, dx, dt, Xradius, Xflight,
+  cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas)
+
+  # Assume, intersection is no duplicate
+  duplicate = false
+  # Loop over previously found intersections
+  for i = 1:size(Xdata, 1)
+    # Use most accurate intersection, when duplicates are found within Xradius
+    if dist.haversine(Xf, (Xdata.lat[i], Xdata.lon[i]), earthradius(Xf[1])) ≤ Xradius &&
+      dx < accuracy.intersection[i]
+      Xdata[i,:] = (id = id, lat = Xf[1], lon = Xf[2], alt = Xflight.data.alt[ift],
+        tdiff = dt, tflight = tmf, tsat = tms, feature = feature)
+      track[i, :] = (id = id, flight = Xflight, CPro = cpro, CLay = clay)
+      accuracy[i, :] = (id = id, intersection = dx, flightcoord = fxmeas,
+        satcoord = sxmeas, flighttime = ftmeas, sattime = stmeas)
+      # Set duplicate flag
+      duplicate = true
+      break
+    end #condition for intersections within Xradius (assumed duplicates)
+  end #loop over already found intersection
+  # Save new intersections that are not identified as duplicates
+  if !duplicate
+    push!(Xdata, (id = id, lat = Xf[1], lon = Xf[2], alt = Xflight.data.alt[ift],
+      tdiff = dt, tflight = tmf, tsat = tms, feature = feature))
+    push!(track, (id = id, flight = Xflight, CPro = cpro, CLay = clay))
+    push!(accuracy, (id = id, intersection = dx, flightcoord = fxmeas,
+      satcoord = sxmeas, flighttime = ftmeas, sattime = stmeas))
+  end
+end #function addX!
+
+
+## Time format conversion of satellite data
+
 """
     convertUTC(t::AbstractFloat) -> DateTime
 
@@ -21,6 +64,8 @@ function convertUTC(t::AbstractFloat)
   return DateTime(Dates.yearmonthday(d)..., h, m, s, ms)
 end
 
+
+## File system scans and data processing
 
 """
     findfiles!(inventory::Vector{String}, folder::String, filetypes::String...) -> inventory
@@ -113,6 +158,8 @@ function findflex(x::AbstractArray{<:Union{V,T} where V where T})
   return Tuple(ranges)
 end #function findflex
 
+
+## Data checks and corrections
 
 """
     checkcols!(
@@ -228,7 +275,7 @@ function checkbounds!(
     all(bounds[pos][1] .< skipmissing(data[!,col]) .< bounds[pos][2])
     correctcols[pos] = val
   end
-end
+end #function checkbounds!
 
 
 """
@@ -377,6 +424,8 @@ function checkDBtype(DB::Vector{FlightData}, type::String)
   DB[[d.metadata.source.==type for d in DB]]
 end #function checkDBtype
 
+
+## Data extractions from raw data
 
 """
     find_timespan(sat::DataFrame, X::Tuple{<:AbstractFloat, <:AbstractFloat}, dataspan::Int=15)
@@ -598,6 +647,8 @@ function closest_points(arr::Vector{T}) where T<:AbstractFloat
 end #function closest_points
 
 
+## Data/unit conversion
+
 """
     earthradius(lat::T) -> R::T
 
@@ -607,28 +658,28 @@ condidering the ellipsoidal shape of the Earth due to the rotational flattening.
 function earthradius(lat::T)::T where T<:AbstractFloat
   req, rpol = 6378137, 6356752
   √(((req^2*cosd(lat))^2 + (rpol^2*sind(lat))^2) / ((req*cosd(lat))^2 + (rpol*sind(lat))^2))
-end
+end #function earthradius
 
 
 """Convert feet to kilometers"""
 function ft2km(ft::T)::T  where T<:Union{Missing,AbstractFloat}
     0.0003048ft
-end
+end #function ft2km
 
 
 """Convert feet to meters"""
 function ft2m(ft::T)::T  where T<:Union{Missing,AbstractFloat}
     0.3048ft
-end
+end #function ft2m
 
 
 """Convert feet/min to m/s"""
 function ftpmin2mps(ftpmin::T)::T  where T<:Union{Missing,AbstractFloat}
     0.00508ftpmin
-end
+end #function ftpmin2mps
 
 
 """Convert knots to m/s"""
 function knot2mps(knot::T)::T  where T<:Union{Missing,AbstractFloat}
     1.852knot/3.6
-end
+end #function knot2mps

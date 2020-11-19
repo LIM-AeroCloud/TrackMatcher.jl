@@ -1,19 +1,19 @@
 """
-    find_intersections(
+    function find_intersections(
       ms::mat.MSession,
       flight::FlightData,
       flighttracks::Vector,
       altmin::Real,
       sat::SatData,
       sattracks::Vector,
-      overlap::Vector{UnitRange},
       maxtimediff::Int,
-      dmin::Real,
+      stepwidth::Real,
       Xradius::Real,
       lidarprofile::NamedTuple,
       lidarrange::Tuple{Real,Real},
       flightspan::Int,
       satspan::Int,
+      expdist::Real,
       savesecondsattype::Bool,
       Float::DataType=Float32
     ) -> Xdata::DataFrame, track::DataFrame, accuracy::DataFrame
@@ -22,19 +22,20 @@ Using interpolated `flighttracks` and `sattracks`,
 add new spatial and temporal coordinates of all intersections of the current flight
 with satellite tracks to `Xdata`, if the overpass of the aircraft and the satellite
 at the intersection is within `maxtimediff` minutes and above `altmin` in meters.
-Additionally, save the measured `flight` and `sat` `tracked` data near the intersection
+Additionally, save the measured `flight` and `sat` `track` data near the intersection
 (±`flightspan`/±`satspan` datapoints of the intersection) and information about the
-`accuracy`.
+`accuracy`. MATLAB session `ms` is used to retrieve `CPro` and `CLay` satellite data.
 
 When `savesecondsattype` is set to true, the additional satellite data type not
 used to derive the intersections from the `SatData` is stored as well in `Intersection`.
-Satellite column data is stored over the `lidarrange` and defined by the `lidarprofile`.
+Satellite column data is stored over the `lidarrange` as defined by the `lidarprofile`.
 
-The algorithm finds intersections, by finding the minimum distance between flight and
-sat track points in the overlap region of both tracks. To be an intersection,
-the minimum distance of the interpolated track points must be below a threshold `dmin`.
-For duplicate intersection finds within an `Xradius`, only the one with the highest
-accuracy (lowest `dmin`) is saved.
+The algorithm finds intersections, by finding the minimum distance between interpolated
+flight and sat tracks (using the defined `stepwidth`) in the overlap region of both
+tracks. For duplicate intersection finds within an `Xradius`, only the one with the
+highest accuracy (lowest `accuracy.intersection`) is saved unless the exceed the
+defined maximum distance by `expdist` to the nearest measured track point of
+either track.
 
 All floating point numbers are saved with single precision unless otherwise
 specified by `Float`.
@@ -48,9 +49,7 @@ function find_intersections(
   sattracks::Vector,
   maxtimediff::Int,
   stepwidth::Real,
-  # Xradius::Real,
-  # epsilon::Real,
-  # tolerance::Real,
+  Xradius::Real,
   lidarprofile::NamedTuple,
   lidarrange::Tuple{Real,Real},
   flightspan::Int,
@@ -67,16 +66,17 @@ function find_intersections(
   accuracy = DataFrame(id=String[], intersection=AbstractFloat[], flightcoord=AbstractFloat[],
     satcoord=AbstractFloat[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
   counter = 0 # for intersections within the same flight used in the id
+
   # Loop over sat and flight tracks
-  for (i, st) in enumerate(sattracks), ft in flighttracks
+  for st in sattracks, ft in flighttracks
     # Continue only for sufficient overlap between flight/sat data
     ft.min < st.max && ft.max > st.min || continue
     # Find intersection coordinates
     Xs, Xf = findXcoords(ft, st, stepwidth, flight.metadata.useLON, Float)
-
     for i = 1:length(Xf)
       # Get ID for current intersection
-      id = string(flight.metadata.source,-,flight.metadata.dbID,-,i)
+      counter += 1
+      id = string(flight.metadata.source,-,flight.metadata.dbID,-,counter)
       # Get precision of Intersection
       dx = dist.haversine(Xf[i], Xs[i], earthradius(Xf[i][1]))
       # Determine time difference between aircraf/satellite at intersection
@@ -103,12 +103,8 @@ function find_intersections(
         continue
       end
       # Save intersection data
-      push!(Xdata, (id=id, lat=Xf[i][1], lon=Xf[i][2], alt=Xflight.data.alt[ift],
-        tdiff=dt, tflight = tmf, tsat = tms, feature=feature))
-      push!(track, (id = id, flight = Xflight, CPro = cpro, CLay = clay))
-      # Save accuracies
-      push!(accuracy, (id=id, intersection=dx, flightcoord=fxmeas,
-        satcoord=sxmeas, flighttime=ftmeas, sattime=stmeas))
+      addX!(Xdata, track, accuracy, Xf[i], id, dx, dt, Xradius, Xflight,
+        cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas)
     end #loop over intersections of current flight
   end #loop over flight and sat tracks
 
@@ -178,8 +174,8 @@ end#function findoverlap
 """
     interpolate_flightdata(flight::FlightData)
 
-Using the `flight` data, interpolate the data with the pchip method
-using the defined `stepwidth` for interpolation.
+Using the `flight` data, construct a PCHIP polynomial and return it together with
+the x data range (`min`/`max` values).
 """
 function interpolate_flightdata(flight::FlightData)
 
@@ -203,11 +199,15 @@ end #function interpolate_flightdata
 
 
 """
-    interpolate_satdata(sat::SatData, overlap::Vector{UnitRange})
-      -> Vector{Any}
+    function interpolate_satdata(
+      sat::SatData,
+      overlap::Vector{NamedTuple{(:range, :min, :max),Tuple{UnitRange, Real, Real}}},
+      useLON::Bool
+    ) -> Vector{Any}
 
-Using the `sat` data and the stored `overlap` ranges, interpolate the data
-with the pchip method. Use the metadata in `flight` for error reports.
+Using the `sat` data and the stored `overlap` ranges, construct a PCHIP polynomial
+and define the range of the x data (`min`/`max` values). X data is defined by the
+prevailing flight direction from the `useLON` flag.
 """
 function interpolate_satdata(
   sat::SatData,
@@ -234,10 +234,26 @@ function interpolate_satdata(
 end #function interpolate_satdata
 
 
-# coordinaterange(lat::Vector{<:AbstractFloat}, lon::Vector{<:AbstractFloat}) = lat[1] < lat[end] ?
-#   (lat, lon) : (reverse(lat), reverse(lon))
+"""
+    function findXcoords(
+      flight::NamedTuple,
+      sat::NamedTuple,
+      stepwidth::Real,
+      useLON::Bool,
+      Float::DataType=Float32
+    ) -> Xf::, Xs::Tuple{Float,Float}[]
 
+From the interpolated `flight` and `satellite` tracks (PCHIP polynomial), construct
+a function `flight - sat` using the PCHIP method on interpolated data points constructed
+from both PCHIP polynomials in the common track range with the defined `stepwidth`.
+X data is defined by the flag `useLON` (true for longitude as x data) depending on
+the prevailing flight direction.
 
+Find all intersections between both tracks by finding all roots in the defined
+function using the `IntervalRootFinding` package.
+
+Floating point numbers are of the precision set by `Float`, by default `Float32`.
+"""
 function findXcoords(
   flight::NamedTuple,
   sat::NamedTuple,
@@ -272,7 +288,4 @@ function findXcoords(
   end
 
   return Xf, Xs
-end
-
-""" Generate a function to interpolate x vectors from the current PCHIP struct """
-# interpolate(pc::Polynomial{<:AbstractFloat}) = x::Union{<:AbstractFloat,Vector{<:AbstractFloat}} -> interpolate(pc, x)
+end #function findXcoords
