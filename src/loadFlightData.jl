@@ -1,14 +1,15 @@
 ### Routines related to loading FlightData
 
 """
-    loadInventory(files::String...; altmin::Real=5_000) -> Vector{FlightData}
+    loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5_000) -> Vector{FlightData}
 
 From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `inventory` field in `FlightDB`.
 
 When the `Vector{FlightData{T}}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
-Floating point numbers in `Flightdata` are of type `T`, by default `Float32`.
+Floating point numbers in `Flightdata` are of the precision set by `Float`,
+by default `Float32`.
 """
 function loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5_000)
 
@@ -77,7 +78,7 @@ end #function loadInventory
 
 
 """
-    loadArchive(files::String...; altmin::Real=5_000)
+    loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_000)
       -> Vector{FlightData}
 
 From a list of `files`, return a `Vector{FlightData}` that can
@@ -85,7 +86,8 @@ be saved to the `archive` field in `FlightDB`.
 
 When the `Vector{FlightData{T}}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
-Floating point numbers in `Flightdata` are of type `T`, by default `Float32`.
+Floating point numbers in `Flightdata` are of the precision set by `Float`,
+by default `Float32`.
 """
 function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_000)
   # Initialise archive file array
@@ -154,7 +156,7 @@ end #function loadArchive
 
 
 """
-    loadOnlineData(files::String...; altmin::Real=5_000, delim::Union{Nothing,Char,String}=nothing)
+    loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=5_000, delim::Union{Nothing,Char,String}=nothing)
       -> Vector{FlightData}
 
 From a list of `files`, return a `Vector{FlightData}` that can
@@ -165,7 +167,8 @@ Default is `nothing`, which means auto-detection of the delimiter is used.
 
 When the `Vector{FlightData{T}}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
-Floating point numbers in `Flightdata` are of type `T`, by default `Float32`.
+Floating point numbers in `Flightdata` are of the precision set by `Float`,
+by default `Float32`.
 """
 function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=5_000,
   delim::Union{Nothing,Char,String}=nothing)

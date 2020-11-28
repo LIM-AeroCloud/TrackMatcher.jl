@@ -33,6 +33,8 @@ import Dates
 import TimeZones; const tz = TimeZones
 import Distances; const dist = Distances
 import MATLAB; const mat = MATLAB
+import IntervalRootFinding; root = IntervalRootFinding
+import IntervalArithmetic...
 import Statistics; const stats = Statistics
 import ProgressMeter; const pm = ProgressMeter
 import Logging; const logg = Logging
@@ -340,8 +342,6 @@ XMetadata can be instantiated using a `Tuple` or `NamedTuple` for the `lidarrang
 struct XMetadata
   maxtimediff::Int
   stepwidth::Real
-  epsilon::Real
-  tolerance::Real
   Xradius::Real
   expdist::Real
   lidarrange::NamedTuple{(:top,:bottom),Tuple{Real,Real}}
@@ -357,8 +357,6 @@ struct XMetadata
   function XMetadata(
     maxtimediff::Int,
     stepwidth::Real,
-    epsilon::Real,
-    tolerance::Real,
     Xradius::Real,
     expdist::Real,
     lidarrange::NamedTuple{(:top,:bottom),Tuple{Real,Real}},
@@ -371,16 +369,13 @@ struct XMetadata
     loadtime::Dates.CompoundPeriod,
     remarks
   )
-    new(maxtimediff, stepwidth, epsilon, tolerance, Xradius, expdist,
-      lidarrange, lidarprofile, sattype, satdates, altmin, flightdates,
-      created, loadtime, remarks)
+    new(maxtimediff, stepwidth, Xradius, expdist, lidarrange, lidarprofile,
+      sattype, satdates, altmin, flightdates, created, loadtime, remarks)
   end #constructor 1 XMetaData
 
   function XMetadata(
     maxtimediff::Int,
     stepwidth::Real,
-    epsilon::Real,
-    tolerance::Real,
     Xradius::Real,
     expdist::Real,
     lidarrange::Tuple{Real,Real},
@@ -393,9 +388,8 @@ struct XMetadata
     loadtime::Dates.CompoundPeriod,
     remarks=nothing
   )
-    new(maxtimediff, stepwidth, epsilon, tolerance, Xradius, expdist,
-      (top=lidarrange[1], bottom=lidarrange[2]), lidarprofile, sattype, satdates,
-      altmin, flightdates, created, loadtime, remarks)
+    new(maxtimediff, stepwidth, Xradius, expdist, (top=lidarrange[1], bottom=lidarrange[2]),
+      lidarprofile, sattype, satdates, altmin, flightdates, created, loadtime, remarks)
   end #constructor 2 XMetaData
 end #struct XMetaData
 
@@ -942,7 +936,8 @@ CALIOP cloud profile `data` stored in a `DataFrame` with columns:
 
 # Instantiation
 
-    CPro(ms::mat.MSession, files::Vector{String}, sattime::Vector{DateTime}, lidarprofile::NamedTuple)
+    CPro(ms::mat.MSession, files::Vector{String}, sattime::Vector{DateTime}, lidarprofile::NamedTuple,
+      Float::DataType=Float32)
       -> struct CPro
 
 Construct `CPro` from a list of file names (including directories) and a running
@@ -1131,6 +1126,7 @@ Measures about the accuracy of the intersection calculations and the quality of 
       lidarrange::Tuple{Real,Real}=(15_000,-Inf),
       stepwidth::Real=1000,
       Xradius::Real=20_000,
+      expdist::Real=Inf,
       Float::DataType=Float32,
       remarks=nothing
     ) -> struct Intersection
@@ -1153,6 +1149,8 @@ data saved to the struct:
   between `(max, min)` (set to `Inf`/`-Inf` to store all values up to top/bottom)
 - `stepwidth::Real=1000`: step width of interpolation in flight and sat tracks
   in meters (partially internally converted to degrees at equator)
+- `expdist::Real=Inf`: threshold for maximum distant to nearest measured track point;
+  if intersection is above threshold, it will be ignored
 - `Xradius::Real=20_000`: radius in meters within which multiple finds of an
   intersection are disregarded and only the most accurate is counted
 - `Float::DataType=Float32`: Set the precision of floating point numbers
@@ -1216,10 +1214,8 @@ struct Intersection
     flightspan::Int=0,
     satspan::Int=15,
     lidarrange::Tuple{Real,Real}=(15_000,-Inf),
-    stepwidth::Real=1000,
+    stepwidth::Real=0.01,
     Xradius::Real=20_000,
-    epsilon::Real=NaN,
-    tolerance::Real=NaN,
     expdist::Real=Inf,
     Float::DataType=Float32,
     remarks=nothing
@@ -1234,11 +1230,6 @@ struct Intersection
       satcoord=Float[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
     # Get lidar altitude levels
     lidarprofile = get_lidarheights(lidarrange, Float)
-    # Save stepwidth in degrees at equator using Earth's equatorial circumference to convert
-    degsteps = stepwidth*360/40_075_017
-    # Calculate default tolerances
-    isnan(epsilon) && (epsilon = 2stepwidth)
-    isnan(tolerance) && (tolerance = stepwidth)
     # New MATLAB session
     ms = mat.MSession()
     # Loop over data from different datasets and interpolate track data and time, throw error on failure
@@ -1255,13 +1246,13 @@ struct Intersection
           continue
         end
         # Interpolate trajectories with PCHIP method
-        sattracks = interpolate_satdata(sat, overlap)
-        flighttracks = interpolate_flightdata(flight, degsteps)
+        flighttracks = interpolate_flightdata(flight)
+        sattracks = interpolate_satdata(sat, overlap, flight.metadata.useLON)
         # Calculate intersections and store data and metadata in DataFrames
         currdata, currtrack, curraccuracy = find_intersections(ms, flight,
           flighttracks, flights.metadata.altmin, sat, sattracks, maxtimediff,
-          Xradius, epsilon, tolerance, lidarprofile, lidarrange,
-          flightspan, satspan, expdist, savesecondsattype, Float)
+          stepwidth, Xradius, lidarprofile, lidarrange, flightspan, satspan,
+          expdist, savesecondsattype, Float)
         append!(Xdata, currdata); append!(track, currtrack)
         append!(accuracy, curraccuracy)
       catch err
@@ -1289,8 +1280,8 @@ struct Intersection
     @info string("Intersection data ($(length(Xdata[!,1])) matches) loaded in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
       "\n▪ data\n▪ tracked\n▪ accuracy\n▪ metadata")
-    new(Xdata, track, accuracy, XMetadata(maxtimediff, stepwidth, epsilon, tolerance,
-      Xradius, expdist, lidarrange, lidarprofile, sat.metadata.type, sat.metadata.date,
+    new(Xdata, track, accuracy, XMetadata(maxtimediff, stepwidth, Xradius,
+       expdist, lidarrange, lidarprofile, sat.metadata.type, sat.metadata.date,
       flights.metadata.altmin, flights.metadata.date, tc, loadtime, remarks))
   end #constructor Intersection
 end #struct Intersection
