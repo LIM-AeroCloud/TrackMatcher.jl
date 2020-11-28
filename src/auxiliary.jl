@@ -10,7 +10,7 @@ Append DataFrames `Xdata`, `tracks`, and `accuracy` by data from `Xf`, `id`,
 `ftmeas`, `sxmeas`, and `stmeas`. If an intersection already exists with `Xradius`
 in `Xdata`, use the more accurate intersection with the lowest `accuracy.intersection`.
 """
-function addX!(Xdata, track, accuracy, Xf, id, dx, dt, Xradius, Xflight,
+function addX!(Xdata, track, accuracy, counter, Xf, id, dx, dt, Xradius, Xflight,
   cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas)
 
   # Assume, intersection is no duplicate
@@ -20,10 +20,10 @@ function addX!(Xdata, track, accuracy, Xf, id, dx, dt, Xradius, Xflight,
     # Use most accurate intersection, when duplicates are found within Xradius
     if dist.haversine(Xf, (Xdata.lat[i], Xdata.lon[i]), earthradius(Xf[1])) ≤ Xradius &&
       dx < accuracy.intersection[i]
-      Xdata[i,:] = (id = id, lat = Xf[1], lon = Xf[2], alt = Xflight.data.alt[ift],
+      Xdata[i, 2:end] = (lat = Xf[1], lon = Xf[2], alt = Xflight.data.alt[ift],
         tdiff = dt, tflight = tmf, tsat = tms, feature = feature)
-      track[i, :] = (id = id, flight = Xflight, CPro = cpro, CLay = clay)
-      accuracy[i, :] = (id = id, intersection = dx, flightcoord = fxmeas,
+      track[i, 2:end] = (flight = Xflight, CPro = cpro, CLay = clay)
+      accuracy[i, 2:end] = (intersection = dx, flightcoord = fxmeas,
         satcoord = sxmeas, flighttime = ftmeas, sattime = stmeas)
       # Set duplicate flag
       duplicate = true
@@ -32,12 +32,15 @@ function addX!(Xdata, track, accuracy, Xf, id, dx, dt, Xradius, Xflight,
   end #loop over already found intersection
   # Save new intersections that are not identified as duplicates
   if !duplicate
+    counter += 1
     push!(Xdata, (id = id, lat = Xf[1], lon = Xf[2], alt = Xflight.data.alt[ift],
       tdiff = dt, tflight = tmf, tsat = tms, feature = feature))
     push!(track, (id = id, flight = Xflight, CPro = cpro, CLay = clay))
     push!(accuracy, (id = id, intersection = dx, flightcoord = fxmeas,
       satcoord = sxmeas, flighttime = ftmeas, sattime = stmeas))
   end
+
+  return counter
 end #function addX!
 
 
@@ -588,10 +591,10 @@ function interpolate_time(data::DataFrame, X::Tuple{T,T}  where T<:AbstractFloat
   d = dist.haversine.(((φ, λ) for (φ, λ) in zip(data.lat, data.lon)), [X], earthradius(X[1]))
   index = closest_points(d)
   d = dist.haversine((data.lat[index[1]], data.lon[index[1]]),
-    (data.lat[index[2]], data.lon[index[2]]), earthradius(data.lat[index[1]]))
+    (data.lat[index[2]], data. + Dlon[index[2]]), earthradius(data.lat[index[1]]))
   ds = dist.haversine((data.lat[index[1]], data.lon[index[1]]), X, earthradius(data.lat[index[1]]))
   dt = data.time[index[2]] - data.time[index[1]]
-  round(data.time[index[1]] + Dates.Millisecond(round(ds/d*dt.value)), Dates.Second)
+  round(data.time[index[1]]ates.Millisecond(round(ds/d*dt.value)), Dates.Second)
 end #function interpolate_time
 
 

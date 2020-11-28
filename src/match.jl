@@ -65,22 +65,24 @@ function find_intersections(
   track = DataFrame(id=String[], flight=FlightData[], CPro=CPro[], CLay=CLay[])
   accuracy = DataFrame(id=String[], intersection=AbstractFloat[], flightcoord=AbstractFloat[],
     satcoord=AbstractFloat[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
-  counter = 0 # for intersections within the same flight used in the id
+  counter = 1 # for intersections within the same flight used in the id
 
   # Loop over sat and flight tracks
-  for st in sattracks, ft in flighttracks
+  for st in sattracks, (n, ft) in enumerate(flighttracks)
     # Continue only for sufficient overlap between flight/sat data
     ft.min < st.max && ft.max > st.min || continue
     # Find intersection coordinates
-    Xs, Xf = findXcoords(ft, st, stepwidth, flight.metadata.useLON, Float)
+    Xf, Xs = findXcoords(ft, st, stepwidth, flight.metadata.useLON, Float)
     for i = 1:length(Xf)
       # Get ID for current intersection
-      counter += 1
       id = string(flight.metadata.source,-,flight.metadata.dbID,-,counter)
       # Get precision of Intersection
       dx = dist.haversine(Xf[i], Xs[i], earthradius(Xf[i][1]))
       # Determine time difference between aircraf/satellite at intersection
-      tmf = interpolate_time(flight.data, Xf[i])
+      # Use only the current flight segment for the time interpolation
+      # from the flex data in the flight metadata, which coincides with the flighttracks
+      # For each flight segment between flex points, one interpolated flight-track exists
+      tmf = interpolate_time(flight.data[flight.metadata.flex[n].range,:], Xf[i])
       tms = interpolate_time(sat.data, Xs[i])
       dt = Dates.canonicalize(Dates.CompoundPeriod(tms-tmf))
       # Skip intersections that exceed allowed time difference
@@ -103,7 +105,7 @@ function find_intersections(
         continue
       end
       # Save intersection data
-      addX!(Xdata, track, accuracy, Xf[i], id, dx, dt, Xradius, Xflight,
+      counter = addX!(Xdata, track, accuracy, counter, Xf[i], id, dx, dt, Xradius, Xflight,
         cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas)
     end #loop over intersections of current flight
   end #loop over flight and sat tracks
@@ -271,7 +273,7 @@ function findXcoords(
   coorddist(x) = interpolate(pchip(xdata, ydata), x)
 
   # Find minimum distance by solving flight track - sat track = 0
-  rts = root.roots(coorddist, xdata[1] .. xdata[end])
+  rts = root.roots(coorddist, xdata[1] .. xdata[end], root.Krawczyk)
   X = Float.(root.mid.(root.interval.(rts)))
 
   # Return Vector with coordinate pairs
