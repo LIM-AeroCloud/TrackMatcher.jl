@@ -591,10 +591,10 @@ function interpolate_time(data::DataFrame, X::Tuple{T,T}  where T<:AbstractFloat
   d = dist.haversine.(((φ, λ) for (φ, λ) in zip(data.lat, data.lon)), [X], earthradius(X[1]))
   index = closest_points(d)
   d = dist.haversine((data.lat[index[1]], data.lon[index[1]]),
-    (data.lat[index[2]], data. + Dlon[index[2]]), earthradius(data.lat[index[1]]))
+    (data.lat[index[2]], data.lon[index[2]]), earthradius(data.lat[index[1]]))
   ds = dist.haversine((data.lat[index[1]], data.lon[index[1]]), X, earthradius(data.lat[index[1]]))
   dt = data.time[index[2]] - data.time[index[1]]
-  round(data.time[index[1]]ates.Millisecond(round(ds/d*dt.value)), Dates.Second)
+  round(data.time[index[1]] + Dates.Millisecond(round(ds/d*dt.value)), Dates.Second)
 end #function interpolate_time
 
 
