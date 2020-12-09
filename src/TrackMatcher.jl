@@ -215,6 +215,16 @@ end #struct FlightMetadata
 
 
 """
+# struct CloudMetadata
+
+Currently only place holder for remarks available during test phase.
+"""
+struct CloudMetadata
+  remarks
+end #struct CloudMetadata
+
+
+"""
 # struct SatMetadata
 
 Immutable struct to hold metadata for `SatData` with fields
@@ -635,6 +645,73 @@ struct FlightDB
 end #struct FlightDB
 
 
+## Define structs related to cloud data
+
+"""
+# struct CloudTrack{T<:AbstractFloat}
+
+Store Data related to a single cloud track.
+
+## Fields
+
+- `time::Vector{DateTime}`
+- `lat::Vector{T}`
+- `lon::Vector{T}`
+- `metadata::CloudMetadata`
+
+Default floating point precision is `Float32`.
+"""
+struct CloudTrack{T<:AbstractFloat}
+  time::Vector{DateTime}
+  lat::Vector{T}
+  lon::Vector{T}
+  metadata::CloudMetadata
+end #struct CloudTrack
+
+
+"""
+# struct CloudDB
+
+Database for cloud track data with fields:
+- `tracks::Vector{CloudTrack}`
+- `metadata::DBMetadata`
+"""
+struct CloudDB
+  tracks::Vector{CloudTrack}
+  metadata::DBMetadata
+
+  """ unmodified constructor for CloudDB """
+  CloudDB(tracks::Vector{CloudTrack}, metadata::DBMetadata) = new(tracks, metadata)
+
+  """
+  Modified constructor creating the database from mat files in the given folder
+  or any subfolder using the floating point precision given by `Float`.
+  """
+  function CloudDB(folders::String...; Float::DataType=Float32)
+    tstart = Dates.now()
+    # Scan folders for HDF4 files
+    files = String[]
+    for folder in folders
+      try findfiles!(files, folder, ".mat")
+      catch
+        @warn "read error; data skipped" folder
+      end
+    end
+
+    # Load cloud tracks from mat files into TrackMatcher in Julia format
+    tracks = loadCloudTracks(files...; Float=Float)
+    # Calculate load time
+    tend = Dates.now()
+    tc = tz.ZonedDateTime(tend, tz.localzone())
+    loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
+    # For now find min/max times in CloudTracks
+    tmin, tmax = minimum(t.time[1] for t in tracks), maximum(t.time[end] for t in tracks)
+
+    # Instantiate CloudDB
+    new(tracks, DBMetadata(NaN, (start=tmin, stop=tmax), tc, loadtime, nothing))
+  end #modified constructor 2
+end #struct CloudDB
+
 ## Define structs related to sat data
 
 """
@@ -669,6 +746,7 @@ struct SatData
   data::DataFrame
   metadata::SatMetadata
 
+  """ Unmodified constructor for `SatData` with basic checks for correct `data`"""
   function SatData(data::DataFrame, metadata::SatMetadata)
     standardnames = ["time", "lat", "lon", "fileindex"]
     standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat},
@@ -679,6 +757,12 @@ struct SatData
     new(data, metadata)
   end #constructor 1 SatData
 
+  """
+  Modified constructor creating the database from mat files in the given `folders`
+  or any subfolder using the floating point precision given by `Float`. The sat data
+  `type` is determined from the first 50 files in the database unless directly
+  specified `type`. Any `remarks` can be added to the metadata.
+  """
   function SatData(
     folders::String...;
     Float::DataType=Float32,
@@ -1295,7 +1379,8 @@ export FlightDB, FlightData, SatData, CLay, CPro, Intersection,
 ## Import functions for Julia include files
 include("auxiliary.jl")       # helper functions
 include("lidar.jl")           # functions related to processing CALIOP lidar data
-include("loadFlightData.jl")  # functions related to loading flight databases/datasets
+include("flightdata.jl")      # functions related to loading flight databases/datasets
+include("clouddata.jl")       # functions related to loading cloud track databases/datasets
 include("match.jl")           # functions related to finding track intersections
 
 end # module TrackMatcher
