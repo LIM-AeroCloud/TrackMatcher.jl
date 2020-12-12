@@ -9,14 +9,14 @@ Set the floating point precision to `Float` (default: `Float32`).
 function loadCloudTracks(files::String...; Float::DataType=Float32)
   # Open MATLAB session
   ms = mat.MSession(0)
-  # Initialise CloudTrack vector
+  # Initialise
   tracks = CloudTrack[]
   # Loop over all mat files
-  for file in files
+  for (i, file) in enumerate(files)
     # Read data from mat files
     t, lonlat = readMAT(ms, file)
     # Store data in Julia format as Vector of CloudTrack structs
-    storeMAT!(tracks, t, lonlat; Float=Float)
+    storeMAT!(tracks, t, lonlat, i, file; Float=Float)
   end #loop over files
   mat.close(ms)
 
@@ -65,12 +65,19 @@ positional data.
 function storeMAT!(
   tracks::Vector{CloudTrack},
   t::Array,
-  lonlat::Array;
+  lonlat::Array,
+  fileID::Int,
+  filename::String;
   Float::DataType=Float32
 )
   # Transform MATLAB data into Julia Format and store as CloudTrack struct in a vector
   for i = 1:length(t)
-    push!(tracks, CloudTrack(vec(DateTime.(t[i], "yyyymmddHHMM")),
-      Float.(lonlat[i][:,2]), Float.(lonlat[i][:,1]), CloudMetadata(nothing)))
+    data = DataFrame(time = vec(DateTime.(t[i], "yyyymmddHHMM")),
+      lat = Float.(lonlat[i][:,2]), lon = Float.(lonlat[i][:,1]))
+    # Determine predominant trajectory direction, inflection points, and remove duplicate entries
+    flex, useLON = preptrack!(data)
+    isempty(flex) && continue
+    push!(tracks, CloudTrack(data, CloudMetadata(string(fileID, ., i), filename,
+      flex, useLON)))
   end
 end

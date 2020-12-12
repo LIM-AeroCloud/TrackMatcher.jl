@@ -53,9 +53,9 @@ function loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5
           continue
         end
         # Determine predominant flight direction, inflection points, and remove duplicate entries
-        flightdata, flex, useLON = preptrack(flightdata)
+        flex, useLON = preptrack!(flightdata)
         # Save the FlightData in the inventory vector
-        push!(inventory, FlightData(flightdata, FID,
+        isempty(flex) || push!(inventory, FlightData(flightdata, FID,
           missing, missing, missing, flex, useLON, "VOLPE AEDT", file))
         # Empty data vectors
         flightdata = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
@@ -124,9 +124,9 @@ function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_0
           continue
         end
         # Determine predominant flight direction, inflection points, and remove duplicate entries
-        flightdata, flex, useLON = preptrack(flightdata)
+        flex, useLON = preptrack!(flightdata)
         # Save the FlightData in the archive vector
-        push!(archive, FlightData(flightdata, FID, flights.flightID[n],
+        isempty(flex) || push!(archive, FlightData(flightdata, FID, flights.flightID[n],
           flights.type[n], (orig=flights.orig[n],
           dest=flights.dest[n]), flex, useLON, "FlightAware", file))
 
@@ -274,11 +274,11 @@ function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=
     flight.lat = float.(flight.lat); flight.lon = float.(flight.lon)
 
     # Determine predominant flight direction, inflection points, and remove duplicate entries
-    flight, flex, useLON = preptrack(flight)
+    flex, useLON = preptrack!(flight)
 
     # Save data as FlightData
-    push!(archive, FlightData(flight, replace(filename, "_" => "/"), flightID,
-      missing, (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
+    isempty(flex) || push!(archive, FlightData(flight, replace(filename, "_" => "/"),
+      flightID, missing, (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
     # Monitor progress for progress bar
     pm.next!(prog)
   end #loop over files

@@ -219,8 +219,11 @@ end #struct FlightMetadata
 
 Currently only place holder for remarks available during test phase.
 """
-struct CloudMetadata
-  remarks
+struct CloudMetadata{T<:AbstractFloat}
+  ID::String
+  file::String
+  flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}}
+  useLON::Bool
 end #struct CloudMetadata
 
 
@@ -662,10 +665,22 @@ Store Data related to a single cloud track.
 Default floating point precision is `Float32`.
 """
 struct CloudTrack{T<:AbstractFloat}
-  time::Vector{DateTime}
-  lat::Vector{T}
-  lon::Vector{T}
+  data::DataFrame
   metadata::CloudMetadata
+
+  """ Unmodified constructor for `CloudTrack` with basic checks for correct `data`"""
+  function CloudTrack(data::DataFrame, metadata::CloudMetadata)
+
+    # Column checks and warnings
+    standardnames = ["time", "lat", "lon"]
+    standardtypes = [Union{DateTime,Vector{DateTime}},
+      Vector{<:AbstractFloat}, Vector{<:AbstractFloat}]
+    bounds = (:lat => (-90, 90), :lon => (-180, 180))
+    checkcols!(data, standardnames, standardtypes, bounds,
+      "CloudTrack", metadata.ID)
+    T = eltype(data.lon)
+    new{T}(data,metadata)
+  end #constructor 1 CloudTrack
 end #struct CloudTrack
 
 
@@ -687,7 +702,7 @@ struct CloudDB
   Modified constructor creating the database from mat files in the given folder
   or any subfolder using the floating point precision given by `Float`.
   """
-  function CloudDB(folders::String...; Float::DataType=Float32)
+  function CloudDB(folders::String...; Float::DataType=Float32, remarks=nothing)
     tstart = Dates.now()
     # Scan folders for HDF4 files
     files = String[]
@@ -705,10 +720,11 @@ struct CloudDB
     tc = tz.ZonedDateTime(tend, tz.localzone())
     loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
     # For now find min/max times in CloudTracks
-    tmin, tmax = minimum(t.time[1] for t in tracks), maximum(t.time[end] for t in tracks)
+    tmin = minimum(t.data.time[1] for t in tracks)
+    tmax = maximum(t.data.time[end] for t in tracks)
 
     # Instantiate CloudDB
-    new(tracks, DBMetadata(NaN, (start=tmin, stop=tmax), tc, loadtime, nothing))
+    new(tracks, DBMetadata(NaN, (start=tmin, stop=tmax), tc, loadtime, remarks))
   end #modified constructor 2
 end #struct CloudDB
 

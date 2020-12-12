@@ -608,22 +608,22 @@ Return a tidied flight data from which duplicate entries are removed together
 with the `flex` points in the x data for interpolation and a boolean `useLON`,
 which is true for longitude values used x data in the track interpolation.
 """
-function preptrack(flight::DataFrame)
+function preptrack!(trajectory::DataFrame)
   # calculate area covered by flight
-  lp = any(flight.lon .≥ 0) ? maximum(filter(l -> l ≥ 0, flight.lon)) -
-    minimum(filter(l -> l ≥ 0, flight.lon)) : 0
-  ln = any(flight.lon .< 0) ? maximum(filter(l -> l < 0, flight.lon)) -
-    minimum(filter(l -> l < 0, flight.lon)) : 0
-  # Determine main direction of flight (N<>S, E<>W) and use it as x values
-  # for flight interpolation (info stored as bool useLON)
-  useLON = maximum(flight.lat) - minimum(flight.lat) ≤ (lp + ln) *
-    cosd(stats.mean(flight.lat)) ? true : false
+  lp = any(trajectory.lon .≥ 0) ? maximum(filter(l -> l ≥ 0, trajectory.lon)) -
+    minimum(filter(l -> l ≥ 0, trajectory.lon)) : 0
+  ln = any(trajectory.lon .< 0) ? maximum(filter(l -> l < 0, trajectory.lon)) -
+    minimum(filter(l -> l < 0, trajectory.lon)) : 0
+  # Determine main direction of trajectory (N<>S, E<>W) and use it as x values
+  # for trajectory interpolation (info stored as bool useLON)
+  useLON = maximum(trajectory.lat) - minimum(trajectory.lat) ≤ (lp + ln) *
+    cosd(stats.mean(trajectory.lat)) ? true : false
   # Adjust for duplicate entries and
-  remdup!(flight, useLON)
+  remdup!(trajectory, useLON)
   # find flex points to cut data in segments needed for the interpolation
-  flex = useLON ? findflex(flight.lon) : findflex(flight.lat)
+  flex = useLON ? findflex(trajectory.lon) : findflex(trajectory.lat)
 
-  return flight, flex, useLON
+  return flex, useLON
 end #function preptrack
 
 
