@@ -77,7 +77,7 @@ function storeMAT!(
     # Determine predominant trajectory direction, inflection points, and remove duplicate entries
     flex, useLON = preptrack!(data)
     isempty(flex) && continue
-    push!(tracks, CloudTrack(data, CloudMetadata(string(fileID, ., i), filename,
-      flex, useLON)))
+    push!(tracks, CloudTrack(data, CloudMetadata(string(fileID, ".", i), data,
+      flex, useLON, filename)))
   end
-end
+end #function storeMAT!

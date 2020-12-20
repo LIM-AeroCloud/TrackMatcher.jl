@@ -469,22 +469,22 @@ end #function extract_timespan
 
 
 """
-    get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:AbstractFloat}, flightspan::Int)
+    get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:AbstractFloat}, primspan::Int)
       -> flightdata::FlightData, index::Int
 
 From the measured `flight` data and lat/lon coordinates the intersection `X`,
-save the closest measured value to the interpolated intersection ±`flightspan` data points
+save the closest measured value to the interpolated intersection ±`primspan` data points
 to `flightdata` and return it together with the `index` in `flightdata` of the time with the coordinates
 closest to `X`.
 """
-function get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:AbstractFloat}, flightspan::Int)
+function get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:AbstractFloat}, primspan::Int)
   # Generate coordinate pairs from lat/lon columns
   coords = ((flight.data.lat[i], flight.data.lon[i]) for i = 1:size(flight.data,1))
   # Find the index (DataFrame row) of the intersection in the flight data
   imin = argmin(dist.haversine.(coords, [X], earthradius(X[1])))
   # Construct FlightData at Intersection
-  t1 = max(1, min(imin-flightspan, length(flight.data.time)))
-  t2 = min(length(flight.data.time), imin+flightspan)
+  t1 = max(1, min(imin-primspan, length(flight.data.time)))
+  t2 = min(length(flight.data.time), imin+primspan)
   # t2 = t-timespan > length(data[:,1]) ? 0 : t2
   flightdata = FlightData(flight.data[t1:t2,:], flight.metadata)
 
@@ -499,7 +499,7 @@ end #function get_flightdata
       ms::mat.MSession,
       sat::SatData,
       X::Tuple{<:AbstractFloat, <:AbstractFloat},
-      satspan::Int,
+      secspan::Int,
       flightalt::Real,
       flightid::Union{Int,String},
       lidarprofile::NamedTuple,
@@ -511,7 +511,7 @@ end #function get_flightdata
 Using the `sat` data measurements within the overlap region and the MATLAB session
 `ms`, extract CALIOP cloud profile (`cpro`) and/or layer data (`clay`) together with
 the atmospheric `feature` at flight level (`flightalt`) for the data point closest
-to the calculated intersection `X` ± `satspan` timesteps. In addition, return the
+to the calculated intersection `X` ± `secspan` timesteps. In addition, return the
 index `ts` within `cpro`/`clay` of the data point closest to `X`.
 When `savesecondtype` is set to `false`, only the data type (`CLay`/`CPro`) in `sat`
 is saved; if set to `true`, the corresponding data type is saved if available.
@@ -523,7 +523,7 @@ function get_satdata(
   ms::mat.MSession,
   sat::SatData,
   X::Tuple{<:AbstractFloat, <:AbstractFloat},
-  satspan::Int,
+  secspan::Int,
   flightalt::Real,
   altmin::Real,
   flightid::Union{Int,String},
@@ -533,7 +533,7 @@ function get_satdata(
   Float::DataType=Float32
 )
   # Retrieve DataFrame at Intersection ± 15 time steps
-  timespan, fileindex = find_timespan(sat.data, X, satspan)
+  timespan, fileindex = find_timespan(sat.data, X, secspan)
   primfiles = map(f -> get(sat.metadata.files, f, 0), fileindex)
   secfiles = if sat.metadata.type == :CPro && savesecondtype
     replace.(primfiles, "CPro" => "CLay")
