@@ -159,7 +159,7 @@ function find_intersections(
   sat::SatData,
   sectracks::Vector,
   dataset::AbstractString,
-  trackID::Union{Missing,AbstractString},
+  trackID::Union{Missing,Int,AbstractString},
   maxtimediff::Int,
   stepwidth::Real,
   Xradius::Real,
@@ -179,6 +179,7 @@ function find_intersections(
   accuracy = DataFrame(id=String[], intersection=AbstractFloat[], flightcoord=AbstractFloat[],
     satcoord=AbstractFloat[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
   counter = 1 # for intersections within the same flight used in the id
+  NA = Float(NaN) # set precision of NaNs according to Float
 
   # Loop over sat and flight tracks
   for st in sectracks, (n, pt) in enumerate(primtracks)
@@ -200,14 +201,17 @@ function find_intersections(
       # Skip intersections that exceed allowed time difference
       abs(tmf - tms) < Dates.Minute(maxtimediff) || continue
       # Extract the DataFrame rows of the sat/flight data near the intersection
-      Xflight, ift = get_flightdata(track, Xf[i], primspan)
-      cpro, clay, feature, ist = get_satdata(ms, sat, Xs[i], secspan, Xflight.data.alt[ift],
+      Xflight, ift = track isa FlightData ? (get_flightdata(track, Xf[i], primspan)) :
+        (FlightData(), 0)
+      alt = track isa FlightData ? Xflight.data.alt[ift] : NA
+      cpro, clay, feature, ist = get_satdata(ms, sat, Xs[i], secspan, alt,
         altmin, trackID, lidarprofile, lidarrange, savesecondsattype, Float)
       Xsat = sat.metadata.type == :CPro ? cpro.data : clay.data
       # Calculate accuracies
-      fxmeas = dist.haversine(Xf[i],(Xflight.data.lat[ift], Xflight.data.lon[ift]),
-        earthradius(Xf[i][1]))
-      ftmeas = Dates.canonicalize(Dates.CompoundPeriod(tmf - Xflight.data.time[ift]))
+      fxmeas = track isa FlightData ? dist.haversine(Xf[i],(Xflight.data.lat[ift],
+        Xflight.data.lon[ift]), earthradius(Xf[i][1])) : NA
+      ftmeas = track isa FlightData ? Dates.canonicalize(Dates.CompoundPeriod(tmf -
+        Xflight.data.time[ift])) : Dates.canonicalize(Dates.CompoundPeriod())
       sxmeas = dist.haversine(Xs[i], (Xsat.lat[ist], Xsat.lon[ist]), earthradius(Xs[i][1]))
       stmeas = Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.time[ist]))
       # Exclude data with long distances to nearest flight measurement
@@ -218,7 +222,7 @@ function find_intersections(
       end
       # Save intersection data
       counter = addX!(Xdata, tracked, accuracy, counter, Xf[i], id, dx, dt, Xradius, Xflight,
-        cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas)
+        cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas, NA)
     end #loop over intersections of current flight
   end #loop over flight and sat tracks
   # Return intersection data of current flight
@@ -234,7 +238,7 @@ in the sat data that are in the vicinity of the flight track (min/max of lat/lon
 Consider only satellite data of ± `maxtimediff` minutes before the start and after
 the end of the flight.
 """
-function findoverlap(flight::Union{FlightData, CloudTrack}, sat::SatData, maxtimediff::Int)
+function findoverlap(flight::T where T<:Union{FlightData, CloudTrack}, sat::SatData, maxtimediff::Int)
 
   # Initialise
   overlap = NamedTuple{(:range, :min, :max),Tuple{UnitRange, Real, Real}}[]

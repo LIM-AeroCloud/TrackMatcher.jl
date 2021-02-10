@@ -28,6 +28,7 @@ module TrackMatcher
 
 ## Import Julia packages
 import DataFrames; const df = DataFrames
+import DataStructures; const ds = DataStructures
 import CSV
 import Dates
 import TimeZones; const tz = TimeZones
@@ -50,6 +51,12 @@ logger = try logg.SimpleLogger(logfile, logg.Info)
 catch; logg.ConsoleLogger(stdout, logg.Info)
 end
 logg.global_logger(logger)
+
+
+## Define time zones for FlightAware online data
+zonedict = ds.DefaultDict{String,tz.TimeZone}(tz.localzone())
+zonedict["_CET_"] = tz.tz"+0100"
+zonedict["_CEST_"] = tz.tz"+0200"
 
 
 ## Define own Metadata structs
@@ -212,6 +219,12 @@ struct FlightMetadata{T<:AbstractFloat}
       flex, useLON, source, file)
   end #constructor 2 FlightMetadata
 end #struct FlightMetadata
+
+""" External constructor for emtpy FlightMetadata struct """
+FlightMetadata(;Float::DataType=Float32) = FlightMetadata("", missing, missing, missing,
+  (start=Dates.now(), stop=Dates.now()), (latmin=Float(NaN), latmax=Float(NaN),
+  elonmin=Float(NaN), elonmax=Float(NaN), wlonmin=Float(NaN), wlonmax=Float(NaN)),
+  ((range=0:0, min=Float(NaN), max=Float(NaN)),), true, "","")
 
 
 """
@@ -547,6 +560,9 @@ struct FlightData{T<:AbstractFloat}
   end #constructor 2 FlightData
 end #struct FlightData
 
+""" External constructor for emtpy FlightData struct """
+FlightData() = FlightData(DataFrame(time = DateTime[], lat = Float32[], lon = Float32[], alt=Float32[],
+  heading = Int[], climb = Float32[], speed = Float32[]), FlightMetadata())
 
 """
 # struct FlightDB
@@ -636,9 +652,9 @@ struct FlightDB
       throw(ArgumentError("Number of characters in `DBtype` must match length of vararg `folder`"))
     end
     # Find database types
-    i1 = [findall(isequal('i'), DBtype); findall(isequal('1'), DBtype)]
-    i2 = [findall(isequal('a'), DBtype); findall(isequal('2'), DBtype)]
-    i3 = [findall(isequal('o'), DBtype); findall(isequal('3'), DBtype)]
+    i1 = [findall(isequal('i'), lowercase(DBtype)); findall(isequal('1'), DBtype)]
+    i2 = [findall(isequal('a'), lowercase(DBtype)); findall(isequal('2'), DBtype)]
+    i3 = [findall(isequal('o'), lowercase(DBtype)); findall(isequal('3'), DBtype)]
 
     # Load databases for each type
     # VOLPE AEDT inventory

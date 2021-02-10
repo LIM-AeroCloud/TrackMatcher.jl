@@ -201,32 +201,10 @@ function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=
     # Define timezones as UTC offset to avoid conflicts during
     # changes to/from daylight saving
 
-    # Time is the first column and has to be addressed as flight[!,1] in the code
-    # due to different column names, in which the timezone is included
-    timezone = if occursin("_CET_", tzone)
-      tz.tz"+0100"
-    elseif occursin("_CEST_", tzone)
-      tz.tz"+0200"
-    else
-      tz.localzone()
-    end
-    # Retrieve date and metadata from filename
+    # Get time zone, data and flight metadata from file name and header of time column
     filename = splitext(basename(file))[1]
-    flightID, datestr, course = try match(r"(.*?)_(.*?)_(.*)", filename).captures
-    catch
-      println()
-      println()
-      @warn "Flight ID, date, and course not found. Data skipped." file
-      continue
-    end
-    orig, dest = match(r"(.*)[-|_](.*)", course).captures
-    date = try Dates.Date(datestr, "d-u-y", locale="english")
-    catch
-      println()
-      println()
-      @warn "Unable to parse date. Data skipped." file
-      continue
-    end
+    date, timezone, flightID, orig, dest = get_DateTimeRoute(filename, tzone)
+
     # Set to 2 days prior to allow corrections for timezone diffences in the next step
     date += Dates.Day(2)
     ### Convert times to datetime and extract heading and climbing rate as Int

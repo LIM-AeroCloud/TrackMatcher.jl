@@ -3,37 +3,45 @@
 ## Storage of intersection data
 """
     addX!(Xdata, track, accuracy, Xf, id, dx, dt, Xradius, Xflight,
-      cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas)
+      cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas, NA)
 
 Append DataFrames `Xdata`, `tracks`, and `accuracy` by data from `Xf`, `id`,
 `dx`, `dt`, `Xflight`, `cpro`, `clay`, `tmf`, `tms`, `ift`, `feature`, `fxmeas`,
 `ftmeas`, `sxmeas`, and `stmeas`. If an intersection already exists with `Xradius`
 in `Xdata`, use the more accurate intersection with the lowest `accuracy.intersection`.
+Altitude is retrieved from flight altitude or, for cloud tracks, set to `NA`
+(`NaN` using the same floating point precision as other cloud data).
 """
 function addX!(Xdata, track, accuracy, counter, Xf, id, dx, dt, Xradius, Xflight,
-  cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas)
+  cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas, NA)
 
+  # Set primary object's altitude
+  alt = track isa FlightData ? Xflight.data.alt[ift] : NA
   # Assume, intersection is no duplicate
   duplicate = false
   # Loop over previously found intersections
   for i = 1:size(Xdata, 1)
     # Use most accurate intersection, when duplicates are found within Xradius
     if dist.haversine(Xf, (Xdata.lat[i], Xdata.lon[i]), earthradius(Xf[1])) ≤ Xradius &&
-      dx < accuracy.intersection[i]
-      Xdata[i, 2:end] = (lat = Xf[1], lon = Xf[2], alt = Xflight.data.alt[ift],
-        tdiff = dt, tflight = tmf, tsat = tms, feature = feature)
-      track[i, 2:end] = (flight = Xflight, CPro = cpro, CLay = clay)
-      accuracy[i, 2:end] = (intersection = dx, flightcoord = fxmeas,
-        satcoord = sxmeas, flighttime = ftmeas, sattime = stmeas)
-      # Set duplicate flag
-      duplicate = true
-      break
-    end #condition for intersections within Xradius (assumed duplicates)
+      dx ≤ accuracy.intersection[i]
+      if dx == accuracy.intersection[i] && dt < Xdata.tdiff[i]
+        Xdata[i, 2:end] = (lat = Xf[1], lon = Xf[2], alt = alt,
+          tdiff = dt, tflight = tmf, tsat = tms, feature = feature)
+        track[i, 2:end] = (flight = Xflight, CPro = cpro, CLay = clay)
+        accuracy[i, 2:end] = (intersection = dx, flightcoord = fxmeas,
+          satcoord = sxmeas, flighttime = ftmeas, sattime = stmeas)
+        # Set duplicate flag
+        duplicate = true
+        break
+      else
+        return counter
+      end # duplicate condition based on time delay at intersection
+    end # duplicate condition based on accuracy
   end #loop over already found intersection
   # Save new intersections that are not identified as duplicates
   if !duplicate
     counter += 1
-    push!(Xdata, (id = id, lat = Xf[1], lon = Xf[2], alt = Xflight.data.alt[ift],
+    push!(Xdata, (id = id, lat = Xf[1], lon = Xf[2], alt = alt,
       tdiff = dt, tflight = tmf, tsat = tms, feature = feature))
     push!(track, (id = id, flight = Xflight, CPro = cpro, CLay = clay))
     push!(accuracy, (id = id, intersection = dx, flightcoord = fxmeas,
@@ -492,6 +500,32 @@ function get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:Abstract
     for i = 1:size(flightdata.data, 1))
   return flightdata, argmin(dist.haversine.(flightcoords, [X], earthradius(X[1])))
 end #function get_flightdata
+
+
+function get_DateTimeRoute(filename::String, tzone::String)
+
+    # Time is the first column and has to be addressed as flight[!,1] in the code
+    # due to different column names, in which the timezone is included
+    timezone = zonedict[tzone]
+    # Retrieve date and metadata from filename
+    flightID, datestr, course = try match(r"(.*?)_(.*?)_(.*)", filename).captures
+    catch
+      println()
+      println()
+      @warn "Flight ID, date, and course not found. Data skipped." file
+      return missing, missing, missing, missing, missing
+    end
+    orig, dest = match(r"(.*)[-|_](.*)", course).captures
+    date = try Dates.Date(datestr, "d-u-y", locale="english")
+    catch
+      println()
+      println()
+      @warn "Unable to parse date. Data skipped." file
+      return missing, missing, missing, missing, missing
+    end
+
+    return date, timezone, flightID, orig, dest
+end
 
 
 """
