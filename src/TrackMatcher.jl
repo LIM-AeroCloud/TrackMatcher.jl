@@ -28,11 +28,14 @@ module TrackMatcher
 
 ## Import Julia packages
 import DataFrames; const df = DataFrames
+import DataStructures; const ds = DataStructures
 import CSV
 import Dates
 import TimeZones; const tz = TimeZones
 import Distances; const dist = Distances
 import MATLAB; const mat = MATLAB
+import IntervalRootFinding; root = IntervalRootFinding
+import IntervalArithmetic...
 import Statistics; const stats = Statistics
 import ProgressMeter; const pm = ProgressMeter
 import Logging; const logg = Logging
@@ -48,6 +51,12 @@ logger = try logg.SimpleLogger(logfile, logg.Info)
 catch; logg.ConsoleLogger(stdout, logg.Info)
 end
 logg.global_logger(logger)
+
+
+## Define time zones for FlightAware online data
+zonedict = ds.DefaultDict{String,tz.TimeZone}(tz.localzone())
+zonedict["_CET_"] = tz.tz"+0100"
+zonedict["_CEST_"] = tz.tz"+0200"
 
 
 ## Define own Metadata structs
@@ -178,7 +187,7 @@ struct FlightMetadata{T<:AbstractFloat}
     source::AbstractString,
     file::AbstractString
   )
-    T = typeof(flex.latmin)
+    T = typeof(area.latmin)
     new{T}(dbID, flightID, route, aircraft, date, area, flex, useLON, source, file)
   end #constructor 1 FlightMetadata
 
@@ -199,7 +208,7 @@ struct FlightMetadata{T<:AbstractFloat}
     source::AbstractString,
     file::AbstractString
   )
-    T = eltype(lat)
+    T = promote_type(eltype(lat), eltype(lon))
     elonmax = isempty(lon[lon.≥0]) ? T(NaN) : maximum(lon[lon.≥0])
     elonmin = isempty(lon[lon.≥0]) ? T(NaN) : minimum(lon[lon.≥0])
     wlonmax = isempty(lon[lon.<0]) ? T(NaN) : maximum(lon[lon.<0])
@@ -210,6 +219,61 @@ struct FlightMetadata{T<:AbstractFloat}
       flex, useLON, source, file)
   end #constructor 2 FlightMetadata
 end #struct FlightMetadata
+
+""" External constructor for emtpy FlightMetadata struct """
+FlightMetadata(;Float::DataType=Float32) = FlightMetadata("", missing, missing, missing,
+  (start=Dates.now(), stop=Dates.now()), (latmin=Float(NaN), latmax=Float(NaN),
+  elonmin=Float(NaN), elonmax=Float(NaN), wlonmin=Float(NaN), wlonmax=Float(NaN)),
+  ((range=0:0, min=Float(NaN), max=Float(NaN)),), true, "","")
+
+
+"""
+# struct CloudMetadata
+
+Currently only place holder for remarks available during test phase.
+"""
+struct CloudMetadata{T<:AbstractFloat}
+  ID::String
+  date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
+  area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,T}}
+  flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}}
+  useLON::Bool
+  file::String
+
+  """ Unmodified constructor for `CloudMetadata` """
+  function CloudMetadata(
+    ID::String,
+    date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+    area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,T}},
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
+    useLON::Bool,
+    file::String
+  ) where T<:AbstractFloat
+    # T = typeof(area.latmin)
+    new{T}(ID, date, area, flex, useLON, file)
+  end #constructor 1 CloudMetadata
+
+  """
+  Modified constructor for CloudMetadata with some automated construction of fields
+  and variable checks.
+  """
+  function CloudMetadata(
+    ID::Union{Int,AbstractString},
+    data::DataFrame,
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
+    useLON::Bool,
+    file::AbstractString
+  ) where T<:AbstractFloat
+    # T = promote_type(eltype(data.lat), eltype(data.lon))
+    elonmax = isempty(data.lon[data.lon.≥0]) ? T(NaN) : maximum(data.lon[data.lon.≥0])
+    elonmin = isempty(data.lon[data.lon.≥0]) ? T(NaN) : minimum(data.lon[data.lon.≥0])
+    wlonmax = isempty(data.lon[data.lon.<0]) ? T(NaN) : maximum(data.lon[data.lon.<0])
+    wlonmin = isempty(data.lon[data.lon.<0]) ? T(NaN) : minimum(data.lon[data.lon.<0])
+    area = (latmin=minimum(data.lat), latmax=maximum(data.lat),
+      elonmin=elonmin, elonmax=elonmax, wlonmin=wlonmin, wlonmax=wlonmax)
+    new{T}(ID, (start=data.time[1], stop=data.time[end]), area, flex, useLON, file)
+  end #constructor 2 CloudMetadata
+end #struct CloudMetadata
 
 
 """
@@ -340,8 +404,6 @@ XMetadata can be instantiated using a `Tuple` or `NamedTuple` for the `lidarrang
 struct XMetadata
   maxtimediff::Int
   stepwidth::Real
-  epsilon::Real
-  tolerance::Real
   Xradius::Real
   expdist::Real
   lidarrange::NamedTuple{(:top,:bottom),Tuple{Real,Real}}
@@ -357,8 +419,6 @@ struct XMetadata
   function XMetadata(
     maxtimediff::Int,
     stepwidth::Real,
-    epsilon::Real,
-    tolerance::Real,
     Xradius::Real,
     expdist::Real,
     lidarrange::NamedTuple{(:top,:bottom),Tuple{Real,Real}},
@@ -371,16 +431,13 @@ struct XMetadata
     loadtime::Dates.CompoundPeriod,
     remarks
   )
-    new(maxtimediff, stepwidth, epsilon, tolerance, Xradius, expdist,
-      lidarrange, lidarprofile, sattype, satdates, altmin, flightdates,
-      created, loadtime, remarks)
+    new(maxtimediff, stepwidth, Xradius, expdist, lidarrange, lidarprofile,
+      sattype, satdates, altmin, flightdates, created, loadtime, remarks)
   end #constructor 1 XMetaData
 
   function XMetadata(
     maxtimediff::Int,
     stepwidth::Real,
-    epsilon::Real,
-    tolerance::Real,
     Xradius::Real,
     expdist::Real,
     lidarrange::Tuple{Real,Real},
@@ -393,9 +450,8 @@ struct XMetadata
     loadtime::Dates.CompoundPeriod,
     remarks=nothing
   )
-    new(maxtimediff, stepwidth, epsilon, tolerance, Xradius, expdist,
-      (top=lidarrange[1], bottom=lidarrange[2]), lidarprofile, sattype, satdates,
-      altmin, flightdates, created, loadtime, remarks)
+    new(maxtimediff, stepwidth, Xradius, expdist, (top=lidarrange[1], bottom=lidarrange[2]),
+      lidarprofile, sattype, satdates, altmin, flightdates, created, loadtime, remarks)
   end #constructor 2 XMetaData
 end #struct XMetaData
 
@@ -504,6 +560,9 @@ struct FlightData{T<:AbstractFloat}
   end #constructor 2 FlightData
 end #struct FlightData
 
+""" External constructor for emtpy FlightData struct """
+FlightData() = FlightData(DataFrame(time = DateTime[], lat = Float32[], lon = Float32[], alt=Float32[],
+  heading = Int[], climb = Float32[], speed = Float32[]), FlightMetadata())
 
 """
 # struct FlightDB
@@ -593,9 +652,9 @@ struct FlightDB
       throw(ArgumentError("Number of characters in `DBtype` must match length of vararg `folder`"))
     end
     # Find database types
-    i1 = [findall(isequal('i'), DBtype); findall(isequal('1'), DBtype)]
-    i2 = [findall(isequal('a'), DBtype); findall(isequal('2'), DBtype)]
-    i3 = [findall(isequal('o'), DBtype); findall(isequal('3'), DBtype)]
+    i1 = [findall(isequal('i'), lowercase(DBtype)); findall(isequal('1'), DBtype)]
+    i2 = [findall(isequal('a'), lowercase(DBtype)); findall(isequal('2'), DBtype)]
+    i3 = [findall(isequal('o'), lowercase(DBtype)); findall(isequal('3'), DBtype)]
 
     # Load databases for each type
     # VOLPE AEDT inventory
@@ -641,6 +700,86 @@ struct FlightDB
 end #struct FlightDB
 
 
+## Define structs related to cloud data
+
+"""
+# struct CloudTrack{T<:AbstractFloat}
+
+Store Data related to a single cloud track.
+
+## Fields
+
+- `time::Vector{DateTime}`
+- `lat::Vector{T}`
+- `lon::Vector{T}`
+- `metadata::CloudMetadata`
+
+Default floating point precision is `Float32`.
+"""
+struct CloudTrack{T<:AbstractFloat}
+  data::DataFrame
+  metadata::CloudMetadata
+
+  """ Unmodified constructor for `CloudTrack` with basic checks for correct `data`"""
+  function CloudTrack(data::DataFrame, metadata::CloudMetadata)
+
+    # Column checks and warnings
+    standardnames = ["time", "lat", "lon"]
+    standardtypes = [Union{DateTime,Vector{DateTime}},
+      Vector{<:AbstractFloat}, Vector{<:AbstractFloat}]
+    bounds = (:lat => (-90, 90), :lon => (-180, 180))
+    checkcols!(data, standardnames, standardtypes, bounds,
+      "CloudTrack", metadata.ID)
+    T = eltype(data.lon)
+    new{T}(data,metadata)
+  end #constructor 1 CloudTrack
+end #struct CloudTrack
+
+
+"""
+# struct CloudDB
+
+Database for cloud track data with fields:
+- `tracks::Vector{CloudTrack}`
+- `metadata::DBMetadata`
+"""
+struct CloudDB
+  tracks::Vector{CloudTrack}
+  metadata::DBMetadata
+
+  """ unmodified constructor for CloudDB """
+  CloudDB(tracks::Vector{CloudTrack}, metadata::DBMetadata) = new(tracks, metadata)
+
+  """
+  Modified constructor creating the database from mat files in the given folder
+  or any subfolder using the floating point precision given by `Float`.
+  """
+  function CloudDB(folders::String...; Float::DataType=Float32, remarks=nothing)
+    tstart = Dates.now()
+    # Scan folders for HDF4 files
+    files = String[]
+    for folder in folders
+      try findfiles!(files, folder, ".mat")
+      catch
+        @warn "read error; data skipped" folder
+      end
+    end
+
+    # Load cloud tracks from mat files into TrackMatcher in Julia format
+    tracks = loadCloudTracks(files...; Float=Float)
+    # Calculate load time
+    tend = Dates.now()
+    tc = tz.ZonedDateTime(tend, tz.localzone())
+    loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
+    # For now find min/max times in CloudTracks
+    tmin = minimum(t.data.time[1] for t in tracks)
+    tmax = maximum(t.data.time[end] for t in tracks)
+
+    # Instantiate CloudDB
+    new(tracks, DBMetadata(NaN, (start=tmin, stop=tmax), tc, loadtime, remarks))
+  end #modified constructor 2
+end #struct CloudDB
+
 ## Define structs related to sat data
 
 """
@@ -675,6 +814,7 @@ struct SatData
   data::DataFrame
   metadata::SatMetadata
 
+  """ Unmodified constructor for `SatData` with basic checks for correct `data`"""
   function SatData(data::DataFrame, metadata::SatMetadata)
     standardnames = ["time", "lat", "lon", "fileindex"]
     standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat},
@@ -685,6 +825,12 @@ struct SatData
     new(data, metadata)
   end #constructor 1 SatData
 
+  """
+  Modified constructor creating the database from mat files in the given `folders`
+  or any subfolder using the floating point precision given by `Float`. The sat data
+  `type` is determined from the first 50 files in the database unless directly
+  specified `type`. Any `remarks` can be added to the metadata.
+  """
   function SatData(
     folders::String...;
     Float::DataType=Float32,
@@ -942,7 +1088,8 @@ CALIOP cloud profile `data` stored in a `DataFrame` with columns:
 
 # Instantiation
 
-    CPro(ms::mat.MSession, files::Vector{String}, sattime::Vector{DateTime}, lidarprofile::NamedTuple)
+    CPro(ms::mat.MSession, files::Vector{String}, sattime::Vector{DateTime}, lidarprofile::NamedTuple,
+      Float::DataType=Float32)
       -> struct CPro
 
 Construct `CPro` from a list of file names (including directories) and a running
@@ -1126,11 +1273,12 @@ Measures about the accuracy of the intersection calculations and the quality of 
       sat::SatData,
       savesecondsattype::Bool=false;
       maxtimediff::Int=30,
-      flightspan::Int=0,
-      satspan::Int=15,
+      primspan::Int=0,
+      secspan::Int=15,
       lidarrange::Tuple{Real,Real}=(15_000,-Inf),
       stepwidth::Real=1000,
       Xradius::Real=20_000,
+      expdist::Real=Inf,
       Float::DataType=Float32,
       remarks=nothing
     ) -> struct Intersection
@@ -1144,15 +1292,17 @@ The following parameters can be set to influence intersection calculations or
 data saved to the struct:
 - `maxtimediff::Int=30`: maximum time difference allowed between aircraft passage
   and satellite overpass at intersection
-- `flightspan::Int=0`: Number of additional data points of original track data
+- `primspan::Int=0`: Number of additional data points of original track data
   saved in the vicinity of the intersection and stored in `Intersection.tracked.flight`
-- `satspan::Int=15`: Number of additional data points of original track data
+- `secspan::Int=15`: Number of additional data points of original track data
   saved in the vicinity of the intersection and stored in `Intersection.tracked.CPro`
   and `Intersection.tracked.CLay`
 - `lidarrange::Tuple{Real,Real}=(15,-Inf)`: lidar measurements saved for column heights
   between `(max, min)` (set to `Inf`/`-Inf` to store all values up to top/bottom)
 - `stepwidth::Real=1000`: step width of interpolation in flight and sat tracks
   in meters (partially internally converted to degrees at equator)
+- `expdist::Real=Inf`: threshold for maximum distant to nearest measured track point;
+  if intersection is above threshold, it will be ignored
 - `Xradius::Real=20_000`: radius in meters within which multiple finds of an
   intersection are disregarded and only the most accurate is counted
 - `Float::DataType=Float32`: Set the precision of floating point numbers
@@ -1207,92 +1357,47 @@ struct Intersection
   end #constructor 1 Intersection
 
 
-  """ Modified constructor with some automated calculations of the intersection data. """
+  """ Modified constructor with some automated calculations of the flight intersection data. """
   function Intersection(
     flights::FlightDB,
     sat::SatData,
     savesecondsattype::Bool=false;
     maxtimediff::Int=30,
-    flightspan::Int=0,
-    satspan::Int=15,
+    primspan::Int=0,
+    secspan::Int=15,
     lidarrange::Tuple{Real,Real}=(15_000,-Inf),
-    stepwidth::Real=1000,
+    stepwidth::Real=0.01,
     Xradius::Real=20_000,
-    epsilon::Real=NaN,
-    tolerance::Real=NaN,
     expdist::Real=Inf,
     Float::DataType=Float32,
     remarks=nothing
   )
-    # Initialise DataFrames with Intersection data and monitor start time
-    tstart = Dates.now()
-    Xdata = DataFrame(id=String[], lat=Float[], lon=Float[],
-      alt=Float[], tdiff=Dates.CompoundPeriod[], tflight = DateTime[],
-      tsat = DateTime[], feature = Union{Missing,Symbol}[])
-    track = DataFrame(id=String[], flight=FlightData[], CPro=CPro[], CLay=CLay[])
-    accuracy = DataFrame(id=String[], intersection=Float[], flightcoord=Float[],
-      satcoord=Float[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
-    # Get lidar altitude levels
-    lidarprofile = get_lidarheights(lidarrange, Float)
-    # Save stepwidth in degrees at equator using Earth's equatorial circumference to convert
-    degsteps = stepwidth*360/40_075_017
-    # Calculate default tolerances
-    isnan(epsilon) && (epsilon = 2stepwidth)
-    isnan(tolerance) && (tolerance = stepwidth)
-    # New MATLAB session
-    ms = mat.MSession()
-    # Loop over data from different datasets and interpolate track data and time, throw error on failure
+    # Combine all datasets and find intersections
     flightdata = [[getfield(flights, f) for f in fieldnames(FlightDB)[1:end-1]]...;]
-    prog = pm.Progress(length(flightdata), "find intersections...")
-    for flight in flightdata
-      try
-        # Find sat tracks in the vicinity of flight tracks, where intersections are possible
-        overlap = findoverlap(flight, sat, maxtimediff)
-        if isempty(overlap)
-          pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
-            (:featured, length(Xdata.id[.!ismissing.(Xdata.feature) .&
-            (Xdata.feature .≠ :no_signal) .& (Xdata.feature .≠ :clear)]))])
-          continue
-        end
-        # Interpolate trajectories with PCHIP method
-        sattracks = interpolate_satdata(sat, overlap)
-        flighttracks = interpolate_flightdata(flight, degsteps)
-        # Calculate intersections and store data and metadata in DataFrames
-        currdata, currtrack, curraccuracy = find_intersections(ms, flight,
-          flighttracks, flights.metadata.altmin, sat, sattracks, maxtimediff,
-          Xradius, epsilon, tolerance, lidarprofile, lidarrange,
-          flightspan, satspan, expdist, savesecondsattype, Float)
-        append!(Xdata, currdata); append!(track, currtrack)
-        append!(accuracy, curraccuracy)
-      catch err
-        @debug begin
-          @show flight.metadata.dbID
-          rethrow(err)
-        end
-        # Issue warning on failure of interpolating track or time data
-        @warn("Track data and/or time could not be interpolated. Data ignored.",
-          dataset = flight.metadata.source, flight = flight.metadata.dbID)
-      end
-      # Monitor progress for progress bar
-      pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
-        (:featured, length(Xdata.id[.!ismissing.(Xdata.feature) .&
-        (Xdata.feature .≠ :no_signal) .& (Xdata.feature .≠ :clear)]))])
-    end #loop over flights
-    pm.finish!(prog)
-    # Close MATLAB session after looping over all data
-    mat.close(ms)
-    # Calculate load time
-    tend = Dates.now()
-    tc = tz.ZonedDateTime(tend, tz.localzone())
-    loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
-    # Return Intersections after completion
-    @info string("Intersection data ($(length(Xdata[!,1])) matches) loaded in ",
-      "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
-      "\n▪ data\n▪ tracked\n▪ accuracy\n▪ metadata")
-    new(Xdata, track, accuracy, XMetadata(maxtimediff, stepwidth, epsilon, tolerance,
-      Xradius, expdist, lidarrange, lidarprofile, sat.metadata.type, sat.metadata.date,
-      flights.metadata.altmin, flights.metadata.date, tc, loadtime, remarks))
-  end #constructor Intersection
+    intersection(flightdata, flights.metadata, sat, savesecondsattype, maxtimediff,
+      primspan, secspan, lidarrange, stepwidth, Xradius, expdist, Float, remarks)
+  end #constructor 2 Intersection
+
+
+  """ Modified constructor with some automated calculations of the cloud intersection data. """
+  function Intersection(
+    cloud::CloudDB,
+    sat::SatData,
+    savesecondsattype::Bool=false;
+    maxtimediff::Int=30,
+    primspan::Int=0,
+    secspan::Int=15,
+    lidarrange::Tuple{Real,Real}=(15_000,-Inf),
+    stepwidth::Real=0.01,
+    Xradius::Real=20_000,
+    expdist::Real=Inf,
+    Float::DataType=Float32,
+    remarks=nothing
+  )
+    # Combine all datasets and find intersections
+    intersection(cloud.tracks, cloud.metadata, sat, savesecondsattype, maxtimediff,
+      primspan, secspan, lidarrange, stepwidth, Xradius, expdist, Float, remarks)
+  end #constructor 3 Intersection
 end #struct Intersection
 
 
@@ -1304,7 +1409,8 @@ export FlightDB, FlightData, SatData, CLay, CPro, Intersection,
 ## Import functions for Julia include files
 include("auxiliary.jl")       # helper functions
 include("lidar.jl")           # functions related to processing CALIOP lidar data
-include("loadFlightData.jl")  # functions related to loading flight databases/datasets
+include("flightdata.jl")      # functions related to loading flight databases/datasets
+include("clouddata.jl")       # functions related to loading cloud track databases/datasets
 include("match.jl")           # functions related to finding track intersections
 
 end # module TrackMatcher

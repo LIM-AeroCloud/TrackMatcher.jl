@@ -1,5 +1,59 @@
 ### Helper functions
 
+## Storage of intersection data
+"""
+    addX!(Xdata, track, accuracy, Xf, id, dx, dt, Xradius, Xflight,
+      cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas, NA)
+
+Append DataFrames `Xdata`, `tracks`, and `accuracy` by data from `Xf`, `id`,
+`dx`, `dt`, `Xflight`, `cpro`, `clay`, `tmf`, `tms`, `ift`, `feature`, `fxmeas`,
+`ftmeas`, `sxmeas`, and `stmeas`. If an intersection already exists with `Xradius`
+in `Xdata`, use the more accurate intersection with the lowest `accuracy.intersection`.
+Altitude is retrieved from flight altitude or, for cloud tracks, set to `NA`
+(`NaN` using the same floating point precision as other cloud data).
+"""
+function addX!(Xdata, track, accuracy, counter, Xf, id, dx, dt, Xradius, Xflight,
+  cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas, NA)
+
+  # Set primary object's altitude
+  alt = track isa FlightData ? Xflight.data.alt[ift] : NA
+  # Assume, intersection is no duplicate
+  duplicate = false
+  # Loop over previously found intersections
+  for i = 1:size(Xdata, 1)
+    # Use most accurate intersection, when duplicates are found within Xradius
+    if dist.haversine(Xf, (Xdata.lat[i], Xdata.lon[i]), earthradius(Xf[1])) ≤ Xradius &&
+      dx ≤ accuracy.intersection[i]
+      if dx == accuracy.intersection[i] && dt < Xdata.tdiff[i]
+        Xdata[i, 2:end] = (lat = Xf[1], lon = Xf[2], alt = alt,
+          tdiff = dt, tflight = tmf, tsat = tms, feature = feature)
+        track[i, 2:end] = (flight = Xflight, CPro = cpro, CLay = clay)
+        accuracy[i, 2:end] = (intersection = dx, flightcoord = fxmeas,
+          satcoord = sxmeas, flighttime = ftmeas, sattime = stmeas)
+        # Set duplicate flag
+        duplicate = true
+        break
+      else
+        return counter
+      end # duplicate condition based on time delay at intersection
+    end # duplicate condition based on accuracy
+  end #loop over already found intersection
+  # Save new intersections that are not identified as duplicates
+  if !duplicate
+    counter += 1
+    push!(Xdata, (id = id, lat = Xf[1], lon = Xf[2], alt = alt,
+      tdiff = dt, tflight = tmf, tsat = tms, feature = feature))
+    push!(track, (id = id, flight = Xflight, CPro = cpro, CLay = clay))
+    push!(accuracy, (id = id, intersection = dx, flightcoord = fxmeas,
+      satcoord = sxmeas, flighttime = ftmeas, sattime = stmeas))
+  end
+
+  return counter
+end #function addX!
+
+
+## Time format conversion of satellite data
+
 """
     convertUTC(t::AbstractFloat) -> DateTime
 
@@ -21,6 +75,8 @@ function convertUTC(t::AbstractFloat)
   return DateTime(Dates.yearmonthday(d)..., h, m, s, ms)
 end
 
+
+## File system scans and data processing
 
 """
     findfiles!(inventory::Vector{String}, folder::String, filetypes::String...) -> inventory
@@ -113,6 +169,8 @@ function findflex(x::AbstractArray{<:Union{V,T} where V where T})
   return Tuple(ranges)
 end #function findflex
 
+
+## Data checks and corrections
 
 """
     checkcols!(
@@ -228,7 +286,7 @@ function checkbounds!(
     all(bounds[pos][1] .< skipmissing(data[!,col]) .< bounds[pos][2])
     correctcols[pos] = val
   end
-end
+end #function checkbounds!
 
 
 """
@@ -260,7 +318,7 @@ function findbyname!(
     col ≠ nothing && typeof(data[!,name]) <: standardtypes[i] &&
       checkbounds!(correctcols, bounds, data, name, i, col)
   end
-  isempty(findall(isequal(0), correctcols)) && check === nothing &&
+  isempty(findall(isequal(0), correctcols)) && isnothing(check) &&
     @warn "all columns corrected based on column names"
 end #function findbyname!
 
@@ -378,6 +436,8 @@ function checkDBtype(DB::Vector{FlightData}, type::String)
 end #function checkDBtype
 
 
+## Data extractions from raw data
+
 """
     find_timespan(sat::DataFrame, X::Tuple{<:AbstractFloat, <:AbstractFloat}, dataspan::Int=15)
       -> DataFrame, Vector{Int}
@@ -417,22 +477,22 @@ end #function extract_timespan
 
 
 """
-    get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:AbstractFloat}, flightspan::Int)
+    get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:AbstractFloat}, primspan::Int)
       -> flightdata::FlightData, index::Int
 
 From the measured `flight` data and lat/lon coordinates the intersection `X`,
-save the closest measured value to the interpolated intersection ±`flightspan` data points
+save the closest measured value to the interpolated intersection ±`primspan` data points
 to `flightdata` and return it together with the `index` in `flightdata` of the time with the coordinates
 closest to `X`.
 """
-function get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:AbstractFloat}, flightspan::Int)
+function get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:AbstractFloat}, primspan::Int)
   # Generate coordinate pairs from lat/lon columns
   coords = ((flight.data.lat[i], flight.data.lon[i]) for i = 1:size(flight.data,1))
   # Find the index (DataFrame row) of the intersection in the flight data
   imin = argmin(dist.haversine.(coords, [X], earthradius(X[1])))
   # Construct FlightData at Intersection
-  t1 = max(1, min(imin-flightspan, length(flight.data.time)))
-  t2 = min(length(flight.data.time), imin+flightspan)
+  t1 = max(1, min(imin-primspan, length(flight.data.time)))
+  t2 = min(length(flight.data.time), imin+primspan)
   # t2 = t-timespan > length(data[:,1]) ? 0 : t2
   flightdata = FlightData(flight.data[t1:t2,:], flight.metadata)
 
@@ -442,12 +502,38 @@ function get_flightdata(flight::FlightData, X::Tuple{<:AbstractFloat, <:Abstract
 end #function get_flightdata
 
 
+function get_DateTimeRoute(filename::String, tzone::String)
+
+    # Time is the first column and has to be addressed as flight[!,1] in the code
+    # due to different column names, in which the timezone is included
+    timezone = zonedict[tzone]
+    # Retrieve date and metadata from filename
+    flightID, datestr, course = try match(r"(.*?)_(.*?)_(.*)", filename).captures
+    catch
+      println()
+      println()
+      @warn "Flight ID, date, and course not found. Data skipped." file
+      return missing, missing, missing, missing, missing
+    end
+    orig, dest = match(r"(.*)[-|_](.*)", course).captures
+    date = try Dates.Date(datestr, "d-u-y", locale="english")
+    catch
+      println()
+      println()
+      @warn "Unable to parse date. Data skipped." file
+      return missing, missing, missing, missing, missing
+    end
+
+    return date, timezone, flightID, orig, dest
+end
+
+
 """
     get_satdata(
       ms::mat.MSession,
       sat::SatData,
       X::Tuple{<:AbstractFloat, <:AbstractFloat},
-      satspan::Int,
+      secspan::Int,
       flightalt::Real,
       flightid::Union{Int,String},
       lidarprofile::NamedTuple,
@@ -459,7 +545,7 @@ end #function get_flightdata
 Using the `sat` data measurements within the overlap region and the MATLAB session
 `ms`, extract CALIOP cloud profile (`cpro`) and/or layer data (`clay`) together with
 the atmospheric `feature` at flight level (`flightalt`) for the data point closest
-to the calculated intersection `X` ± `satspan` timesteps. In addition, return the
+to the calculated intersection `X` ± `secspan` timesteps. In addition, return the
 index `ts` within `cpro`/`clay` of the data point closest to `X`.
 When `savesecondtype` is set to `false`, only the data type (`CLay`/`CPro`) in `sat`
 is saved; if set to `true`, the corresponding data type is saved if available.
@@ -471,7 +557,7 @@ function get_satdata(
   ms::mat.MSession,
   sat::SatData,
   X::Tuple{<:AbstractFloat, <:AbstractFloat},
-  satspan::Int,
+  secspan::Int,
   flightalt::Real,
   altmin::Real,
   flightid::Union{Int,String},
@@ -481,7 +567,7 @@ function get_satdata(
   Float::DataType=Float32
 )
   # Retrieve DataFrame at Intersection ± 15 time steps
-  timespan, fileindex = find_timespan(sat.data, X, satspan)
+  timespan, fileindex = find_timespan(sat.data, X, secspan)
   primfiles = map(f -> get(sat.metadata.files, f, 0), fileindex)
   secfiles = if sat.metadata.type == :CPro && savesecondtype
     replace.(primfiles, "CPro" => "CLay")
@@ -556,22 +642,22 @@ Return a tidied flight data from which duplicate entries are removed together
 with the `flex` points in the x data for interpolation and a boolean `useLON`,
 which is true for longitude values used x data in the track interpolation.
 """
-function preptrack(flight::DataFrame)
+function preptrack!(trajectory::DataFrame)
   # calculate area covered by flight
-  lp = any(flight.lon .≥ 0) ? maximum(filter(l -> l ≥ 0, flight.lon)) -
-    minimum(filter(l -> l ≥ 0, flight.lon)) : 0
-  ln = any(flight.lon .< 0) ? maximum(filter(l -> l < 0, flight.lon)) -
-    minimum(filter(l -> l < 0, flight.lon)) : 0
-  # Determine main direction of flight (N<>S, E<>W) and use it as x values
-  # for flight interpolation (info stored as bool useLON)
-  useLON = maximum(flight.lat) - minimum(flight.lat) ≤ (lp + ln) *
-    cosd(stats.mean(flight.lat)) ? true : false
+  lp = any(trajectory.lon .≥ 0) ? maximum(filter(l -> l ≥ 0, trajectory.lon)) -
+    minimum(filter(l -> l ≥ 0, trajectory.lon)) : 0
+  ln = any(trajectory.lon .< 0) ? maximum(filter(l -> l < 0, trajectory.lon)) -
+    minimum(filter(l -> l < 0, trajectory.lon)) : 0
+  # Determine main direction of trajectory (N<>S, E<>W) and use it as x values
+  # for trajectory interpolation (info stored as bool useLON)
+  useLON = maximum(trajectory.lat) - minimum(trajectory.lat) ≤ (lp + ln) *
+    cosd(stats.mean(trajectory.lat)) ? true : false
   # Adjust for duplicate entries and
-  remdup!(flight, useLON)
+  remdup!(trajectory, useLON)
   # find flex points to cut data in segments needed for the interpolation
-  flex = useLON ? findflex(flight.lon) : findflex(flight.lat)
+  flex = useLON ? findflex(trajectory.lon) : findflex(trajectory.lat)
 
-  return flight, flex, useLON
+  return flex, useLON
 end #function preptrack
 
 
@@ -598,6 +684,8 @@ function closest_points(arr::Vector{T}) where T<:AbstractFloat
 end #function closest_points
 
 
+## Data/unit conversion
+
 """
     earthradius(lat::T) -> R::T
 
@@ -607,28 +695,28 @@ condidering the ellipsoidal shape of the Earth due to the rotational flattening.
 function earthradius(lat::T)::T where T<:AbstractFloat
   req, rpol = 6378137, 6356752
   √(((req^2*cosd(lat))^2 + (rpol^2*sind(lat))^2) / ((req*cosd(lat))^2 + (rpol*sind(lat))^2))
-end
+end #function earthradius
 
 
 """Convert feet to kilometers"""
 function ft2km(ft::T)::T  where T<:Union{Missing,AbstractFloat}
     0.0003048ft
-end
+end #function ft2km
 
 
 """Convert feet to meters"""
 function ft2m(ft::T)::T  where T<:Union{Missing,AbstractFloat}
     0.3048ft
-end
+end #function ft2m
 
 
 """Convert feet/min to m/s"""
 function ftpmin2mps(ftpmin::T)::T  where T<:Union{Missing,AbstractFloat}
     0.00508ftpmin
-end
+end #function ftpmin2mps
 
 
 """Convert knots to m/s"""
 function knot2mps(knot::T)::T  where T<:Union{Missing,AbstractFloat}
     1.852knot/3.6
-end
+end #function knot2mps

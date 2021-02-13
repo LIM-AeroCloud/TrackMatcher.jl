@@ -1,27 +1,27 @@
 ### Routines related to loading FlightData
 
 """
-    loadInventory(files::String...; altmin::Real=5_000) -> Vector{FlightData}
+    loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5_000) -> Vector{FlightData}
 
 From a list of `files`, return a `Vector{FlightData}` that can
 be saved to the `inventory` field in `FlightDB`.
 
 When the `Vector{FlightData{T}}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
-Floating point numbers in `Flightdata` are of type `T`, by default `Float32`.
+Floating point numbers in `Flightdata` are of the precision set by `Float`,
+by default `Float32`.
 """
 function loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5_000)
 
   # Initialise inventory file array and start MATLAB for PCHIP fitting
   inventory = FlightData[]
-  parallel = VERSION ≥ v"1.3" ? true : false
 
   # Loop over files
   prog = pm.Progress(2length(files), "load inventory...")
   for file in files
     # Load data
     flights = CSV.File(file, datarow=3, footerskip=2, ignoreemptylines=true,
-      silencewarnings=true, threaded=parallel, dateformat="HH:MM:SS.sssm",
+      silencewarnings=true, threaded=true, dateformat="HH:MM:SS.sssm",
       types = Dict("LATITUDE" => Float, "LONGITUDE" => Float, "ALTITUDE" => Float,
       "SPEED" => Float), select = [1:11;16]) |> df.DataFrame!
     # Monitor progress for progress bar
@@ -53,9 +53,9 @@ function loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5
           continue
         end
         # Determine predominant flight direction, inflection points, and remove duplicate entries
-        flightdata, flex, useLON = preptrack(flightdata)
+        flex, useLON = preptrack!(flightdata)
         # Save the FlightData in the inventory vector
-        push!(inventory, FlightData(flightdata, FID,
+        isempty(flex) || push!(inventory, FlightData(flightdata, FID,
           missing, missing, missing, flex, useLON, "VOLPE AEDT", file))
         # Empty data vectors
         flightdata = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
@@ -78,7 +78,7 @@ end #function loadInventory
 
 
 """
-    loadArchive(files::String...; altmin::Real=5_000)
+    loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_000)
       -> Vector{FlightData}
 
 From a list of `files`, return a `Vector{FlightData}` that can
@@ -86,17 +86,17 @@ be saved to the `archive` field in `FlightDB`.
 
 When the `Vector{FlightData{T}}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
-Floating point numbers in `Flightdata` are of type `T`, by default `Float32`.
+Floating point numbers in `Flightdata` are of the precision set by `Float`,
+by default `Float32`.
 """
 function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_000)
   # Initialise archive file array
   archive = FlightData[]
-  parallel = VERSION ≥ v"1.3" ? true : false
   # Loop over database files
   prog = pm.Progress(length(files), "load archive...")
   for file in files
     # Load data from csv file into standardised DataFrame
-    flights = readArchive(file, parallel, Float)
+    flights = readArchive(file, Float)
     # Unit conversions
     flights.alt = ft2m.(flights.alt)
     flights.speed = knot2mps.(flights.speed)
@@ -124,9 +124,9 @@ function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_0
           continue
         end
         # Determine predominant flight direction, inflection points, and remove duplicate entries
-        flightdata, flex, useLON = preptrack(flightdata)
+        flex, useLON = preptrack!(flightdata)
         # Save the FlightData in the archive vector
-        push!(archive, FlightData(flightdata, FID, flights.flightID[n],
+        isempty(flex) || push!(archive, FlightData(flightdata, FID, flights.flightID[n],
           flights.type[n], (orig=flights.orig[n],
           dest=flights.dest[n]), flex, useLON, "FlightAware", file))
 
@@ -156,7 +156,7 @@ end #function loadArchive
 
 
 """
-    loadOnlineData(files::String...; altmin::Real=5_000, delim::Union{Nothing,Char,String}=nothing)
+    loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=5_000, delim::Union{Nothing,Char,String}=nothing)
       -> Vector{FlightData}
 
 From a list of `files`, return a `Vector{FlightData}` that can
@@ -167,12 +167,12 @@ Default is `nothing`, which means auto-detection of the delimiter is used.
 
 When the `Vector{FlightData{T}}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
-Floating point numbers in `Flightdata` are of type `T`, by default `Float32`.
+Floating point numbers in `Flightdata` are of the precision set by `Float`,
+by default `Float32`.
 """
 function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=5_000,
   delim::Union{Nothing,Char,String}=nothing)
   # Initialise inventory file array
-  # parallel = VERSION ≥ v"1.3" ? true : false
   archive = FlightData[]
   # Loop over files with online data
   prog = pm.Progress(length(files), "load online data...")
@@ -201,32 +201,10 @@ function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=
     # Define timezones as UTC offset to avoid conflicts during
     # changes to/from daylight saving
 
-    # Time is the first column and has to be addressed as flight[!,1] in the code
-    # due to different column names, in which the timezone is included
-    timezone = if occursin("_CET_", tzone)
-      tz.tz"+0100"
-    elseif occursin("_CEST_", tzone)
-      tz.tz"+0200"
-    else
-      tz.localzone()
-    end
-    # Retrieve date and metadata from filename
+    # Get time zone, data and flight metadata from file name and header of time column
     filename = splitext(basename(file))[1]
-    flightID, datestr, course = try match(r"(.*?)_(.*?)_(.*)", filename).captures
-    catch
-      println()
-      println()
-      @warn "Flight ID, date, and course not found. Data skipped." file
-      continue
-    end
-    orig, dest = match(r"(.*)[-|_](.*)", course).captures
-    date = try Dates.Date(datestr, "d-u-y", locale="english")
-    catch
-      println()
-      println()
-      @warn "Unable to parse date. Data skipped." file
-      continue
-    end
+    date, timezone, flightID, orig, dest = get_DateTimeRoute(filename, tzone)
+
     # Set to 2 days prior to allow corrections for timezone diffences in the next step
     date += Dates.Day(2)
     ### Convert times to datetime and extract heading and climbing rate as Int
@@ -257,27 +235,9 @@ function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=
         date -= Dates.Day(1)
       end
       # Derive time from time string
-      t = if VERSION ≥ v"1.3"
-        # Use AM/PM format for Julia > version 1.3
-        Time(flight.time[i][5:end], "I:M:S p")
-      else
-        # Calculate time manually otherwise
-        t = Time(flight.time[i][5:12], "H:M:S")
-        if flight.time[i][end-1:end] == "PM" && !(Dates.hour(t)==12)
-          t += Dates.Hour(12)
-        elseif flight.time[i][end-1:end] == "AM" && Dates.hour(t)==12
-          t -= Dates.Hour(12)
-        else
-          t
-        end
-      end
+      t = Time(flight.time[i][5:end], "I:M:S p")
       # Save data that needed tweaking of current time step
-      if VERSION ≥ v"1.1"
-        pushfirst!(flighttime, ZonedDateTime(DateTime(date, t), timezone))
-      else
-        pushfirst!(flighttime, ZonedDateTime(DateTime(Dates.yearmonthday(date)...,
-          Dates.hour(t), Dates.minute(t), Dates.second(t)), timezone))
-      end
+      pushfirst!(flighttime, ZonedDateTime(DateTime(date, t), timezone))
       pushfirst!(altitude, alt); pushfirst!(climbingrate, climb); pushfirst!(heading, head)
     end #loop of flight
 
@@ -292,11 +252,11 @@ function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=
     flight.lat = float.(flight.lat); flight.lon = float.(flight.lon)
 
     # Determine predominant flight direction, inflection points, and remove duplicate entries
-    flight, flex, useLON = preptrack(flight)
+    flex, useLON = preptrack!(flight)
 
     # Save data as FlightData
-    push!(archive, FlightData(flight, replace(filename, "_" => "/"), flightID,
-      missing, (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
+    isempty(flex) || push!(archive, FlightData(flight, replace(filename, "_" => "/"),
+      flightID, missing, (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
     # Monitor progress for progress bar
     pm.next!(prog)
   end #loop over files
@@ -311,14 +271,13 @@ end #function loadOnlineData
 
 Read FlightAware archived data from a csv `file` and return content as DataFrame.
 
-Using Julia version 1.3 or higher, `parallel` can be set to `true` to speed up file reading.
 The routine works for several FlightAware archive versions. Floating point numbers
 are read with single precision or as defined by kwarg `Float`.
 """
-function readArchive(file, parallel, Float=Float32)
+function readArchive(file, Float=Float32)
   # Read file
   flightdata = CSV.File(file, datarow=2, normalizenames=true, ignoreemptylines=true,
-    silencewarnings=true, threaded=parallel, dateformat="m/d/y H:M:S",
+    silencewarnings=true, threaded=true, dateformat="m/d/y H:M:S",
     types = Dict(:Latitude => Float, :Longitude => Float, :Altitude_feet_ => Float,
     :Altitude_ft_ => Float, :Groundspeed_knots_ => Float, :Groundspeed_kts_ => Float,
     :Rate => Float),
