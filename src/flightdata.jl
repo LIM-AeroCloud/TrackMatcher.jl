@@ -53,9 +53,9 @@ function loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5
           continue
         end
         # Determine predominant flight direction, inflection points, and remove duplicate entries
-        flightdata, flex, useLON = preptrack(flightdata)
+        flex, useLON = preptrack!(flightdata)
         # Save the FlightData in the inventory vector
-        push!(inventory, FlightData(flightdata, FID,
+        isempty(flex) || push!(inventory, FlightData(flightdata, FID,
           missing, missing, missing, flex, useLON, "VOLPE AEDT", file))
         # Empty data vectors
         flightdata = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
@@ -124,9 +124,9 @@ function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_0
           continue
         end
         # Determine predominant flight direction, inflection points, and remove duplicate entries
-        flightdata, flex, useLON = preptrack(flightdata)
+        flex, useLON = preptrack!(flightdata)
         # Save the FlightData in the archive vector
-        push!(archive, FlightData(flightdata, FID, flights.flightID[n],
+        isempty(flex) || push!(archive, FlightData(flightdata, FID, flights.flightID[n],
           flights.type[n], (orig=flights.orig[n],
           dest=flights.dest[n]), flex, useLON, "FlightAware", file))
 
@@ -201,32 +201,10 @@ function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=
     # Define timezones as UTC offset to avoid conflicts during
     # changes to/from daylight saving
 
-    # Time is the first column and has to be addressed as flight[!,1] in the code
-    # due to different column names, in which the timezone is included
-    timezone = if occursin("_CET_", tzone)
-      tz.tz"+0100"
-    elseif occursin("_CEST_", tzone)
-      tz.tz"+0200"
-    else
-      tz.localzone()
-    end
-    # Retrieve date and metadata from filename
+    # Get time zone, data and flight metadata from file name and header of time column
     filename = splitext(basename(file))[1]
-    flightID, datestr, course = try match(r"(.*?)_(.*?)_(.*)", filename).captures
-    catch
-      println()
-      println()
-      @warn "Flight ID, date, and course not found. Data skipped." file
-      continue
-    end
-    orig, dest = match(r"(.*)[-|_](.*)", course).captures
-    date = try Dates.Date(datestr, "d-u-y", locale="english")
-    catch
-      println()
-      println()
-      @warn "Unable to parse date. Data skipped." file
-      continue
-    end
+    date, timezone, flightID, orig, dest = get_DateTimeRoute(filename, tzone)
+
     # Set to 2 days prior to allow corrections for timezone diffences in the next step
     date += Dates.Day(2)
     ### Convert times to datetime and extract heading and climbing rate as Int
@@ -274,11 +252,11 @@ function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=
     flight.lat = float.(flight.lat); flight.lon = float.(flight.lon)
 
     # Determine predominant flight direction, inflection points, and remove duplicate entries
-    flight, flex, useLON = preptrack(flight)
+    flex, useLON = preptrack!(flight)
 
     # Save data as FlightData
-    push!(archive, FlightData(flight, replace(filename, "_" => "/"), flightID,
-      missing, (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
+    isempty(flex) || push!(archive, FlightData(flight, replace(filename, "_" => "/"),
+      flightID, missing, (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
     # Monitor progress for progress bar
     pm.next!(prog)
   end #loop over files
