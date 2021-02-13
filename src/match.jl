@@ -54,7 +54,7 @@ function intersection(
     ID = track isa FlightData ? track.metadata.dbID : track.metadata.ID
     try
       # Find sat tracks in the vicinity of flight tracks, where intersections are possible
-      overlap = findoverlap(track, sat, maxtimediff)
+      overlap = findoverlap(track, sat, maxtimediff, ID)
       if isempty(overlap)
         pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
           (:featured, length(Xdata.id[.!ismissing.(Xdata.feature) .&
@@ -73,7 +73,7 @@ function intersection(
       append!(accuracy, curraccuracy)
     catch err
       @debug begin
-        track isa FlightData ? (@show track.metadata.dbID) : (@show track.metadata.ID)
+        @show ID
         rethrow(err)
       end
       # Issue warning on failure of interpolating track or time data
@@ -217,7 +217,7 @@ function find_intersections(
       # Exclude data with long distances to nearest flight measurement
       if fxmeas > expdist || sxmeas > expdist
         @info("maximum distance of intersection to next track point exceeded; data excluded",
-          track.metadata.dbID)
+          trackID)
         continue
       end
       # Save intersection data
@@ -238,31 +238,31 @@ in the sat data that are in the vicinity of the flight track (min/max of lat/lon
 Consider only satellite data of ± `maxtimediff` minutes before the start and after
 the end of the flight.
 """
-function findoverlap(flight::T where T<:Union{FlightData, CloudTrack}, sat::SatData, maxtimediff::Int)
+function findoverlap(track::T where T<:Union{FlightData, CloudTrack}, sat::SatData,
+  maxtimediff::Int, ID::Union{Missing,Int,String})
 
   # Initialise
   overlap = NamedTuple{(:range, :min, :max),Tuple{UnitRange, Real, Real}}[]
   ## Retrieve sat data in the range ±maxtimediff minutes before and after the flight
   # Set time span
-  t1 = findfirst(sat.data.time .≥ flight.data.time[1] - Dates.Minute(maxtimediff))
-  t2 = findlast(sat.data.time .≤ flight.data.time[end] + Dates.Minute(maxtimediff))
+  t1 = findfirst(sat.data.time .≥ track.data.time[1] - Dates.Minute(maxtimediff))
+  t2 = findlast(sat.data.time .≤ track.data.time[end] + Dates.Minute(maxtimediff))
   # return empty ranges, if no complete overlap is found
   if isnothing(t1) || isnothing(t2)
     @warn string("no sufficient satellite data for time index ",
-      "$(flight.data.time[1] - Dates.Minute(maxtimediff))...",
-      "$(flight.data.time[end] + Dates.Minute(maxtimediff))")
+      "$(track.data.time[1] - Dates.Minute(maxtimediff))...",
+      "$(track.data.time[end] + Dates.Minute(maxtimediff))")
     return overlap
   elseif length(t1:t2) ≤ 1
-    @warn string("no sufficient overlap between flight/satellite data for flight ",
-      "$(flight.metadata.dbID) at ",
-      "$(sat.data.time[t1]) ... $(sat.data.time[t2])")
+    @warn string("no sufficient overlap between primary/secondary trajectory for track ",
+      "$(ID) at $(sat.data.time[t1]) ... $(sat.data.time[t2])")
     return overlap
   end
 
   ## Find overlaps in flight and sat data
-  satoverlap = (flight.metadata.area.latmin .≤ sat.data.lat[t1:t2] .≤ flight.metadata.area.latmax) .&
-    ((flight.metadata.area.elonmin .≤ sat.data.lon[t1:t2] .≤ flight.metadata.area.elonmax) .|
-    (flight.metadata.area.wlonmin .≤ sat.data.lon[t1:t2] .≤ flight.metadata.area.wlonmax))
+  satoverlap = (track.metadata.area.latmin .≤ sat.data.lat[t1:t2] .≤ track.metadata.area.latmax) .&
+    ((track.metadata.area.elonmin .≤ sat.data.lon[t1:t2] .≤ track.metadata.area.elonmax) .|
+    (track.metadata.area.wlonmin .≤ sat.data.lon[t1:t2] .≤ track.metadata.area.wlonmax))
   # Convert boolean vector of satellite overlapping data into ranges
   r = false # flag, whether index is part of a current range
   ind = 0   # index in the data array, when looping over data points
@@ -275,7 +275,7 @@ function findoverlap(flight::T where T<:Union{FlightData, CloudTrack}, sat::SatD
       # Define current track segment from saved first index to last index
       seg = t1+ind-1:t1+i-2
       # Find flex points at poles in sat tracks
-      xdata = flight.metadata.useLON ? sat.data.lon[seg] : sat.data.lat[seg]
+      xdata = track.metadata.useLON ? sat.data.lon[seg] : sat.data.lat[seg]
       satsegments = findflex(xdata)
       # Save current range split into segments with monotonic latitude values
       for s in satsegments
