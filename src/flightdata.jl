@@ -4,7 +4,7 @@
     loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5_000) -> Vector{FlightTrack}
 
 From a list of `files`, return a `Vector{FlightTrack}` that can
-be saved to the `inventory` field in `FlightDB`.
+be saved to the `inventory` field in `FlightSet`.
 
 When the `Vector{FlightTrack{T}}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
@@ -82,7 +82,7 @@ end #function loadInventory
       -> Vector{FlightTrack}
 
 From a list of `files`, return a `Vector{FlightTrack}` that can
-be saved to the `archive` field in `FlightDB`.
+be saved to the `archive` field in `FlightSet`.
 
 When the `Vector{FlightTrack{T}}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
@@ -160,7 +160,7 @@ end #function loadArchive
       -> Vector{FlightTrack}
 
 From a list of `files`, return a `Vector{FlightTrack}` that can
-be saved to the `onlineData` field in `FlightDB`.
+be saved to the `onlineData` field in `FlightSet`.
 
 The `delim`iter of the data in the input file can be specified by a string or character.
 Default is `nothing`, which means auto-detection of the delimiter is used.

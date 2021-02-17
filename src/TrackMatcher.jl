@@ -12,7 +12,7 @@ with ship or cloud tracks.
   - `inventory`: VOLPE AEDT inventory
   - `archive`: commercially available database by FlightAware
   - `onlineData`: free online data by FlightAware
-- `DBMetadata` stores metadata for the primary database (`FLightDB` or `CloudDB`)
+- `SetMetadata` stores metadata for the primary database (`FLightDB` or `CloudDB`)
 - `FlightTrack` stores data of a single flight in `FlightDB`
 - `FlightMetadata` holds metadata to every flight
 - `SatData` stores CALIPSO position and time and a file index for the granule of each data line
@@ -64,23 +64,25 @@ abstract type DataSet{T<:AbstractFloat} end
 abstract type MeasuredSet{T} <: DataSet{T} end
 abstract type ComputedSet{T} <: DataSet{T} end
 abstract type PrimarySet{T} <: MeasuredSet{T} end
-abstract type SecondarySet{T} <: MeasuredSet{T} end
-abstract type FlightSet{T} <: PrimarySet{T} end
-abstract type CloudSet{T} <: PrimarySet{T} end
-abstract type FlightTrack{T} <: FlightSet{T} end
-# abstract type CloudTrack{T} <: CloudSet{T} end
-abstract type SatTrack{T} <: SecondarySet{T} end
+abstract type ObservationSet{T} <: MeasuredSet{T} end
+abstract type SecondaryTrack{T} <: MeasuredSet{T} end
+abstract type PrimaryTrack{T} <: PrimarySet{T} end
+abstract type FlightTrack{T} <: PrimaryTrack{T} end
+# abstract type CloudTrack{T} <: PrimaryTrack{T} end
+abstract type SatTrack{T} <: SecondaryTrack{T} end
 # abstract type Intersection{T} <: ComputedSet{T} end
 
 
-## Export structs
-export FlightDB, FlightTrack, SatData, CLay, CPro, Intersection,
-       FlightMetadata, SatMetadata, DBMetadata, XMetadata
+## Export types and constructors
+export DataSet, MeasuredSet, ComputedSet, PrimarySet, ObservationSet,
+       PrimaryTrack, SecondaryTrack, FlightTrack, CloudTrack, FlightData, #CloudData,
+       SecondaryTrack, SatData, CLay, CPro, Intersection, #APro, ALay, XData,
+       FlightMetadata, SatMetadata, SetMetadata, XMetadata
 
 
 ## Import functions for Julia include files
-include("concretetypes.jl")   # structs of concrete types at the end of the type tree
-include("mixedtypes.jl")      # structs of abstract types with constructors for concrete types
+include("inputtypes.jl")      # structs of concrete types at the end of the type tree
+include("outputtypes.jl")     # structs of abstract types with constructors for concrete types
 include("datachecks.jl")      # helper functions for data checks
 include("dataprocessing.jl")  # helper functions for data processing
 include("conversions.jl")     # helper functions for time/unit conversions

@@ -1,7 +1,7 @@
 """
     function intersection(
       trackdata::T where T<:Union{Vector{FlightTrack},Vector{CloudTrack}},
-      dbmetadata::DBMetadata,
+      setmetadata::SetMetadata,
       sat::SatData,
       savesecondsattype::Bool=false,
       maxtimediff::Int=30,
@@ -16,12 +16,12 @@
     )
 
 Instantiate `Intersection` from either flight or cloud `trackdata` and `sat` tracks
-as defined by the kwargs of `Intersection`. The `dbmetadata` is mainly needed for
+as defined by the kwargs of `Intersection`. The `setmetadata` is mainly needed for
 defining IDs and the source of the track data.
 """
 function intersection(
-  trackdata::T where T<:Union{<:Vector{<:FlightData},<:Vector{<:CloudTrack}},
-  dbmetadata::DBMetadata,
+  trackdata::T where T<:PrimaryTrack,
+  setmetadata::SetMetadata,
   sat::SatData,
   savesecondsattype::Bool=false,
   maxtimediff::Int=30,
@@ -66,7 +66,7 @@ function intersection(
       sectracks = interpolate_satdata(sat, overlap, track.metadata.useLON)
       # Calculate intersections and store data and metadata in DataFrames
       currdata, currtrack, curraccuracy = find_intersections(ms, track,
-        primtracks, dbmetadata.altmin, sat, sectracks, dataset, ID, maxtimediff,
+        primtracks, setmetadata.altmin, sat, sectracks, dataset, ID, maxtimediff,
         stepwidth, Xradius, lidarprofile, lidarrange, primspan, secspan,
         expdist, savesecondsattype, Float)
       append!(Xdata, currdata); append!(tracked, currtrack)
@@ -98,14 +98,14 @@ function intersection(
     "\n▪ data\n▪ tracked\n▪ accuracy\n▪ metadata")
   Intersection(Xdata, tracked, accuracy, XMetadata(maxtimediff, stepwidth, Xradius,
       expdist, lidarrange, lidarprofile, sat.metadata.type, sat.metadata.date,
-    dbmetadata.altmin, dbmetadata.date, tc, loadtime, remarks))
+    setmetadata.altmin, setmetadata.date, tc, loadtime, remarks))
 end #function intersection
 
 
 """
     function find_intersections(
       ms::mat.MSession,
-      track::Union{FlightTrack,CloudTrack},
+      track::T where T<:PrimaryTrack,
       primtracks::Vector,
       altmin::Real,
       sat::SatData,
@@ -153,7 +153,7 @@ and as flags in error messages.
 """
 function find_intersections(
   ms::mat.MSession,
-  track::Union{FlightTrack,CloudTrack},
+  track::T where T<:PrimaryTrack,
   primtracks::Vector,
   altmin::Real,
   sat::SatData,
@@ -294,7 +294,7 @@ end#function findoverlap
 Using the `flight` data, construct a PCHIP polynomial and return it together with
 the x data range (`min`/`max` values).
 """
-function interpolate_trackdata(track::Union{FlightTrack,CloudTrack})
+function interpolate_trackdata(track::T where T<:PrimaryTrack)
 
   # Define x and y data based on useLON
   x, y = track.metadata.useLON ?

@@ -1,3 +1,319 @@
+## Define own Metadata structs
+"""
+# struct FlightMetadata{T}
+
+Immutable struct to hold metadata for `FlightTrack` of the `FlightSet` with fields
+
+- `dbID::Union{Int,AbstractString}`
+- `flightID::Union{Missing,AbstractString}`
+- `route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}}`
+- `aircraft::Union{Missing,AbstractString}`
+- `date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}`
+- `area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,AbstractFloat}}`
+- `flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}}`
+- `useLON::Bool`
+- `source::AbstractString`
+- `file::AbstractString`
+
+By default, all `AbstractFloat` are set to Float32 but can be set to any other precision
+in `FlightSet` with the kwarg `Float`.
+
+## dbID
+Database ID – integer counter for `inventory`,
+String with information about `FlightID`, `route`, and/or scheduled arrival for
+FlightAware data.
+
+## FlightID and aircraft
+Strings with aircraft identification and type.
+
+## route
+`NamedTuple` with fields for `orig`in and `dest`ination holding the airport codes.
+
+## area
+`NamedTuple` with fields for latitude and Longitude range. For the longitude range,
+it is distinguished between positive and negative ranges to avoid problems with
+flights passing the date line.
+
+Fields:
+- `latmin`
+- `latmax`
+- `elonmin`
+- `elonmax`
+- `wlonmin`
+- `wlonmax`
+
+## date
+`NamedTuple` with fields `start` and `stop` for start and end time of the current
+flight.
+
+## flex
+`Tuple` of `NamedTuple`s with entries
+- `range` (`UnitRange`): flight segment between inflection points of the current flight track
+- `min` (`AbstractFloat`): minimum x value in the flight segment
+- `max` (`AbstractFloat`): maximum x value in the flight segment
+
+## useLON
+Flag (`Bool`) whether to use longitude as x data for track interpolation.
+
+## source
+String describing the database source of the current flight:
+- `"VOLPE AEDT"`
+- `"FlightAware"`
+- `"flightaware.com"`
+
+## file
+String holding the absolute folder path and file name.
+
+
+# Instantiation
+
+`FlightMetadata` is constructed automatically, when `FlightTrack` is instatiated using
+a modified constructor and `dbID`, `flightID`, `aircraft` type, `route`, `useLON`,
+`flex`, `source`, and `file`.
+Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
+
+    FlightMetadata(
+      dbID::Union{Int,AbstractString},
+      flightID::Union{Missing,AbstractString},
+      route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
+      aircraft::Union{Missing,AbstractString},
+      date::Vector{DateTime},
+      lat::Vector{<:Union{Missing,<:AbstractFloat}},
+      lon::Vector{<:Union{Missing,<:AbstractFloat}},
+      useLON::Bool,
+      flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}},
+      source::AbstractString,
+      file::AbstractString
+    ) -> struct FlightMetadata
+
+Or construct `FlightMetadata` by directly handing over every field:
+
+    FlightMetadata(
+      dbID::Union{Int,AbstractString},
+      flightID::Union{Missing,AbstractString},
+      route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
+      aircraft::Union{Missing,AbstractString},
+      date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+      area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,AbstractFloat}},
+      flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}},
+      useLON::Bool,
+      source::AbstractString,
+      file::AbstractString
+    ) -> struct FlightMetadata
+"""
+struct FlightMetadata{T} <: FlightTrack{T}
+  dbID::Union{Int,AbstractString}
+  flightID::Union{Missing,AbstractString}
+  route::Union{Missing,NamedTuple{(:orig,:dest),Tuple{AbstractString,AbstractString}}}
+  aircraft::Union{Missing,AbstractString}
+  date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
+  area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,T}}
+  flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}}
+  useLON::Bool
+  source::AbstractString
+  file::AbstractString
+
+  """ Unmodified constructor for `FlightMetadata` """
+  function FlightMetadata{T}(
+    dbID::Union{Int,AbstractString},
+    flightID::Union{Missing,AbstractString},
+    route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
+    aircraft::Union{Missing,AbstractString},
+    date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+    area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,T}},
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
+    useLON::Bool,
+    source::AbstractString,
+    file::AbstractString
+  ) where T
+    # T = typeof(area.latmin)
+    new{T}(dbID, flightID, route, aircraft, date, area, flex, useLON, source, file)
+  end #constructor 1 FlightMetadata
+
+  """
+  Modified constructor for FlightMetadata with some automated construction of fields
+  and variable checks.
+  """
+  function FlightMetadata{T}(
+    dbID::Union{Int,AbstractString},
+    flightID::Union{Missing,AbstractString},
+    route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
+    aircraft::Union{Missing,AbstractString},
+    date::Vector{DateTime},
+    lat::Vector{<:Union{Missing,<:AbstractFloat}},
+    lon::Vector{<:Union{Missing,<:AbstractFloat}},
+    useLON::Bool,
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
+    source::AbstractString,
+    file::AbstractString
+  ) where T
+    # T = promote_type(eltype(lat), eltype(lon))
+    elonmax = isempty(lon[lon.≥0]) ? T(NaN) : maximum(lon[lon.≥0])
+    elonmin = isempty(lon[lon.≥0]) ? T(NaN) : minimum(lon[lon.≥0])
+    wlonmax = isempty(lon[lon.<0]) ? T(NaN) : maximum(lon[lon.<0])
+    wlonmin = isempty(lon[lon.<0]) ? T(NaN) : minimum(lon[lon.<0])
+    area = (latmin=minimum(lat), latmax=maximum(lat),
+      elonmin=elonmin, elonmax=elonmax, wlonmin=wlonmin, wlonmax=wlonmax)
+    new{T}(dbID, flightID, route, aircraft, (start=date[1], stop=date[end]), area,
+      flex, useLON, source, file)
+  end #constructor 2 FlightMetadata
+end #struct FlightMetadata
+
+""" External constructor for emtpy FlightMetadata struct """
+FlightMetadata{T}() where T = FlightMetadata("", missing, missing, missing,
+  (start=Dates.now(), stop=Dates.now()), (latmin=T(NaN), latmax=T(NaN),
+  elonmin=T(NaN), elonmax=T(NaN), wlonmin=T(NaN), wlonmax=T(NaN)),
+  ((range=0:0, min=T(NaN), max=T(NaN)),), true, "","")
+
+
+"""
+# struct CloudMetadata
+
+Currently only place holder for remarks available during test phase.
+"""
+struct CloudMetadata{T}
+  ID::String
+  date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
+  area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,T}}
+  flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}}
+  useLON::Bool
+  file::String
+
+  """ Unmodified constructor for `CloudMetadata` """
+  function CloudMetadata(
+    ID::String,
+    date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+    area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,T}},
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
+    useLON::Bool,
+    file::String
+  ) where T<:AbstractFloat
+    # T = typeof(area.latmin)
+    new{T}(ID, date, area, flex, useLON, file)
+  end #constructor 1 CloudMetadata
+
+  """
+  Modified constructor for CloudMetadata with some automated construction of fields
+  and variable checks.
+  """
+  function CloudMetadata(
+    ID::Union{Int,AbstractString},
+    data::DataFrame,
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
+    useLON::Bool,
+    file::AbstractString
+  ) where T<:AbstractFloat
+    # T = promote_type(eltype(data.lat), eltype(data.lon))
+    elonmax = isempty(data.lon[data.lon.≥0]) ? T(NaN) : maximum(data.lon[data.lon.≥0])
+    elonmin = isempty(data.lon[data.lon.≥0]) ? T(NaN) : minimum(data.lon[data.lon.≥0])
+    wlonmax = isempty(data.lon[data.lon.<0]) ? T(NaN) : maximum(data.lon[data.lon.<0])
+    wlonmin = isempty(data.lon[data.lon.<0]) ? T(NaN) : minimum(data.lon[data.lon.<0])
+    area = (latmin=minimum(data.lat), latmax=maximum(data.lat),
+      elonmin=elonmin, elonmax=elonmax, wlonmin=wlonmin, wlonmax=wlonmax)
+    new{T}(ID, (start=data.time[1], stop=data.time[end]), area, flex, useLON, file)
+  end #constructor 2 CloudMetadata
+end #struct CloudMetadata
+
+
+"""
+# struct SatMetadata
+
+Immutable struct to hold metadata for `SatData` with fields
+
+- `files::Dict{Int,String}`
+- `type::Symbol`
+- `date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}`
+- `created::Union{DateTime,ZonedDateTime}`
+- `loadtime::Dates.CompoundPeriod`
+- `remarks`
+
+## files
+Dictionary with indices of `fileindex` column in `SatData.data` pointing to the
+full file names.
+
+## type
+Symbol indicating, whether profile or layer data is stored.
+
+## date
+`NamedTuple` with fields `start` and `stop` for start and end time of the monitored
+satellite period.
+
+## created
+time of creation of database
+
+## loadtime
+time it took to read data files and load it to the struct
+
+##remarks
+any additional data or comments that can be attached to the database
+
+
+# Instantiation
+
+`SatMetadata` is constructed automatically, when `SatData` is instatiated using
+a modified constructor and `files`, `date`, `loadtime`, and `remarks`.
+
+    function SatMetadata(
+      files::Vector{String},
+      date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+      loadtime::Dates.CompoundPeriod=Dates.canonicalize(Dates.CompoundPeriod());
+      remarks=nothing
+    ) -> struct SattMetadata
+"""
+struct SatMetadata
+  files::Dict{Int,String}
+  type::Symbol
+  date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
+  created::Union{DateTime,ZonedDateTime}
+  loadtime::Dates.CompoundPeriod
+  remarks
+
+  function SatMetadata(
+    files::Dict{Int,String},
+    type::Symbol,
+    date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+    created::Union{DateTime,ZonedDateTime},
+    loadtime::Dates.CompoundPeriod,
+    remarks=nothing
+  )
+    new(files, type, date, created, loadtime, remarks)
+  end #constructor 1 SatMetadata
+
+  function SatMetadata(
+    files::Vector{String},
+    date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+    loadtime::Dates.CompoundPeriod=Dates.canonicalize(Dates.CompoundPeriod());
+    remarks=nothing
+  )
+    # Find type of satellite data based on first 50 files (~2 days)
+    type = occursin("CLay", files[1]) ≥
+      count(occursin.("CPro", files[1:min(length(files), 50)])) ? :CLay : :CPro
+    # Create a new instance of SatMetadata
+    new(Dict(enumerate(files)), type, date, tz.now(tz.localzone()), loadtime, remarks)
+  end #constructor 2 SatMetadata
+end #struct SatMetadata
+
+
+"""
+# struct SetMetadata
+
+Immutable struct with additional information of databases:
+
+- `altmin::Real`: Minimum altitude threshold for which flight data is considered
+- `date`: NamedTuple with entries `start`/`stop` giving the time range of the database
+- `created`: time of creation of database
+- `loadtime`: time it took to read data files and load it to the struct
+- `remarks`: any additional data or comments that can be attached to the database
+"""
+struct SetMetadata{T} <: PrimarySet{T}
+  altmin::T
+  date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
+  created::Union{DateTime,ZonedDateTime}
+  loadtime::Dates.CompoundPeriod
+  remarks
+end #struct SetMetadata
+
+
 ## Define structs related to flight data
 
 """
@@ -18,7 +334,7 @@ The `DataFrame` of `data` has columns in the following order with the respective
 - `speed::Vector{<:Union{Missing,<:AbstractFloat}}` (velocity in m/s)
 
 By default, all AbstractFloat are set to `Float32`, but can be set to any other
-precision in `FlightDB` by the kwarg `Float`.
+precision in `FlightSet` by the kwarg `Float`.
 
 
 # Instantiation
@@ -110,7 +426,7 @@ FlightTrack{T}() where T = FlightData(DataFrame(time = DateTime[],
 
 
 """
-# struct FlightDB
+# struct FlightSet
 
 Database for aircraft data of different database types with fields:
 - `inventory::Vector{FlightTrack}`
@@ -133,7 +449,7 @@ Commercial flight data by FlightAware from a csv file.
 Online data from the FlightAware website copied to whitespace-separated files.
 
 ## metadata
-Immutable struct `DBMetadata`.
+Immutable struct `SetMetadata`.
 
 
 # Instantiation
@@ -145,7 +461,7 @@ altitude threshold for the data (default = `15000`) and any remarks
 online data with the keyword `odelim`. Use any character or string as delimiter.
 By default (`odelim=nothing`), auto-detection is used.
 
-    FlightDB(DBtype::String, folder::Union{String, Vector{String}}...;
+    FlightSet(DBtype::String, folder::Union{String, Vector{String}}...;
       Float::DataType=Float32, altmin::Real=5_000, remarks=nothing,
       odelim::Union{Nothing,Char,String}=nothing)
 
@@ -158,23 +474,23 @@ By default, all values are read in as `Float32`, but can be set to any other
 precision by the `Float` kwarg; `altmin` set the minimum threshold above which
 flight tracking points are considered. Set the delimiter of the input files with
 kwarg `odelim`, if delimiters are any character different from whitespace. Any
-`remarks` can be attached to `FlightDB`.
+`remarks` can be attached to `FlightSet`.
 
-Alternatively, instatiate directly with the fields of `FlightDB`, where the correct
+Alternatively, instatiate directly with the fields of `FlightSet`, where the correct
 database type is checked, and wrong datasets are removed in every field.
 """
-struct FlightDB{T} <: FlightSet{T}
+struct FlightSet{T} <: PrimarySet{T}
   inventory::Vector{FlightData{T}}
   archive::Vector{FlightData{T}}
   onlineData::Vector{FlightData{T}}
-  metadata::DBMetadata{T}
+  metadata::SetMetadata{T}
 
   """
-  Unmodified constructor for `FlightDB` with basic checks for correct dataset type
+  Unmodified constructor for `FlightSet` with basic checks for correct dataset type
   in each dataset field.
   """
-  function FlightDB{T}(inventory::Vector{FlightData{T}}, archive::Vector{FlightData{T}},
-    onlineData::Vector{FlightData{T}}, metadata::DBMetadata{T}) where {T}
+  function FlightSet{T}(inventory::Vector{FlightData{T}}, archive::Vector{FlightData{T}},
+    onlineData::Vector{FlightData{T}}, metadata::SetMetadata{T}) where {T}
 
     # Check for correct dataset type in each vector and for correct floating point precision
     inventory = checkDBtype(inventory, "VOLPE")
@@ -182,69 +498,68 @@ struct FlightDB{T} <: FlightSet{T}
     onlineData = checkDBtype(onlineData, "flightaware.com")
 
     new{T}(inventory, archive, onlineData, metadata)
-  end #constructor 1 FlightDB
-end #struct FlightDB
+  end #constructor 1 FlightSet
 
+  """
+  Modified constructor creating the database from an identifer of the
+  database type and the respective folder path for that database.
+  """
+  function FlightSet{T}(DBtype::String, folder::String...; altmin::Real=5000,
+    remarks=nothing, odelim::Union{Nothing,Char,String}=nothing) where T
 
-"""
-Modified constructor creating the database from an identifer of the
-database type and the respective folder path for that database.
-"""
-function FlightSet{T}(DBtype::String, folder::String...; altmin::Real=5000,
-  remarks=nothing, odelim::Union{Nothing,Char,String}=nothing) where T
+    # Save time of database creation
+    tstart = Dates.now()
+    # Check DBtype addresses all folder paths
+    if length(DBtype) ≠ length(folder)
+      throw(ArgumentError("Number of characters in `DBtype` must match length of vararg `folder`"))
+    end
+    # Find database types
+    i1 = [findall(isequal('i'), lowercase(DBtype)); findall(isequal('1'), DBtype)]
+    i2 = [findall(isequal('a'), lowercase(DBtype)); findall(isequal('2'), DBtype)]
+    i3 = [findall(isequal('o'), lowercase(DBtype)); findall(isequal('3'), DBtype)]
 
-  # Save time of database creation
-  tstart = Dates.now()
-  # Check DBtype addresses all folder paths
-  if length(DBtype) ≠ length(folder)
-    throw(ArgumentError("Number of characters in `DBtype` must match length of vararg `folder`"))
-  end
-  # Find database types
-  i1 = [findall(isequal('i'), lowercase(DBtype)); findall(isequal('1'), DBtype)]
-  i2 = [findall(isequal('a'), lowercase(DBtype)); findall(isequal('2'), DBtype)]
-  i3 = [findall(isequal('o'), lowercase(DBtype)); findall(isequal('3'), DBtype)]
+    # Load databases for each type
+    # VOLPE AEDT inventory
+    ifiles = String[]
+    for i in i1
+      findfiles!(ifiles, folder[i], ".csv")
+    end
+    inventory = loadInventory(ifiles...; Float=T, altmin=altmin)
+    # FlightAware commercial archive
+    ifiles = String[]
+    for i in i2
+      findfiles!(ifiles, folder[i], ".csv")
+    end
+    archive = loadArchive(ifiles...; Float=T, altmin=altmin)
+    ifiles = String[]
+    for i in i3
+      findfiles!(ifiles, folder[i], ".tsv", ".txt", ".dat")
+    end
+    onlineData = loadOnlineData(ifiles...; Float=T, altmin=altmin, delim=odelim)
+    tmin, tmax = if isempty([inventory; archive; onlineData])
+      tstart, tstart
+    else
+      minimum([[f.metadata.date.start for f in inventory];
+        [f.metadata.date.start for f in archive];
+        [f.metadata.date.start for f in onlineData]]),
+      maximum([[f.metadata.date.stop for f in inventory];
+        [f.metadata.date.stop for f in archive];
+        [f.metadata.date.stop for f in onlineData]])
+    end
 
-  # Load databases for each type
-  # VOLPE AEDT inventory
-  ifiles = String[]
-  for i in i1
-    findfiles!(ifiles, folder[i], ".csv")
-  end
-  inventory = loadInventory(ifiles...; Float=T, altmin=altmin)
-  # FlightAware commercial archive
-  ifiles = String[]
-  for i in i2
-    findfiles!(ifiles, folder[i], ".csv")
-  end
-  archive = loadArchive(ifiles...; Float=T, altmin=altmin)
-  ifiles = String[]
-  for i in i3
-    findfiles!(ifiles, folder[i], ".tsv", ".txt", ".dat")
-  end
-  onlineData = loadOnlineData(ifiles...; Float=T, altmin=altmin, delim=odelim)
-  tmin, tmax = if isempty([inventory; archive; onlineData])
-    tstart, tstart
-  else
-    minimum([[f.metadata.date.start for f in inventory];
-      [f.metadata.date.start for f in archive];
-      [f.metadata.date.start for f in onlineData]]),
-    maximum([[f.metadata.date.stop for f in inventory];
-      [f.metadata.date.stop for f in archive];
-      [f.metadata.date.stop for f in onlineData]])
-  end
+    tend = Dates.now()
+    tc = tz.ZonedDateTime(tend, tz.localzone())
+    loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
 
-  tend = Dates.now()
-  tc = tz.ZonedDateTime(tend, tz.localzone())
-  loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
+    @info string("FlightSet loaded in ",
+      "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
+      "\n▪ inventory ($(length(inventory)) entries)\n▪ archive ($(length(archive)) entries)\n",
+      "▪ onlineData ($(length(onlineData)) entries)\n▪ metadata")
 
-  @info string("FlightDB data loaded in ",
-    "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
-    "\n▪ inventory ($(length(inventory)) entries)\n▪ archive ($(length(archive)) entries)\n",
-    "▪ onlineData ($(length(onlineData)) entries)\n▪ metadata")
-
-  FlightDB{T}(inventory, archive, onlineData,
-    DBMetadata{T}(altmin, (start=tmin, stop=tmax), tc, loadtime, remarks))
-end # constructor 2 FlightDB
+    new{T}(inventory, archive, onlineData,
+      SetMetadata{T}(altmin, (start=tmin, stop=tmax), tc, loadtime, remarks))
+  end # constructor 2 FlightSet
+end #struct FlightSet
 
 
 """ Default FlightSet/FlightData constructor for Float32 """
@@ -294,14 +609,14 @@ end #struct CloudTrack
 
 Database for cloud track data with fields:
 - `tracks::Vector{CloudTrack}`
-- `metadata::DBMetadata`
+- `metadata::SetMetadata`
 """
 struct CloudDB
   tracks::Vector{CloudTrack}
-  metadata::DBMetadata
+  metadata::SetMetadata
 
   """ unmodified constructor for CloudDB """
-  CloudDB(tracks::Vector{CloudTrack}, metadata::DBMetadata) = new(tracks, metadata)
+  CloudDB(tracks::Vector{CloudTrack}, metadata::SetMetadata) = new(tracks, metadata)
 
   """
   Modified constructor creating the database from mat files in the given folder
@@ -329,9 +644,10 @@ struct CloudDB
     tmax = maximum(t.data.time[end] for t in tracks)
 
     # Instantiate CloudDB
-    new(tracks, DBMetadata(NaN, (start=tmin, stop=tmax), tc, loadtime, remarks))
+    new(tracks, SetMetadata{Float}(NaN, (start=tmin, stop=tmax), tc, loadtime, remarks))
   end #modified constructor 2
 end #struct CloudDB
+
 
 ## Define structs related to sat data
 
@@ -471,193 +787,3 @@ SatData(Float::DataType=Float32) = SatData(DataFrame(time=DateTime[], lat=Float[
   lon=Float[], fileindex=Int[]), SatMetadata(Dict{Int,String}(), :undef,
   (start=Dates.now(), stop=Dates.now()), Dates.now(),
   Dates.canonicalize(Dates.CompoundPeriod())))
-
-
-## Define structs related to intersection data
-
-"""
-# struct Intersection
-
-Intersection-related data with fields
-- `data::DataFrame`
-- `tracked::DataFrame`
-- `accuracy::DataFrame`
-- `metadata::XMetadata`
-
-
-## data
-
-Data related to spatial and temporal coordinates of intersections between satellite
-and flight tracks and the meteorological conditions at the intersections.
-
-`DataFrame` columns are:
-- `id::Vector{String}`: unique intersection identifier
-- `lat::Vector{<:AbstractFloat}`: latitude of intersection
-- `lon::Vector{<:AbstractFloat}`: longitude of intersection
-- `tdiff::Vector{Dates.CompoundPeriod}`: time difference between flight and satellite overpass
-- `tflight::Vector{DateTime}`: time of aircraft at intersection
-- `tsat::Vector{DateTime}`: time of satellite at intersection
-- `feature::Vector{<:Union{Missing,Symbol}}`: atmospheric conditions at intersection
-
-
-## tracked
-
-Original track data in the vicinity of the intersection.
-
-`DataFrame` columns are:
-- `id: Vector{String}`: unique intersection identifier
-- `flight::Vector{FlightTrack}`: `FlightTrack` in the vicinity of the intersection
-- `CPro::Vector{CPro}`: `CPro` CALIOP profile data in the vicinity of the intersection
-- `CLay::Vector{CLay}`: `CLay` CALIOP layer data in the vicinity of the intersection
-
-
-## accuracy
-
-Measures about the accuracy of the intersection calculations and the quality of the track data.
-
-`DataFrame` columns are:
-- `id: Vector{String}`: unique intersection identifier
-- `intersection::Vector{<:AbstractFloat}`: accuracy of the intersection calculation in meters
-- `flightcoord::Vector{<:AbstractFloat}`: distance of nearest tracked flight data
-  to calculated intersection in meters
-- `satcoord::Vector{<:AbstractFloat}`: distance of nearest tracked sat data
-  to calculated intersection in meters
-- `flighttime::Vector{Dates.CompoundPeriod}`: time difference between measurement
-  of nearest tracked flight data and calculated time of aircraft at intersection
-- `sattime::Vector{Dates.CompoundPeriod}`: time difference between measurement
-  of nearest tracked sat data and calculated time of satellite at intersection
-
-
-# Instantiation
-
-    Intersection(
-      flights::FlightDB,
-      sat::SatData,
-      savesecondsattype::Bool=false;
-      maxtimediff::Int=30,
-      primspan::Int=0,
-      secspan::Int=15,
-      lidarrange::Tuple{Real,Real}=(15_000,-Inf),
-      stepwidth::Real=1000,
-      Xradius::Real=20_000,
-      expdist::Real=Inf,
-      Float::DataType=Float32,
-      remarks=nothing
-    ) -> struct Intersection
-
-Construct `Intersection` from the preloaded `FlightDB` and `SatData` with the option
-to save the other satellite data type not used in `sat` (either `CLay` or `CPro`),
-when `savesecondsattype` is set to `true`. Folder structure and file names must
-be identical only with `CLay`/`CPro` interchanged for this option to work.
-
-The following parameters can be set to influence intersection calculations or
-data saved to the struct:
-- `maxtimediff::Int=30`: maximum time difference allowed between aircraft passage
-  and satellite overpass at intersection
-- `primspan::Int=0`: Number of additional data points of original track data
-  saved in the vicinity of the intersection and stored in `Intersection.tracked.flight`
-- `secspan::Int=15`: Number of additional data points of original track data
-  saved in the vicinity of the intersection and stored in `Intersection.tracked.CPro`
-  and `Intersection.tracked.CLay`
-- `lidarrange::Tuple{Real,Real}=(15,-Inf)`: lidar measurements saved for column heights
-  between `(max, min)` (set to `Inf`/`-Inf` to store all values up to top/bottom)
-- `stepwidth::Real=1000`: step width of interpolation in flight and sat tracks
-  in meters (partially internally converted to degrees at equator)
-- `expdist::Real=Inf`: threshold for maximum distant to nearest measured track point;
-  if intersection is above threshold, it will be ignored
-- `Xradius::Real=20_000`: radius in meters within which multiple finds of an
-  intersection are disregarded and only the most accurate is counted
-- `Float::DataType=Float32`: Set the precision of floating point numbers
-  (single precision by default)
-- `remarks=nothing`: any data or remarks attached to the metadata
-
-Or construct `Intersection` by directly handing over the different `DataFrame`s where the names, order,
-and types of each columns are checked and attempted to correct, together with the metadata:
-
-    function Intersection(
-      data::DataFrame,
-      tracked::DataFrame,
-      accuracy::DataFrame,
-      metadata::XMetadata
-    ) -> struct Intersection
-"""
-struct Intersection
-  data::DataFrame
-  tracked::DataFrame
-  accuracy::DataFrame
-  metadata::XMetadata
-
-
-  """ Unmodified constructor for `Intersection` """
-  function Intersection(
-    data::DataFrame,
-    tracked::DataFrame,
-    accuracy::DataFrame,
-    metadata::XMetadata
-  )
-    # Check data
-    standardnames = ["id", "lat", "lon", "alt", "tdiff", "tflight", "tsat", "feature"]
-    standardtypes = [Vector{String}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
-      Vector{<:AbstractFloat}, Vector{Dates.CompoundPeriod}, Vector{DateTime},
-      Vector{DateTime}, Vector{<:Union{Missing,Symbol}}]
-    bounds = (:lat => (-90,90), :lon => (-180,180), :alt => (0, Inf))
-    checkcols!(data, standardnames, standardtypes, bounds, "Intersection.data")
-    # Check tracked (measured data)
-    standardnames = ["id", "flight", "CPro", "CLay"]
-    standardtypes = [Vector{String}, Vector{FlightTrack}, Vector{CPro}, Vector{CLay}]
-    bounds = ()
-    checkcols!(tracked, standardnames, standardtypes, bounds, "Intersection.tracked",
-      essentialcols = [1])
-    # Check accuracy
-    standardnames = ["id", "intersection", "flightcoord", "satcoord", "flighttime", "sattime"]
-    standardtypes = [Vector{String}, Vector{<:AbstractFloat}, Vector{<:AbstractFloat},
-      Vector{<:AbstractFloat}, Vector{Dates.CompoundPeriod}, Vector{Dates.CompoundPeriod}]
-    bounds = ()
-    checkcols!(accuracy, standardnames, standardtypes, bounds, "Intersection.accuracy",
-      essentialcols = [1])
-    new(data, tracked, accuracy, metadata)
-  end #constructor 1 Intersection
-
-
-  """ Modified constructor with some automated calculations of the flight intersection data. """
-  function Intersection(
-    flights::FlightDB,
-    sat::SatData,
-    savesecondsattype::Bool=false;
-    maxtimediff::Int=30,
-    primspan::Int=0,
-    secspan::Int=15,
-    lidarrange::Tuple{Real,Real}=(15_000,-Inf),
-    stepwidth::Real=0.01,
-    Xradius::Real=20_000,
-    expdist::Real=Inf,
-    Float::DataType=Float32,
-    remarks=nothing
-  )
-    # Combine all datasets and find intersections
-    track = [[getfield(flights, f) for f in fieldnames(FlightDB)[1:end-1]]...;]
-    intersection(track, flights.metadata, sat, savesecondsattype, maxtimediff,
-      primspan, secspan, lidarrange, stepwidth, Xradius, expdist, Float, remarks)
-  end #constructor 2 Intersection
-
-
-  """ Modified constructor with some automated calculations of the cloud intersection data. """
-  function Intersection(
-    cloud::CloudDB,
-    sat::SatData,
-    savesecondsattype::Bool=false;
-    maxtimediff::Int=30,
-    primspan::Int=0,
-    secspan::Int=15,
-    lidarrange::Tuple{Real,Real}=(15_000,-Inf),
-    stepwidth::Real=0.01,
-    Xradius::Real=20_000,
-    expdist::Real=Inf,
-    Float::DataType=Float32,
-    remarks=nothing
-  )
-    # Combine all datasets and find intersections
-    intersection(cloud.tracks, cloud.metadata, sat, savesecondsattype, maxtimediff,
-      primspan, secspan, lidarrange, stepwidth, Xradius, expdist, Float, remarks)
-  end #constructor 3 Intersection
-end #struct Intersection

@@ -78,12 +78,13 @@ end #function find_timespan
 
 
 """
-    extract_timespan(sat::Union{CLay,CPro}, timespan::Vector{DateTime}) -> T where T<:Union{CLay,CPro}
+    extract_timespan(sat::T where T<:ObservationSet, timespan::Vector{DateTime})
+      -> T where T<:ObservationSet
 
 From the `sat` data of type `CLay` or `CPro`, extract a subset within `timespan`
 and return the reduced struct.
 """
-function extract_timespan(sat::Union{CLay,CPro}, timespan::Vector{DateTime})
+function extract_timespan(sat::T where T<:ObservationSet, timespan::Vector{DateTime})
   timeindex = [findfirst(sat.data.time .== t) for t in timespan
     if findfirst(sat.data.time .== t) ≠ nothing]
   satdata = sat.data[timeindex,:]
