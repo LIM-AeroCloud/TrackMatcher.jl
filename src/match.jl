@@ -1,6 +1,6 @@
 """
     function intersection(
-      trackdata::T where T<:Union{Vector{FlightData},Vector{CloudTrack}},
+      trackdata::T where T<:Union{Vector{FlightTrack},Vector{CloudTrack}},
       dbmetadata::DBMetadata,
       sat::SatData,
       savesecondsattype::Bool=false,
@@ -20,7 +20,7 @@ as defined by the kwargs of `Intersection`. The `dbmetadata` is mainly needed fo
 defining IDs and the source of the track data.
 """
 function intersection(
-  trackdata::T where T<:Union{Vector{FlightData},Vector{CloudTrack}},
+  trackdata::T where T<:Union{<:Vector{<:FlightData},<:Vector{<:CloudTrack}},
   dbmetadata::DBMetadata,
   sat::SatData,
   savesecondsattype::Bool=false,
@@ -39,7 +39,7 @@ function intersection(
   Xdata = DataFrame(id=String[], lat=Float[], lon=Float[],
     alt=Float[], tdiff=Dates.CompoundPeriod[], tflight = DateTime[],
     tsat = DateTime[], feature = Union{Missing,Symbol}[])
-  tracked = DataFrame(id=String[], flight=FlightData[], CPro=CPro[], CLay=CLay[])
+  tracked = DataFrame(id=String[], flight=FlightTrack[], CPro=CPro[], CLay=CLay[])
   accuracy = DataFrame(id=String[], intersection=Float[], flightcoord=Float[],
     satcoord=Float[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
   # Get lidar altitude levels
@@ -50,8 +50,8 @@ function intersection(
   prog = pm.Progress(length(trackdata), "find intersections...")
   for track in trackdata
     # Get database source and track ID for labelling data/issues
-    dataset = track isa FlightData ? track.metadata.source : "CloudTrack"
-    ID = track isa FlightData ? track.metadata.dbID : track.metadata.ID
+    dataset = track isa FlightTrack ? track.metadata.source : "CloudTrack"
+    ID = track isa FlightTrack ? track.metadata.dbID : track.metadata.ID
     try
       # Find sat tracks in the vicinity of flight tracks, where intersections are possible
       overlap = findoverlap(track, sat, maxtimediff, ID)
@@ -105,7 +105,7 @@ end #function intersection
 """
     function find_intersections(
       ms::mat.MSession,
-      track::Union{FlightData,CloudTrack},
+      track::Union{FlightTrack,CloudTrack},
       primtracks::Vector,
       altmin::Real,
       sat::SatData,
@@ -153,7 +153,7 @@ and as flags in error messages.
 """
 function find_intersections(
   ms::mat.MSession,
-  track::Union{FlightData,CloudTrack},
+  track::Union{FlightTrack,CloudTrack},
   primtracks::Vector,
   altmin::Real,
   sat::SatData,
@@ -175,7 +175,7 @@ function find_intersections(
   Xdata = DataFrame(id=String[], lat=AbstractFloat[], lon=AbstractFloat[],
     alt=AbstractFloat[], tdiff=Dates.CompoundPeriod[], tflight = DateTime[],
     tsat = DateTime[], feature = Union{Missing,Symbol}[])
-  tracked = DataFrame(id=String[], flight=FlightData[], CPro=CPro[], CLay=CLay[])
+  tracked = DataFrame(id=String[], flight=FlightTrack[], CPro=CPro[], CLay=CLay[])
   accuracy = DataFrame(id=String[], intersection=AbstractFloat[], flightcoord=AbstractFloat[],
     satcoord=AbstractFloat[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
   counter = 1 # for intersections within the same flight used in the id
@@ -201,16 +201,16 @@ function find_intersections(
       # Skip intersections that exceed allowed time difference
       abs(tmf - tms) < Dates.Minute(maxtimediff) || continue
       # Extract the DataFrame rows of the sat/flight data near the intersection
-      Xflight, ift = track isa FlightData ? (get_flightdata(track, Xf[i], primspan)) :
-        (FlightData(), 0)
-      alt = track isa FlightData ? Xflight.data.alt[ift] : NA
+      Xflight, ift = track isa FlightTrack ? (get_flightdata(track, Xf[i], primspan)) :
+        (FlightTrack{Float}(), 0)
+      alt = track isa FlightTrack ? Xflight.data.alt[ift] : NA
       cpro, clay, feature, ist = get_satdata(ms, sat, Xs[i], secspan, alt,
         altmin, trackID, lidarprofile, lidarrange, savesecondsattype, Float)
       Xsat = sat.metadata.type == :CPro ? cpro.data : clay.data
       # Calculate accuracies
-      fxmeas = track isa FlightData ? dist.haversine(Xf[i],(Xflight.data.lat[ift],
+      fxmeas = track isa FlightTrack ? dist.haversine(Xf[i],(Xflight.data.lat[ift],
         Xflight.data.lon[ift]), earthradius(Xf[i][1])) : NA
-      ftmeas = track isa FlightData ? Dates.canonicalize(Dates.CompoundPeriod(tmf -
+      ftmeas = track isa FlightTrack ? Dates.canonicalize(Dates.CompoundPeriod(tmf -
         Xflight.data.time[ift])) : Dates.canonicalize(Dates.CompoundPeriod())
       sxmeas = dist.haversine(Xs[i], (Xsat.lat[ist], Xsat.lon[ist]), earthradius(Xs[i][1]))
       stmeas = Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.time[ist]))
@@ -231,14 +231,14 @@ end #function find_intersections
 
 
 """
-    findoverlap(flight::FlightData, sat::SatDB, maxtimediff::Int) -> Vector{UnitRange}
+    findoverlap(flight::FlightTrack, sat::SatDB, maxtimediff::Int) -> Vector{UnitRange}
 
 From the data of the current `flight` and the `sat` data, calculate the data ranges
 in the sat data that are in the vicinity of the flight track (min/max of lat/lon).
 Consider only satellite data of ± `maxtimediff` minutes before the start and after
 the end of the flight.
 """
-function findoverlap(track::T where T<:Union{FlightData, CloudTrack}, sat::SatData,
+function findoverlap(track::T where T<:PrimarySet, sat::SatData,
   maxtimediff::Int, ID::Union{Missing,Int,String})
 
   # Initialise
@@ -289,12 +289,12 @@ end#function findoverlap
 
 
 """
-    interpolate_trackdata(flight::FlightData)
+    interpolate_trackdata(flight::FlightTrack)
 
 Using the `flight` data, construct a PCHIP polynomial and return it together with
 the x data range (`min`/`max` values).
 """
-function interpolate_trackdata(track::Union{FlightData,CloudTrack})
+function interpolate_trackdata(track::Union{FlightTrack,CloudTrack})
 
   # Define x and y data based on useLON
   x, y = track.metadata.useLON ?

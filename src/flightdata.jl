@@ -1,20 +1,20 @@
-### Routines related to loading FlightData
+### Routines related to loading FlightTrack
 
 """
-    loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5_000) -> Vector{FlightData}
+    loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5_000) -> Vector{FlightTrack}
 
-From a list of `files`, return a `Vector{FlightData}` that can
+From a list of `files`, return a `Vector{FlightTrack}` that can
 be saved to the `inventory` field in `FlightDB`.
 
-When the `Vector{FlightData{T}}` is constructed, data can be filtered by a minimum
+When the `Vector{FlightTrack{T}}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
-Floating point numbers in `Flightdata` are of the precision set by `Float`,
+Floating point numbers in `FlightTrack` are of the precision set by `Float`,
 by default `Float32`.
 """
 function loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5_000)
 
   # Initialise inventory file array and start MATLAB for PCHIP fitting
-  inventory = FlightData[]
+  inventory = FlightData{Float}[]
 
   # Loop over files
   prog = pm.Progress(2length(files), "load inventory...")
@@ -36,7 +36,7 @@ function loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5
     flights.SPEED = knot2mps.(flights.SPEED)
 
     # Initialise loop over file
-    flightdata = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
+    track = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
       alt = Float[], speed = Float[])
     FID = flights.FLIGHT_ID[1]
 
@@ -45,26 +45,26 @@ function loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5
       # If the next flight ID is found, save current flight
       if flights.FLIGHT_ID[i] ≠ FID || i == length(flights.time)
         # Ignore data with less than 2 data points
-        if length(flightdata.time) ≤ 1
+        if length(track.time) ≤ 1
           FID = flights.FLIGHT_ID[i]
           # Empty possible entry
-          flightdata = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
+          track = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
             alt = Float[], speed = Float[])
           continue
         end
         # Determine predominant flight direction, inflection points, and remove duplicate entries
-        flex, useLON = preptrack!(flightdata)
-        # Save the FlightData in the inventory vector
-        isempty(flex) || push!(inventory, FlightData(flightdata, FID,
-          missing, missing, missing, flex, useLON, "VOLPE AEDT", file))
+        flex, useLON = preptrack!(track)
+        # Save the FlightTrack in the inventory vector
+        isempty(flex) || push!(inventory, FlightTrack{Float}(track, FID,
+          missing, missing, missing, flex, useLON, "VOLPE", file))
         # Empty data vectors
-        flightdata = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
+        track = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
           alt = Float[], speed = Float[])
         FID = flights.FLIGHT_ID[i]
-      end # saving FlightData
+      end # saving FlightTrack
       # Filter altitude threshold
       if ismissing(flights.ALTITUDE[i]) || flights.ALTITUDE[i] ≥ altmin
-        push!(flightdata, [flights.time[i], flights.LATITUDE[i],
+        push!(track, [flights.time[i], flights.LATITUDE[i],
           flights.LONGITUDE[i], flights.ALTITUDE[i], flights.SPEED[i]])
       end
     end #loop over flights
@@ -79,19 +79,19 @@ end #function loadInventory
 
 """
     loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_000)
-      -> Vector{FlightData}
+      -> Vector{FlightTrack}
 
-From a list of `files`, return a `Vector{FlightData}` that can
+From a list of `files`, return a `Vector{FlightTrack}` that can
 be saved to the `archive` field in `FlightDB`.
 
-When the `Vector{FlightData{T}}` is constructed, data can be filtered by a minimum
+When the `Vector{FlightTrack{T}}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
-Floating point numbers in `Flightdata` are of the precision set by `Float`,
+Floating point numbers in `FlightTrack` are of the precision set by `Float`,
 by default `Float32`.
 """
 function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_000)
   # Initialise archive file array
-  archive = FlightData[]
+  archive = FlightData{Float}[]
   # Loop over database files
   prog = pm.Progress(length(files), "load archive...")
   for file in files
@@ -105,7 +105,7 @@ function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_0
 
     # Initialise loop over file
     FID = flights.dbID[1]; n = 1
-    flightdata = DataFrame(time = DateTime[], lat = Float[]; lon = Float[],
+    track = DataFrame(time = DateTime[], lat = Float[]; lon = Float[],
       alt = Union{Missing,Float}[], speed = Union{Missing,Float}[],
       climb = Union{Missing,Float}[], heading = Union{Missing,Int}[])
 
@@ -114,24 +114,24 @@ function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_0
       # Save flight, if flight ID changes
       if flights.dbID[i] ≠ FID || i == length(flights.time)
         # Ignore data with less than 2 data points
-        if length(flightdata.time) ≤ 1
+        if length(track.time) ≤ 1
           n = i
           FID = flights.dbID[n]
           # Empty possible entry
-          flightdata = DataFrame(time = DateTime[], lat = Float[]; lon = Float[],
+          track = DataFrame(time = DateTime[], lat = Float[]; lon = Float[],
             alt = Union{Missing,Float}[], speed = Union{Missing,Float}[],
             climb = Union{Missing,Float}[], heading = Union{Missing,Int}[])
           continue
         end
         # Determine predominant flight direction, inflection points, and remove duplicate entries
-        flex, useLON = preptrack!(flightdata)
-        # Save the FlightData in the archive vector
-        isempty(flex) || push!(archive, FlightData(flightdata, FID, flights.flightID[n],
+        flex, useLON = preptrack!(track)
+        # Save the FlightTrack in the archive vector
+        isempty(flex) || push!(archive, FlightTrack{Float}(track, FID, flights.flightID[n],
           flights.type[n], (orig=flights.orig[n],
           dest=flights.dest[n]), flex, useLON, "FlightAware", file))
 
         # Reset temporary data arrays
-        flightdata = DataFrame(time = DateTime[], lat = Float[]; lon = Float[],
+        track = DataFrame(time = DateTime[], lat = Float[]; lon = Float[],
           alt = Union{Missing,Float}[], speed = Union{Missing,Float}[],
           climb = Union{Missing,Float}[], heading = Union{Missing,Int}[])
         # Set Flight ID and position to next flight
@@ -141,7 +141,7 @@ function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_0
       # Filter data
       if !ismissing(flights.lat[i]) && !ismissing(flights.lon[i]) &&
         (ismissing(flights.alt[i]) || flights.alt[i] ≥ altmin)
-        push!(flightdata, [flights.time[i], flights.lat[i],
+        push!(track, [flights.time[i], flights.lat[i],
           flights.lon[i], flights.alt[i], flights.speed[i],
           flights.climb[i], flights.heading[i]])
       end
@@ -157,23 +157,23 @@ end #function loadArchive
 
 """
     loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=5_000, delim::Union{Nothing,Char,String}=nothing)
-      -> Vector{FlightData}
+      -> Vector{FlightTrack}
 
-From a list of `files`, return a `Vector{FlightData}` that can
+From a list of `files`, return a `Vector{FlightTrack}` that can
 be saved to the `onlineData` field in `FlightDB`.
 
 The `delim`iter of the data in the input file can be specified by a string or character.
 Default is `nothing`, which means auto-detection of the delimiter is used.
 
-When the `Vector{FlightData{T}}` is constructed, data can be filtered by a minimum
+When the `Vector{FlightTrack{T}}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
-Floating point numbers in `Flightdata` are of the precision set by `Float`,
+Floating point numbers in `FlightTrack` are of the precision set by `Float`,
 by default `Float32`.
 """
 function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=5_000,
   delim::Union{Nothing,Char,String}=nothing)
   # Initialise inventory file array
-  archive = FlightData[]
+  archive = FlightData{Float}[]
   # Loop over files with online data
   prog = pm.Progress(length(files), "load online data...")
   for file in files
@@ -254,8 +254,8 @@ function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=
     # Determine predominant flight direction, inflection points, and remove duplicate entries
     flex, useLON = preptrack!(flight)
 
-    # Save data as FlightData
-    isempty(flex) || push!(archive, FlightData(flight, replace(filename, "_" => "/"),
+    # Save data as FlightTrack
+    isempty(flex) || push!(archive, FlightTrack{Float}(flight, replace(filename, "_" => "/"),
       flightID, missing, (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
     # Monitor progress for progress bar
     pm.next!(prog)
@@ -276,7 +276,7 @@ are read with single precision or as defined by kwarg `Float`.
 """
 function readArchive(file, Float=Float32)
   # Read file
-  flightdata = CSV.File(file, datarow=2, normalizenames=true, ignoreemptylines=true,
+  track = CSV.File(file, datarow=2, normalizenames=true, ignoreemptylines=true,
     silencewarnings=true, threaded=true, dateformat="m/d/y H:M:S",
     types = Dict(:Latitude => Float, :Longitude => Float, :Altitude_feet_ => Float,
     :Altitude_ft_ => Float, :Groundspeed_knots_ => Float, :Groundspeed_kts_ => Float,
@@ -284,7 +284,7 @@ function readArchive(file, Float=Float32)
     drop = ["Direction", "Facility_Name", "Facility_Description", "Estimated"])
   ## Get column order and define column names
   # Get column names of current file
-  datacols = propertynames(flightdata[1])
+  datacols = propertynames(track[1])
   # Define unique key phrases for each column found in every FlightAware version
   keys = [datacols[i] for i in findfirst.(occursin.(str, string.(datacols)) for str in
     ["Flight_ID", "Ident", "Orig", "Dest", "Type",
@@ -293,5 +293,5 @@ function readArchive(file, Float=Float32)
   colnames = ["dbID", "flightID", "orig", "dest", "type",
     "time", "lat", "lon", "alt", "speed", "climb", "heading"]
   # Construct DataFrame
-  DataFrame(colnames .=> [getproperty(flightdata, key) for key in keys])
+  DataFrame(colnames .=> [getproperty(track, key) for key in keys])
 end #function readArchive
