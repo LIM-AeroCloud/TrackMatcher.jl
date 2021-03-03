@@ -16,36 +16,31 @@ function addX!(Xdata, track, accuracy, counter, Xf, id, dx, dt, Xradius, Xflight
 
   # Set primary object's altitude
   alt = track isa FlightTrack ? Xflight.data.alt[ift] : NA
-  # Assume, intersection is no duplicate
-  duplicate = false
   # Loop over previously found intersections
   for i = 1:size(Xdata, 1)
     # Use most accurate intersection, when duplicates are found within Xradius
-    if dist.haversine(Xf, (Xdata.lat[i], Xdata.lon[i]), earthradius(Xf[1])) ≤ Xradius &&
-      dx ≤ accuracy.intersection[i]
-      if dx == accuracy.intersection[i] && dt < Xdata.tdiff[i]
-        Xdata[i, 2:end] = (lat = Xf[1], lon = Xf[2], alt = alt,
-          tdiff = dt, tflight = tmf, tsat = tms, feature = feature)
-        track[i, 2:end] = (flight = Xflight, CPro = cpro, CLay = clay)
-        accuracy[i, 2:end] = (intersection = dx, flightcoord = fxmeas,
-          satcoord = sxmeas, flighttime = ftmeas, sattime = stmeas)
-        # Set duplicate flag
-        duplicate = true
-        break
-      else
-        return counter
-      end # duplicate condition based on time delay at intersection
+    # or intersection with least decay between overpass times for equal accuracies
+    if dist.haversine(Xf, (Xdata.lat[i], Xdata.lon[i]), earthradius(Xf[1])) ≤ Xradiu
+      dx ≤ accuracy.intersection[i] || return counter # previous intersection more accurate
+      # previous intersection equally accurate, but smaller delay time:
+      (dx == accuracy.intersection[i] && dt < Xdata.tdiff[i]) || return counter
+
+      # Save more accurate duplicate
+      Xdata[i, 2:end] = (lat = Xf[1], lon = Xf[2], alt = alt,
+        tdiff = dt, tflight = tmf, tsat = tms, feature = feature)
+      track[i, 2:end] = (flight = Xflight, CPro = cpro, CLay = clay)
+      accuracy[i, 2:end] = (intersection = dx, flightcoord = fxmeas,
+        satcoord = sxmeas, flighttime = ftmeas, sattime = stmeas)
+      return counter
     end # duplicate condition based on accuracy
   end #loop over already found intersection
-  # Save new intersections that are not identified as duplicates
-  if !duplicate
-    counter += 1
-    push!(Xdata, (id = id, lat = Xf[1], lon = Xf[2], alt = alt,
-      tdiff = dt, tflight = tmf, tsat = tms, feature = feature))
-    push!(track, (id = id, flight = Xflight, CPro = cpro, CLay = clay))
-    push!(accuracy, (id = id, intersection = dx, flightcoord = fxmeas,
-      satcoord = sxmeas, flighttime = ftmeas, sattime = stmeas))
-  end
+  # Save new intersections that are not identified as duplicates and increase counter
+  counter += 1
+  push!(Xdata, (id = id, lat = Xf[1], lon = Xf[2], alt = alt,
+    tdiff = dt, tflight = tmf, tsat = tms, feature = feature))
+  push!(track, (id = id, flight = Xflight, CPro = cpro, CLay = clay))
+  push!(accuracy, (id = id, intersection = dx, flightcoord = fxmeas,
+    satcoord = sxmeas, flighttime = ftmeas, sattime = stmeas))
 
   return counter
 end #function addX!
