@@ -171,7 +171,7 @@ FlightMetadata{T}() where T = FlightMetadata("", missing, missing, missing,
 
 Currently only place holder for remarks available during test phase.
 """
-struct CloudMetadata{T}
+struct CloudMetadata{T} <: CloudTrack{T}
   ID::String
   date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
   area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,T}}
@@ -584,45 +584,54 @@ Store Data related to a single cloud track.
 
 Default floating point precision is `Float32`.
 """
-struct CloudTrack{T<:AbstractFloat}
+struct CloudData{T} <: PrimaryTrack{T}
   data::DataFrame
   metadata::CloudMetadata
 
   """ Unmodified constructor for `CloudTrack` with basic checks for correct `data`"""
-  function CloudTrack(data::DataFrame, metadata::CloudMetadata)
+  function CloudData{T}(data::DataFrame, metadata::CloudMetadata) where T
 
     # Column checks and warnings
     standardnames = ["time", "lat", "lon"]
     standardtypes = [Union{DateTime,Vector{DateTime}},
-      Vector{<:AbstractFloat}, Vector{<:AbstractFloat}]
+      Vector{T}, Vector{T}]
     bounds = (:lat => (-90, 90), :lon => (-180, 180))
     checkcols!(data, standardnames, standardtypes, bounds,
       "CloudTrack", metadata.ID)
-    T = eltype(data.lon)
     new{T}(data,metadata)
   end #constructor 1 CloudTrack
 end #struct CloudTrack
 
 
+""" CloudTrack constructor for CloudData """
+CloudTrack{T}(data::DataFrame, metadata::CloudMetadata) where T =
+  CloudData{T}(data, metadata)
+
+""" CloudTrack default Float32 constructor for CloudData """
+CloudTrack(data::DataFrame, metadata::CloudMetadata) =
+  CloudData{Float32}(data, metadata)
+
+
+
 """
-# struct CloudDB
+# struct CloudSet{T} <: PrimarySet{T}
 
 Database for cloud track data with fields:
 - `tracks::Vector{CloudTrack}`
 - `metadata::SetMetadata`
 """
-struct CloudDB
-  tracks::Vector{CloudTrack}
-  metadata::SetMetadata
+struct CloudSet{T} <: PrimarySet{T}
+  tracks::Vector{CloudTrack{T}}
+  metadata::SetMetadata{T}
 
-  """ unmodified constructor for CloudDB """
-  CloudDB(tracks::Vector{CloudTrack}, metadata::SetMetadata) = new(tracks, metadata)
+  """ unmodified constructor for CloudSet """
+  CloudSet{T}(tracks::Vector{CloudTrack}, metadata::SetMetadata) where T = new{T}(tracks, metadata)
 
   """
   Modified constructor creating the database from mat files in the given folder
   or any subfolder using the floating point precision given by `Float`.
   """
-  function CloudDB(folders::String...; Float::DataType=Float32, remarks=nothing)
+  function CloudSet{T}(folders::String...; remarks=nothing) where T
     tstart = Dates.now()
     # Scan folders for HDF4 files
     files = String[]
@@ -634,7 +643,7 @@ struct CloudDB
     end
 
     # Load cloud tracks from mat files into TrackMatcher in Julia format
-    tracks = loadCloudTracks(files...; Float=Float)
+    tracks = loadCloudTracks(files...; Float=T)
     # Calculate load time
     tend = Dates.now()
     tc = tz.ZonedDateTime(tend, tz.localzone())
@@ -644,9 +653,13 @@ struct CloudDB
     tmax = maximum(t.data.time[end] for t in tracks)
 
     # Instantiate CloudDB
-    new(tracks, SetMetadata{Float}(NaN, (start=tmin, stop=tmax), tc, loadtime, remarks))
+    new{T}(tracks, SetMetadata{T}(NaN, (start=tmin, stop=tmax), tc, loadtime, remarks))
   end #modified constructor 2
 end #struct CloudDB
+
+
+""" Default CloudSet construct for Float32 """
+CloudSet(folders::String...; remarks=nothing) = CloudSet{Float32}(folders...; remarks=remarks)
 
 
 ## Define structs related to sat data

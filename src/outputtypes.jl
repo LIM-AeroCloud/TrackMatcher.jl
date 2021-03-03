@@ -227,7 +227,7 @@ struct Intersection
 
   """ Modified constructor with some automated calculations of the flight intersection data. """
   function Intersection(
-    flights::FlightSet,
+    tracks::PrimarySet,
     sat::SatData,
     savesecondsattype::Bool=false;
     maxtimediff::Int=30,
@@ -240,32 +240,75 @@ struct Intersection
     Float::DataType=Float32,
     remarks=nothing
   )
-    # Combine all datasets and find intersections
-    track = [[getfield(flights, f) for f in fieldnames(FlightSet)[1:end-1]]...;]
-    intersection(track, flights.metadata, sat, savesecondsattype, maxtimediff,
-      primspan, secspan, lidarrange, stepwidth, Xradius, expdist, Float, remarks)
+    # Initialise DataFrames with Intersection data and monitor start time
+    tstart = Dates.now()
+    Xdata = DataFrame(id=String[], lat=Float[], lon=Float[],
+      alt=Float[], tdiff=Dates.CompoundPeriod[], tflight = DateTime[],
+      tsat = DateTime[], feature = Union{Missing,Symbol}[])
+    tracked = DataFrame(id=String[], flight=FlightTrack[], CPro=CPro[], CLay=CLay[])
+    accuracy = DataFrame(id=String[], intersection=Float[], flightcoord=Float[],
+      satcoord=Float[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
+    # Combine all flight datasets and find intersections
+    trackdata = tracks isa FlightSet ?
+      [[getfield(tracks, f) for f in fieldnames(FlightSet)[1:end-1]]...;] : tracks.tracks
+    # Get lidar altitude levels
+    lidarprofile = get_lidarheights(lidarrange, Float)
+    # New MATLAB session
+    ms = mat.MSession()
+    # Loop over data from different datasets and interpolate track data and time, throw error on failure
+    prog = pm.Progress(length(trackdata), "find intersections...")
+    for (i, track) in enumerate(trackdata)
+      # Get dataset source and ID
+      dataset = track isa FlightTrack ? trackdata[i].metadata.source : "CloudTrack"
+      ID = track isa FlightTrack ? trackdata[i].metadata.dbID : trackdata[i].metadata.ID
+      try
+        # Find sat tracks in the vicinity of flight tracks, where intersections are possible
+        overlap = findoverlap(track, sat, maxtimediff, ID)
+        if isempty(overlap)
+          pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
+            (:featured, length(Xdata.id[.!ismissing.(Xdata.feature) .&
+            (Xdata.feature .≠ :no_signal) .& (Xdata.feature .≠ :clear)]))])
+          continue
+        end
+        # Interpolate trajectories with PCHIP method
+        primtracks = interpolate_trackdata(track)
+        sectracks = interpolate_satdata(sat, overlap, trackdata[i].metadata.useLON)
+        # Calculate intersections and store data and metadata in DataFrames
+        currdata, currtrack, curraccuracy = find_intersections(ms, track,
+          primtracks, tracks.metadata.altmin, sat, sectracks, dataset, ID, maxtimediff,
+          stepwidth, Xradius, lidarprofile, lidarrange, primspan, secspan,
+          expdist, savesecondsattype, Float)
+        append!(Xdata, currdata); append!(tracked, currtrack)
+        append!(accuracy, curraccuracy)
+      catch err
+        @debug begin
+          @show ID
+          rethrow(err)
+        end
+        # Issue warning on failure of interpolating track or time data
+        @warn("Track data and/or time could not be interpolated. Data ignored.",
+          dataset, ID)
+      end
+      # Monitor progress for progress bar
+      pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
+        (:featured, length(Xdata.id[.!ismissing.(Xdata.feature) .&
+        (Xdata.feature .≠ :no_signal) .& (Xdata.feature .≠ :clear)]))])
+    end #loop over flights
+    pm.finish!(prog)
+    # Close MATLAB session after looping over all data
+    mat.close(ms)
+    # Calculate load time
+    tend = Dates.now()
+    tc = tz.ZonedDateTime(tend, tz.localzone())
+    loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
+    # Return Intersections after completion
+    @info string("Intersection data ($(length(Xdata[!,1])) matches) loaded in ",
+      "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
+      "\n▪ data\n▪ tracked\n▪ accuracy\n▪ metadata")
+    new(Xdata, tracked, accuracy, XMetadata(maxtimediff, stepwidth, Xradius,
+      expdist, lidarrange, lidarprofile, sat.metadata.type, sat.metadata.date,
+      tracks.metadata.altmin, tracks.metadata.date, tc, loadtime, remarks))
   end #constructor 2 Intersection
-
-
-  """ Modified constructor with some automated calculations of the cloud intersection data. """
-  function Intersection(
-    cloud::CloudDB,
-    sat::SatData,
-    savesecondsattype::Bool=false;
-    maxtimediff::Int=30,
-    primspan::Int=0,
-    secspan::Int=15,
-    lidarrange::Tuple{Real,Real}=(15_000,-Inf),
-    stepwidth::Real=0.01,
-    Xradius::Real=20_000,
-    expdist::Real=Inf,
-    Float::DataType=Float32,
-    remarks=nothing
-  )
-    # Combine all datasets and find intersections
-    intersection(cloud.tracks, cloud.metadata, sat, savesecondsattype, maxtimediff,
-      primspan, secspan, lidarrange, stepwidth, Xradius, expdist, Float, remarks)
-  end #constructor 3 Intersection
 end #struct Intersection
 
 

@@ -15,15 +15,16 @@ function addX!(Xdata, track, accuracy, counter, Xf, id, dx, dt, Xradius, Xflight
   cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas, NA)
 
   # Set primary object's altitude
-  alt = track isa FlightTrack ? Xflight.data.alt[ift] : NA
+  alt = Xflight isa FlightTrack ? Xflight.data.alt[ift] : NA
   # Loop over previously found intersections
   for i = 1:size(Xdata, 1)
     # Use most accurate intersection, when duplicates are found within Xradius
     # or intersection with least decay between overpass times for equal accuracies
-    if dist.haversine(Xf, (Xdata.lat[i], Xdata.lon[i]), earthradius(Xf[1])) ≤ Xradiu
+      accuracy.intersection[i], Xdata.tdiff[i], dt
+    if dist.haversine(Xf, (Xdata.lat[i], Xdata.lon[i]), earthradius(Xf[1])) ≤ Xradius
       dx ≤ accuracy.intersection[i] || return counter # previous intersection more accurate
       # previous intersection equally accurate, but smaller delay time:
-      (dx == accuracy.intersection[i] && dt < Xdata.tdiff[i]) || return counter
+      (dx == accuracy.intersection[i] && abs(dt) > abs(Xdata.tdiff[i])) && return counter
 
       # Save more accurate duplicate
       Xdata[i, 2:end] = (lat = Xf[1], lon = Xf[2], alt = alt,
@@ -79,7 +80,7 @@ end #function find_timespan
 From the `sat` data of type `CLay` or `CPro`, extract a subset within `timespan`
 and return the reduced struct.
 """
-function extract_timespan(sat::T where T<:ObservationSet, timespan::Vector{DateTime})
+function extract_timespan(sat::Union{CLay,CPro}, timespan::Vector{DateTime})
   timeindex = [findfirst(sat.data.time .== t) for t in timespan
     if findfirst(sat.data.time .== t) ≠ nothing]
   satdata = sat.data[timeindex,:]

@@ -68,7 +68,7 @@ abstract type ObservationSet{T} <: MeasuredSet{T} end
 abstract type SecondaryTrack{T} <: MeasuredSet{T} end
 abstract type PrimaryTrack{T} <: PrimarySet{T} end
 abstract type FlightTrack{T} <: PrimaryTrack{T} end
-# abstract type CloudTrack{T} <: PrimaryTrack{T} end
+abstract type CloudTrack{T} <: PrimaryTrack{T} end
 abstract type SatTrack{T} <: SecondaryTrack{T} end
 # abstract type Intersection{T} <: ComputedSet{T} end
 

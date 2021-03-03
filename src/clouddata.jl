@@ -63,7 +63,7 @@ using the floating point precision set by `Float` (default: `Float32`) for the
 positional data.
 """
 function storeMAT!(
-  tracks::Vector{CloudTrack},
+  tracks::Vector{CloudData},
   t::Array,
   lonlat::Array,
   fileID::Int,
@@ -77,7 +77,7 @@ function storeMAT!(
     # Determine predominant trajectory direction, inflection points, and remove duplicate entries
     flex, useLON = preptrack!(data)
     isempty(flex) && continue
-    push!(tracks, CloudTrack(data, CloudMetadata(string(fileID, ".", i), data,
+    push!(tracks, CloudData(data, CloudMetadata{Float}(string(fileID, ".", i), data,
       flex, useLON, filename)))
   end
 end #function storeMAT!
