@@ -1,21 +1,39 @@
 ### Helper functions for data processing
 ## Storage of intersection data
-"""
-    addX!(Xdata, track, accuracy, Xf, id, dx, dt, Xradius, Xflight,
-      cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas, NA)
 
-Append DataFrames `Xdata`, `tracks`, and `accuracy` by data from `Xf`, `id`,
-`dx`, `dt`, `Xflight`, `cpro`, `clay`, `tmf`, `tms`, `ift`, `feature`, `fxmeas`,
-`ftmeas`, `sxmeas`, and `stmeas`. If an intersection already exists with `Xradius`
-in `Xdata`, use the more accurate intersection with the lowest `accuracy.intersection`.
-Altitude is retrieved from flight altitude or, for cloud tracks, set to `NA`
-(`NaN` using the same floating point precision as other cloud data).
 """
-function addX!(Xdata, track, accuracy, counter, Xf, id, dx, dt, Xradius, Xflight,
-  cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas, NA)
+    addX!(Xdata, track, accuracy, counter, Xf, id, dx, dt, Xradius, Xflight,
+      cpro, clay, tmf, tms, feature, fxmeas, ftmeas, sxmeas, stmeas, alt)
 
-  # Set primary object's altitude
-  alt = Xflight isa FlightTrack ? Xflight.data.alt[ift] : NA
+Append DataFrames `Xdata`, `track`, and `accuracy` by data from `Xf`, `id`,
+`dx`, `dt`, `Xflight`, `cpro`, `clay`, `tmf`, `tms`, `feature`, `fxmeas`,
+`ftmeas`, `sxmeas`, `stmeas`, and `alt`. If an intersection already exists within
+`Xradius` in `Xdata`, use the more accurate intersection with the lowest
+`accuracy.intersection`.
+"""
+function addX!(
+  Xdata::DataFrame,
+  track::DataFrame,
+  accuracy::DataFrame,
+  counter::Int,
+  Xf::Tuple{T,T},
+  id::String,
+  dx::T,
+  dt::Dates.CompoundPeriod,
+  Xradius::Real,
+  Xflight::FlightData{T},
+  cpro::CPro,
+  clay::CLay,
+  tmf::DateTime,
+  tms::DateTime,
+  feature::Symbol,
+  fxmeas::T,
+  ftmeas::Dates.CompoundPeriod,
+  sxmeas::T,
+  stmeas::Dates.CompoundPeriod,
+  alt::Real
+) where T
+
   # Loop over previously found intersections
   for i = 1:size(Xdata, 1)
     # Use most accurate intersection, when duplicates are found within Xradius
@@ -45,6 +63,183 @@ function addX!(Xdata, track, accuracy, counter, Xf, id, dx, dt, Xradius, Xflight
 
   return counter
 end #function addX!
+
+
+"""
+    function add_intersections!(
+      ms::mat.MSession,
+      Xdata::DataFrame,
+      tracked::DataFrame,
+      accuracy::DataFrame,
+      track::FlightTrack,
+      sat::SatData,
+      Xf::Tuple{T,T},
+      Xs::Tuple{T,T},
+      counter::Int,
+      id::String,
+      dx::T,
+      dt::Dates.CompoundPeriod,
+      tmf::DateTime,
+      tms::DateTime,
+      primspan::Int,
+      secspan::Int,
+      altmin::Real,
+      trackID::Union{Missing,Int,AbstractString},
+      Xradius::Real,
+      expdist::Real,
+      lidarprofile::NamedTuple,
+      lidarrange::Tuple{Real,Real},
+      savesecondsattype::Bool
+    ) where T<:AbstractFloat
+
+Add intersection data to the DataFrames `Xdata`, `tracked`, and `accuracy` using
+the coordinates calculated from the primary (`Xf`) and secondary (`Xs`) track, the
+primary flight `track` data, and the secondary `sat` track data. Each intersection
+is identified by the `id`. New intersections or duplicates are identified according
+to the parameters `dx`, `dt`, `tmf`, `tms`, `altmin`, `Xradius`, `expdist`,
+`lidarprofile`, and `lidarrange`. Individual primary tracks are identified by their
+`trackID`, which is used for error and warning messages. Experimental data is saved
+for the `primspan`/`secspan` closest points to the intersection for primary/secondary
+track points unless the closest measured point to the calculated intersection exceeds
+the distance in meters of `expdist`. Only one type of satellite data is saved near
+intersections (either profile or layer data) unless `savesecondsattype` is set to
+`true`. Experimental data is read from the data files using the MATLAB sessions `ms`.
+For new intersections, the counter is increased by 1, for duplicates the most accurate
+calculation is saved.
+"""
+function add_intersections!(
+  ms::mat.MSession,
+  Xdata::DataFrame,
+  tracked::DataFrame,
+  accuracy::DataFrame,
+  track::FlightTrack,
+  sat::SatData,
+  Xf::Tuple{T,T},
+  Xs::Tuple{T,T},
+  counter::Int,
+  id::String,
+  dx::T,
+  dt::Dates.CompoundPeriod,
+  tmf::DateTime,
+  tms::DateTime,
+  primspan::Int,
+  secspan::Int,
+  altmin::Real,
+  trackID::Union{Missing,Int,AbstractString},
+  Xradius::Real,
+  expdist::Real,
+  lidarprofile::NamedTuple,
+  lidarrange::Tuple{Real,Real},
+  savesecondsattype::Bool
+) where T<:AbstractFloat
+  # only CloudTrack: NA = T(NaN) # set precision of NaNs according to Float
+  # Extract the DataFrame rows of the sat/flight data near the intersection
+  Xflight, ift = get_flightdata(track, Xf, primspan)
+  cpro, clay, feature, ist = get_satdata(ms, sat, Xs, secspan, Xflight.data.alt[ift],
+    altmin, trackID, lidarprofile, lidarrange, savesecondsattype, T)
+  Xsat = sat.metadata.type == :CPro ? cpro.data : clay.data
+  # Calculate accuracies
+  fxmeas = dist.haversine(Xf,(Xflight.data.lat[ift], Xflight.data.lon[ift]),
+    earthradius(Xf[1]))
+  ftmeas = Dates.canonicalize(Dates.CompoundPeriod(tmf - Xflight.data.time[ift]))
+  sxmeas = dist.haversine(Xs, (Xsat.lat[ist], Xsat.lon[ist]), earthradius(Xs[1]))
+  stmeas = Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.time[ist]))
+  # Exclude data with long distances to nearest flight measurement
+  if fxmeas > expdist || sxmeas > expdist
+    @info("maximum distance of intersection to next track point exceeded; data excluded",
+      trackID)
+    return counter
+  end
+  # Save intersection data
+  addX!(Xdata, tracked, accuracy, counter, Xf, id, dx, dt, Xradius, Xflight,
+    cpro, clay, tmf, tms, feature, fxmeas, ftmeas, sxmeas, stmeas, Xflight.data.alt[ift])
+end #function add_intersections
+
+
+"""
+    function add_intersections!(
+      ms::mat.MSession,
+      Xdata::DataFrame,
+      tracked::DataFrame,
+      accuracy::DataFrame,
+      sat::SatData,
+      Xf::Tuple{T,T},
+      Xs::Tuple{T,T},
+      counter::Int,
+      id::String,
+      dx::T,
+      dt::Dates.CompoundPeriod,
+      tmf::DateTime,
+      tms::DateTime,
+      secspan::Int,
+      altmin::Real,
+      trackID::Union{Missing,Int,AbstractString},
+      Xradius::Real,
+      expdist::Real,
+      lidarprofile::NamedTuple,
+      lidarrange::Tuple{Real,Real},
+      savesecondsattype::Bool
+    ) where T<:AbstractFloat
+
+Add intersection data to the DataFrames `Xdata`, `tracked`, and `accuracy` using
+the coordinates calculated from the primary (`Xf`) and secondary (`Xs`) track, the
+primary cloud `track` data, and the secondary `sat` track data. Each intersection
+is identified by the `id`. New intersections or duplicates are identified according
+to the parameters `dx`, `dt`, `tmf`, `tms`, `altmin`, `Xradius`, `expdist`,
+`lidarprofile`, and `lidarrange`. Individual primary tracks are identified by their
+`trackID`, which is used for error and warning messages. Experimental data is saved
+for the `secspan` closest points to the intersection for secondary trajectories
+unless the closest measured point to the calculated intersection exceeds
+the distance in meters of `expdist`. Only one type of satellite data is saved near
+intersections (either profile or layer data) unless `savesecondsattype` is set to
+`true`. Experimental data is read from the data files using the MATLAB sessions `ms`.
+For new intersections, the counter is increased by 1, for duplicates the most accurate
+calculation is saved.
+"""
+function add_intersections!(
+  ms::mat.MSession,
+  Xdata::DataFrame,
+  tracked::DataFrame,
+  accuracy::DataFrame,
+  sat::SatData,
+  Xf::Tuple{T,T},
+  Xs::Tuple{T,T},
+  counter::Int,
+  id::String,
+  dx::T,
+  dt::Dates.CompoundPeriod,
+  tmf::DateTime,
+  tms::DateTime,
+  secspan::Int,
+  altmin::Real,
+  trackID::Union{Missing,Int,AbstractString},
+  Xradius::Real,
+  expdist::Real,
+  lidarprofile::NamedTuple,
+  lidarrange::Tuple{Real,Real},
+  savesecondsattype::Bool
+) where T<:AbstractFloat
+  NA = T(NaN) # set precision of NaNs according to Float
+  # Don't save additional cloud data near intersections at the moment
+  Xcloud, ift = FlightTrack{T}(), 0
+  cpro, clay, feature, ist = get_satdata(ms, sat, Xs, secspan, NA, altmin,
+    trackID, lidarprofile, lidarrange, savesecondsattype, T)
+  Xsat = sat.metadata.type == :CPro ? cpro.data : clay.data
+  # Calculate accuracies
+  fxmeas = NA
+  ftmeas = Dates.canonicalize(Dates.CompoundPeriod())
+  sxmeas = dist.haversine(Xs, (Xsat.lat[ist], Xsat.lon[ist]), earthradius(Xs[1]))
+  stmeas = Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.time[ist]))
+  # Exclude data with long distances to nearest flight measurement
+  if fxmeas > expdist || sxmeas > expdist
+    @info("maximum distance of intersection to next track point exceeded; data excluded",
+      trackID)
+    return counter
+  end
+  # Save intersection data
+  addX!(Xdata, tracked, accuracy, counter, Xf, id, dx, dt, Xradius, Xcloud,
+    cpro, clay, tmf, tms, feature, fxmeas, ftmeas, sxmeas, stmeas, NA)
+end #function add_intersections!
 
 
 ## Data extractions from raw data
@@ -147,7 +342,7 @@ function get_DateTimeRoute(filename::String, tzone::String)
     end
 
     return date, timezone, flightID, orig, dest
-end
+end #function get_DateTimeRoute
 
 
 """

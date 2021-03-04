@@ -77,7 +77,6 @@ function find_intersections(
   accuracy = DataFrame(id=String[], intersection=AbstractFloat[], flightcoord=AbstractFloat[],
     satcoord=AbstractFloat[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
   counter = 1 # for intersections within the same flight used in the id
-  NA = Float(NaN) # set precision of NaNs according to Float
 
   # Loop over sat and flight tracks
   for st in sectracks, (n, pt) in enumerate(primtracks)
@@ -98,29 +97,14 @@ function find_intersections(
       dt = Dates.canonicalize(Dates.CompoundPeriod(tms-tmf))
       # Skip intersections that exceed allowed time difference
       abs(tmf - tms) < Dates.Minute(maxtimediff) || continue
-      # Extract the DataFrame rows of the sat/flight data near the intersection
-      Xflight, ift = track isa FlightTrack ? (get_flightdata(track, Xf[i], primspan)) :
-        (FlightTrack{Float}(), 0)
-      alt = track isa FlightTrack ? Xflight.data.alt[ift] : NA
-      cpro, clay, feature, ist = get_satdata(ms, sat, Xs[i], secspan, alt,
-        altmin, trackID, lidarprofile, lidarrange, savesecondsattype, Float)
-      Xsat = sat.metadata.type == :CPro ? cpro.data : clay.data
-      # Calculate accuracies
-      fxmeas = track isa FlightTrack ? dist.haversine(Xf[i],(Xflight.data.lat[ift],
-        Xflight.data.lon[ift]), earthradius(Xf[i][1])) : NA
-      ftmeas = track isa FlightTrack ? Dates.canonicalize(Dates.CompoundPeriod(tmf -
-        Xflight.data.time[ift])) : Dates.canonicalize(Dates.CompoundPeriod())
-      sxmeas = dist.haversine(Xs[i], (Xsat.lat[ist], Xsat.lon[ist]), earthradius(Xs[i][1]))
-      stmeas = Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.time[ist]))
-      # Exclude data with long distances to nearest flight measurement
-      if fxmeas > expdist || sxmeas > expdist
-        @info("maximum distance of intersection to next track point exceeded; data excluded",
-          trackID)
-        continue
-      end
-      # Save intersection data
-      counter = addX!(Xdata, tracked, accuracy, counter, Xf[i], id, dx, dt, Xradius, Xflight,
-        cpro, clay, tmf, tms, ift, feature, fxmeas, ftmeas, sxmeas, stmeas, NA)
+      # Add intersection and nearby measurements
+      counter =  track isa FlightTrack ?
+        add_intersections!(ms, Xdata, tracked, accuracy, track, sat, Xf[i], Xs[i],
+          counter, id, dx, dt, tmf, tms, primspan, secspan, altmin, trackID,
+          Xradius, expdist, lidarprofile, lidarrange, savesecondsattype) :
+        add_intersections!(ms, Xdata, tracked, accuracy, sat, Xf[i], Xs[i],
+          counter, id, dx, dt, tmf, tms, secspan, altmin, trackID,
+          Xradius, expdist, lidarprofile, lidarrange, savesecondsattype)
     end #loop over intersections of current flight
   end #loop over flight and sat tracks
   # Return intersection data of current flight

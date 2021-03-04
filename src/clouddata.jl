@@ -10,7 +10,7 @@ function loadCloudTracks(files::String...; Float::DataType=Float32)
   # Open MATLAB session
   ms = mat.MSession(0)
   # Initialise
-  tracks = CloudTrack[]
+  tracks = CloudData[]
   # Loop over all mat files
   for (i, file) in enumerate(files)
     # Read data from mat files
@@ -77,7 +77,7 @@ function storeMAT!(
     # Determine predominant trajectory direction, inflection points, and remove duplicate entries
     flex, useLON = preptrack!(data)
     isempty(flex) && continue
-    push!(tracks, CloudData(data, CloudMetadata{Float}(string(fileID, ".", i), data,
+    push!(tracks, CloudData{Float}(data, CloudMetadata{Float}(string(fileID, ".", i), data,
       flex, useLON, filename)))
   end
 end #function storeMAT!

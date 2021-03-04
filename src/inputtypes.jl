@@ -160,7 +160,7 @@ struct FlightMetadata{T} <: FlightTrack{T}
 end #struct FlightMetadata
 
 """ External constructor for emtpy FlightMetadata struct """
-FlightMetadata{T}() where T = FlightMetadata("", missing, missing, missing,
+FlightMetadata{T}() where T = FlightMetadata{T}("", missing, missing, missing,
   (start=Dates.now(), stop=Dates.now()), (latmin=T(NaN), latmax=T(NaN),
   elonmin=T(NaN), elonmax=T(NaN), wlonmin=T(NaN), wlonmax=T(NaN)),
   ((range=0:0, min=T(NaN), max=T(NaN)),), true, "","")
@@ -180,7 +180,7 @@ struct CloudMetadata{T} <: CloudTrack{T}
   file::String
 
   """ Unmodified constructor for `CloudMetadata` """
-  function CloudMetadata(
+  function CloudMetadata{T}(
     ID::String,
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
     area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,T}},
@@ -196,7 +196,7 @@ struct CloudMetadata{T} <: CloudTrack{T}
   Modified constructor for CloudMetadata with some automated construction of fields
   and variable checks.
   """
-  function CloudMetadata(
+  function CloudMetadata{T}(
     ID::Union{Int,AbstractString},
     data::DataFrame,
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
@@ -420,7 +420,7 @@ end #constructor 2 FlightTrack
 
 
 """ External constructor for emtpy FlightTrack struct """
-FlightTrack{T}() where T = FlightData(DataFrame(time = DateTime[],
+FlightTrack{T}() where T = FlightData{T}(DataFrame(time = DateTime[],
   lat = T[], lon = T[], alt=T[], heading = Int[], climb = T[],
   speed = T[]), FlightMetadata{T}())
 
@@ -621,7 +621,7 @@ Database for cloud track data with fields:
 - `metadata::SetMetadata`
 """
 struct CloudSet{T} <: PrimarySet{T}
-  tracks::Vector{CloudTrack{T}}
+  tracks::Vector{CloudData{T}}
   metadata::SetMetadata{T}
 
   """ unmodified constructor for CloudSet """
