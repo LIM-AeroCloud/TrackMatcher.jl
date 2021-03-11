@@ -165,6 +165,18 @@ FlightMetadata{T}() where T = FlightMetadata{T}("", missing, missing, missing,
   elonmin=T(NaN), elonmax=T(NaN), wlonmin=T(NaN), wlonmax=T(NaN)),
   ((range=0:0, min=T(NaN), max=T(NaN)),), true, "","")
 
+""" External constructor for floating point conversions """
+FlightMetadata{T}(meta::FlightMetadata) where T = FlightMetadata{T}(
+  meta.dbID, meta.flightID, meta.route, meta.aircraft, meta.date,
+  (latmin = T(meta.area.latmin), latmax = T(meta.area.latmax), elonmin = T(meta.area.elonmin),
+  elonmax = T(meta.area.elonmax), wlonmin = T(meta.area.wlonmin), wlonmax = T(meta.area.wlonmax)),
+  Tuple([(range = m.range, min = T.(m.min), max = T.(m.max)) for m in meta.flex]),
+  meta.useLON, meta.source, meta.file
+)
+
+""" External constructor for default single floating point precision """
+FlightMetadata(args...) = FlightMetadata{Float32}(args...)
+
 
 """
 # struct CloudMetadata
@@ -369,7 +381,7 @@ struct FlightData{T} <: FlightTrack{T}
   metadata::FlightMetadata
 
   """ Unmodified constructor for `FlightData` with basic checks for correct `data`"""
-  function FlightData{T}(data::DataFrame, metadata::FlightMetadata{T}) where T<:AbstractFloat
+  function FlightData{T}(data::DataFrame, metadata::FlightMetadata{T}) where T
     # Column checks and warnings
     standardnames = ["time", "lat", "lon", "alt", "heading", "climb", "speed"]
     standardtypes = [Union{DateTime,Vector{DateTime}},
@@ -419,10 +431,32 @@ function FlightTrack{T}(
 end #constructor 2 FlightTrack
 
 
-""" External constructor for emtpy FlightTrack struct """
-FlightTrack{T}() where T = FlightData{T}(DataFrame(time = DateTime[],
+""" External constructor for emtpy FlightData """
+FlightData{T}() where T = FlightData{T}(DataFrame(time = DateTime[],
   lat = T[], lon = T[], alt=T[], heading = Int[], climb = T[],
   speed = T[]), FlightMetadata{T}())
+
+""" External constructor for emtpy FlightData """
+FlightTrack{T}() where T = FlightData{T}()
+
+""" Default FlightData constructor for Float32 """
+FlightData(args...; kwargs...) = FlightData{Float32}(args...; kwargs...)
+
+""" Default FlightData constructor for Float32 """
+FlightTrack(args...; kwargs...) = FlightData(args...; kwargs...)
+
+""" External constructor for conversion of floating point precision """
+function FlightData{T}(flight::FlightData) where T
+  for (i, col) in enumerate(eachcol(flight.data))
+    eltype(col) <: AbstractFloat || continue
+    v = []
+    for el in col
+      ismissing(el) ? push!(v, el) : push!(v, T(el))
+    end
+    flight.data[!, i] = [v...;]
+  end
+  FlightData{T}(flight.data, FlightMetadata{T}(flight.metadata))
+end
 
 
 """
@@ -562,7 +596,7 @@ struct FlightSet{T} <: PrimarySet{T}
 end #struct FlightSet
 
 
-""" Default FlightSet/FlightData constructor for Float32 """
+""" Default FlightSet constructor for Float32 """
 FlightSet(DBtype::String, folder::String...; altmin::Real=5000,
   remarks=nothing, odelim::Union{Nothing,Char,String}=nothing) =
   FlightSet{Float32}(DBtype, folder...; altmin=altmin, remarks=remarks, odelim=odelim)
@@ -611,6 +645,9 @@ CloudTrack{T}(data::DataFrame, metadata::CloudMetadata) where T =
 CloudTrack(data::DataFrame, metadata::CloudMetadata) =
   CloudData{Float32}(data, metadata)
 
+""" CloudTrack default Float32 constructor for CloudData """
+CloudData(data::DataFrame, metadata::CloudMetadata) =
+  CloudData{Float32}(data, metadata)
 
 
 """
@@ -659,7 +696,7 @@ end #struct CloudDB
 
 
 """ Default CloudSet construct for Float32 """
-CloudSet(folders::String...; remarks=nothing) = CloudSet{Float32}(folders...; remarks=remarks)
+CloudSet(folders::String...; remarks=nothing) = CloudSet{Float32}(folders...; remarks)
 
 
 ## Define structs related to sat data

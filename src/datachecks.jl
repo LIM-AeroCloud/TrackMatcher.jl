@@ -335,7 +335,7 @@ function correctDF!(data::DataFrame, correctcols::Vector{Int},
   for (i, col) in enumerate(findall(isequal(0), correctcols))
     data[!,Symbol("missing$i")] = [missing for i = 1:length(data[!,1])]
     correctcols[col] = length(names(data))
-    col in essentialcols ? throw(@error "column $(standardnames[col]) not found in data") :
+    col in essentialcols ? @error("column $(standardnames[col]) not found in data") :
       @warn("column $(standardnames[col]) not found in data; filled with `missing`")
   end
   additionalcols = setdiff(collect(1:length(names(data))), correctcols)
