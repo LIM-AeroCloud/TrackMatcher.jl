@@ -272,7 +272,7 @@ a modified constructor and `files`, `date`, `loadtime`, and `remarks`.
       remarks=nothing
     ) -> struct SattMetadata
 """
-struct SatMetadata
+struct SatMetadata{T} <: SatTrack{T}
   files::Dict{Int,String}
   type::Symbol
   date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
@@ -280,23 +280,23 @@ struct SatMetadata
   loadtime::Dates.CompoundPeriod
   remarks
 
-  function SatMetadata(
+  function SatMetadata{T}(
     files::Dict{Int,String},
     type::Symbol,
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
     created::Union{DateTime,ZonedDateTime},
     loadtime::Dates.CompoundPeriod,
     remarks=nothing
-  )
-    new(files, type, date, created, loadtime, remarks)
+  ) where T
+    new{T}(files, type, date, created, loadtime, remarks)
   end #constructor 1 SatMetadata
 
-  function SatMetadata(
+  function SatMetadata{T}(
     files::Vector{String},
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
     loadtime::Dates.CompoundPeriod=Dates.canonicalize(Dates.CompoundPeriod());
     remarks=nothing
-  )
+  ) where T
     # Find type of satellite data based on first 50 files (~2 days)
     type = occursin("CLay", files[1]) ≥
       count(occursin.("CPro", files[1:min(length(files), 50)])) ? :CLay : :CPro
@@ -729,111 +729,113 @@ with a Symbol `:CLay` or `:CPro` by the keyword argument `type`. Only one type o
 data can be stored in `SatData`. By default, all values are read in as `Float32`,
 but can be set to any other precision by the `Float` kwarg.
 """
-struct SatData
+struct SatData{T} <: SatTrack{T}
   data::DataFrame
-  metadata::SatMetadata
+  metadata::SatMetadata{T}
 
   """ Unmodified constructor for `SatData` with basic checks for correct `data`"""
-  function SatData(data::DataFrame, metadata::SatMetadata)
+  function SatData{T}(data::DataFrame, metadata::SatMetadata) where T
     standardnames = ["time", "lat", "lon", "fileindex"]
-    standardtypes = [Vector{DateTime}, Vector{<:AbstractFloat},
-      Vector{<:AbstractFloat}, Vector{Int}]
+    standardtypes = [Vector{DateTime}, Vector{T}, Vector{T}, Vector{Int}]
     bounds = (:time => (DateTime(2006), Dates.now()), :lat => (-90,90),
       :lon => (-180,180), :fileindex => (1, Inf))
     checkcols!(data, standardnames, standardtypes, bounds, "CLay")
-    new(data, metadata)
+    new{T}(data, metadata)
   end #constructor 1 SatData
-
-  """
-  Modified constructor creating the database from mat files in the given `folders`
-  or any subfolder using the floating point precision given by `Float`. The sat data
-  `type` is determined from the first 50 files in the database unless directly
-  specified `type`. Any `remarks` can be added to the metadata.
-  """
-  function SatData(
-    folders::String...;
-    Float::DataType=Float32,
-    type::Symbol=:undef,
-    remarks=nothing
-  )
-    tstart = Dates.now()
-    # Scan folders for HDF4 files
-    files = String[]
-    for folder in folders
-      try findfiles!(files, folder, ".hdf")
-      catch
-        @warn "read error; data skipped" folder
-      end
-    end
-    # If type of satellite data is not defined, find it based on first 50 file names (~2 days)
-    type = type == :CLay || type == :CPro ? string(type) :
-      count(occursin.("CLay", files[1:min(length(files), 50)])) ≥
-      count(occursin.("CPro", files[1:min(length(files), 50)])) ? "CLay" : "CPro"
-    # Select files of type based on file name
-    satfiles = files[occursin.(type, basename.(files))]
-    wrongtype = length(files) - length(satfiles)
-    wrongtype > 0 &&
-      @warn "$wrongtype files with wrong satellite type detected; data skipped"
-    # Create empty struct, if no data files were found
-    isempty(satfiles) && return SatData(Float)
-    # Start MATLAB session
-    ms = mat.MSession()
-    # Initialise arrays
-    utc = Vector{Vector{DateTime}}(undef, length(satfiles))
-    lat = Vector{Vector{Float}}(undef, length(satfiles))
-    lon = Vector{Vector{Float}}(undef, length(satfiles))
-    fileindex = Vector{Vector{Int}}(undef, length(satfiles))
-    # Loop over files
-    prog = pm.Progress(length(satfiles), "load sat data...")
-    for (i, file) in enumerate(satfiles)
-      # Find files with cloud layer data
-      utc[i], lat[i], lon[i], fileindex[i] = try
-        # Extract time
-        mat.put_variable(ms, :file, file)
-        mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
-        # Extract lat/lon
-        mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-        longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
-        mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-        latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
-        # Save time converted to UTC and lat/lon
-        convertUTC.(t), latitude, longitude, [i for index in t]
-      catch
-        # Skip data on failure and warn
-        @warn "read error in CALIPSO granule; data skipped"  granule = splitext(basename(file))[1]
-        DateTime[], Float[], Float[], Int[]
-      end
-      # Monitor progress for progress bar
-      pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
-    end #loop over files
-    pm.finish!(prog)
-
-    # Close MATLAB session
-    mat.close(ms)
-    # Calculate time span of satellite data
-    sattime = [utc...;]
-    # Find data range
-    tmin = minimum(sattime)
-    tmax = maximum(sattime)
-    # Save computing times
-    tend = Dates.now()
-    loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
-
-    # Instantiate new struct
-    @info string("SatData data loaded in ",
-      "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
-      "\n▪ data ($(length(sattime)) data rows)\n  – time\n  – lat\n  – lon",
-      "\n  – fileindex\n▪ metadata")
-    satdata = DataFrame(time=sattime, lat=[lat...;],
-      lon=[lon...;], fileindex=[fileindex...;])
-    new(satdata, SatMetadata(satfiles, (start=tmin, stop=tmax), loadtime, remarks=remarks))
-  end #constructor 2 SatData
 end #struct SatData
 
 
+"""
+Modified constructor creating the database from mat files in the given `folders`
+or any subfolder using the floating point precision given by `Float`. The sat data
+`type` is determined from the first 50 files in the database unless directly
+specified `type`. Any `remarks` can be added to the metadata.
+"""
+function SatTrack{T}(
+  folders::String...;
+  type::Symbol=:undef,
+  remarks=nothing
+) where T
+  tstart = Dates.now()
+  # Scan folders for HDF4 files
+  files = String[]
+  for folder in folders
+    try findfiles!(files, folder, ".hdf")
+    catch
+      @warn "read error; data skipped" folder
+    end
+  end
+  # If type of satellite data is not defined, find it based on first 50 file names (~2 days)
+  type = type == :CLay || type == :CPro ? string(type) :
+    count(occursin.("CLay", files[1:min(length(files), 50)])) ≥
+    count(occursin.("CPro", files[1:min(length(files), 50)])) ? "CLay" : "CPro"
+  # Select files of type based on file name
+  satfiles = files[occursin.(type, basename.(files))]
+  wrongtype = length(files) - length(satfiles)
+  wrongtype > 0 &&
+    @warn "$wrongtype files with wrong satellite type detected; data skipped"
+  # Create empty struct, if no data files were found
+  isempty(satfiles) && return SatData{T}()
+  # Start MATLAB session
+  ms = mat.MSession()
+  # Initialise arrays
+  utc = Vector{Vector{DateTime}}(undef, length(satfiles))
+  lat = Vector{Vector{T}}(undef, length(satfiles))
+  lon = Vector{Vector{T}}(undef, length(satfiles))
+  fileindex = Vector{Vector{Int}}(undef, length(satfiles))
+  # Loop over files
+  prog = pm.Progress(length(satfiles), "load sat data...")
+  for (i, file) in enumerate(satfiles)
+    # Find files with cloud layer data
+    utc[i], lat[i], lon[i], fileindex[i] = try
+      # Extract time
+      mat.put_variable(ms, :file, file)
+      mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
+      t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
+      # Extract lat/lon
+      mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
+      longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
+      mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
+      latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
+      # Save time converted to UTC and lat/lon
+      convertUTC.(t), latitude, longitude, [i for index in t]
+    catch
+      # Skip data on failure and warn
+      @warn "read error in CALIPSO granule; data skipped"  granule = splitext(basename(file))[1]
+      DateTime[], T[], T[], Int[]
+    end
+    # Monitor progress for progress bar
+    pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
+  end #loop over files
+  pm.finish!(prog)
+
+  # Close MATLAB session
+  mat.close(ms)
+  # Calculate time span of satellite data
+  sattime = [utc...;]
+  # Find data range
+  tmin = minimum(sattime)
+  tmax = maximum(sattime)
+  # Save computing times
+  tend = Dates.now()
+  loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
+
+  # Instantiate new struct
+  @info string("SatData data loaded in ",
+    "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
+    "\n▪ data ($(length(sattime)) data rows)\n  – time\n  – lat\n  – lon",
+    "\n  – fileindex\n▪ metadata")
+  satdata = DataFrame(time=sattime, lat=[lat...;],
+    lon=[lon...;], fileindex=[fileindex...;])
+  SatData{T}(satdata, SatMetadata{T}(satfiles, (start=tmin, stop=tmax), loadtime, remarks=remarks))
+end #external constructor for SatData
+
+
 """ External constructor for emtpy SatData struct """
-SatData(Float::DataType=Float32) = SatData(DataFrame(time=DateTime[], lat=Float[],
-  lon=Float[], fileindex=Int[]), SatMetadata(Dict{Int,String}(), :undef,
+SatData{T}() where T = SatData{T}(DataFrame(time=DateTime[], lat=T[],
+  lon=T[], fileindex=Int[]), SatMetadata(Dict{Int,String}(), :undef,
   (start=Dates.now(), stop=Dates.now()), Dates.now(),
   Dates.canonicalize(Dates.CompoundPeriod())))
+
+""" Default Float32 constructor for SatData """
+SatData(args...; kwargs...) = SatData{Float32}(args...; kwargs...)
