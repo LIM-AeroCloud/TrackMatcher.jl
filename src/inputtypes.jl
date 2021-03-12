@@ -160,12 +160,13 @@ struct FlightMetadata{T} <: FlightTrack{T}
 end #struct FlightMetadata
 
 """ External constructor for emtpy FlightMetadata struct """
-FlightMetadata{T}() where T = FlightMetadata{T}("", missing, missing, missing,
-  (start=Dates.now(), stop=Dates.now()), (latmin=T(NaN), latmax=T(NaN),
-  elonmin=T(NaN), elonmax=T(NaN), wlonmin=T(NaN), wlonmax=T(NaN)),
-  ((range=0:0, min=T(NaN), max=T(NaN)),), true, "","")
+FlightMetadata{T}() where T = FlightMetadata{T}(
+  "", missing, missing, missing, (start=Dates.now(), stop=Dates.now()),
+  (latmin=T(NaN), latmax=T(NaN), elonmin=T(NaN), elonmax=T(NaN), wlonmin=T(NaN), wlonmax=T(NaN)),
+  ((range=0:0, min=T(NaN), max=T(NaN)),), false, "", ""
+)
 
-""" External constructor for floating point conversions """
+""" External FlightMetadata constructor for floating point conversions """
 FlightMetadata{T}(meta::FlightMetadata) where T = FlightMetadata{T}(
   meta.dbID, meta.flightID, meta.route, meta.aircraft, meta.date,
   (latmin = T(meta.area.latmin), latmax = T(meta.area.latmax), elonmin = T(meta.area.elonmin),
@@ -174,7 +175,7 @@ FlightMetadata{T}(meta::FlightMetadata) where T = FlightMetadata{T}(
   meta.useLON, meta.source, meta.file
 )
 
-""" External constructor for default single floating point precision """
+""" External FlightMetadata constructor for default single floating point precision """
 FlightMetadata(args...) = FlightMetadata{Float32}(args...)
 
 
@@ -200,7 +201,6 @@ struct CloudMetadata{T} <: CloudTrack{T}
     useLON::Bool,
     file::String
   ) where T<:AbstractFloat
-    # T = typeof(area.latmin)
     new{T}(ID, date, area, flex, useLON, file)
   end #constructor 1 CloudMetadata
 
@@ -225,6 +225,26 @@ struct CloudMetadata{T} <: CloudTrack{T}
     new{T}(ID, (start=data.time[1], stop=data.time[end]), area, flex, useLON, file)
   end #constructor 2 CloudMetadata
 end #struct CloudMetadata
+
+""" Default CloudMetadata constructor for single floating point precision """
+CloudMetadata(args...) = CloudMetadata{Float32}(args...)
+
+""" External constructor for emtpy CloudMetadata struct """
+CloudMetadata{T}() where T = CloudMetadata{T}(
+  "", (start=Dates.now(), stop=Dates.now()), (latmin=T(NaN), latmax=T(NaN),
+  elonmin=T(NaN), elonmax=T(NaN), wlonmin=T(NaN), wlonmax=T(NaN)),
+  ((range=0:0, min=T(NaN), max=T(NaN)),), false, ""
+)
+
+""" External CloudMetadata constructor for floating point conversions """
+CloudMetadata{T}(meta::CloudMetadata) where T = CloudMetadata{T}(
+  meta.ID, meta.date, (latmin = T(meta.area.latmin), latmax = T(meta.area.latmax),
+  elonmin = T(meta.area.elonmin), elonmax = T(meta.area.elonmax),
+  wlonmin = T(meta.area.wlonmin), wlonmax = T(meta.area.wlonmax)),
+  Tuple([(range = m.range, min = T.(m.min), max = T.(m.max)) for m in meta.flex]),
+  meta.useLON, meta.file
+)
+
 
 
 """
@@ -305,6 +325,13 @@ struct SatMetadata{T} <: SatTrack{T}
   end #constructor 2 SatMetadata
 end #struct SatMetadata
 
+""" Default SatMetadata constructor for single floating point precision """
+SatMetadata(args...) = SatMetadata{Float32}(args...)
+
+""" External SatMetadata constructor for floating point conversions """
+SatMetadata{T}(meta::SatMetadata) where T = SatMetadata{T}(meta.files, meta.type,
+  meta.date, meta.created, meta.loadtime, meta.remarks)
+
 
 """
 # struct SetMetadata
@@ -324,6 +351,13 @@ struct SetMetadata{T} <: PrimarySet{T}
   loadtime::Dates.CompoundPeriod
   remarks
 end #struct SetMetadata
+
+""" Default SetMetadata constructor for single floating point precision """
+SetMetadata(args...) = SetMetadata{Float32}(args...)
+
+""" External SetMetadata constructor for floating point conversions """
+SetMetadata{T}(meta::SetMetadata) where T = SetMetadata{T}(T(meta.altmin),
+  meta.date, meta.created, meta.loadtime, meta.remarks)
 
 
 ## Define structs related to flight data
@@ -396,54 +430,44 @@ struct FlightData{T} <: FlightTrack{T}
       metadata.source, metadata.dbID)
     new{T}(data,metadata)
   end #constructor 1 FlightData
+
+  """ Modified constructor with variable checks and some automated calculation of fields """
+  function FlightData{T}(
+    track::DataFrame,
+    dbID::Union{Int,AbstractString},
+    flightID::Union{Missing,AbstractString},
+    aircraft::Union{Missing,AbstractString},
+    route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{<:AbstractString,<:AbstractString}}},
+    flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
+    useLON::Bool,
+    source::String,
+    file::AbstractString
+  ) where T
+    # Check dataframe columns of flight data; fill missing columns with missing values
+    t = getproperty(track, :time)
+    t = t isa Vector{ZonedDateTime} ? [zt.utc_datetime for zt in t] : t
+    lat = getproperty(track, :lat)
+    lon = getproperty(track, :lon)
+    alt = getproperty(track, :alt)
+    heading = df.hasproperty(track, :heading) ? df.getproperty(track, :heading) :
+      [missing for i in t]
+    climb = df.hasproperty(track, :climb) ? df.getproperty(track, :climb) :
+      [missing for i in t]
+    speed = df.hasproperty(track, :speed) ? df.getproperty(track, :speed) :
+      [missing for i in t]
+    metadata = FlightMetadata{T}(dbID,flightID,route,aircraft,t,lat,lon,useLON,flex,source,file)
+
+    # Instatiate new FlightTrack
+    return FlightData{T}(DataFrame(time=t,lat=lat,lon=lon,alt=alt,heading=heading,climb=climb,speed=speed),metadata)
+  end #constructor 2 FlightData
 end #struct FlightData
-
-
-""" Modified constructor with variable checks and some automated calculation of fields """
-function FlightTrack{T}(
-  track::DataFrame,
-  dbID::Union{Int,AbstractString},
-  flightID::Union{Missing,AbstractString},
-  aircraft::Union{Missing,AbstractString},
-  route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{<:AbstractString,<:AbstractString}}},
-  flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
-  useLON::Bool,
-  source::String,
-  file::AbstractString
-) where T
-  # Check dataframe columns of flight data; fill missing columns with missing values
-  t = getproperty(track, :time)
-  t = t isa Vector{ZonedDateTime} ? [zt.utc_datetime for zt in t] : t
-  lat = getproperty(track, :lat)
-  lon = getproperty(track, :lon)
-  alt = getproperty(track, :alt)
-  heading = df.hasproperty(track, :heading) ? df.getproperty(track, :heading) :
-    [missing for i in t]
-  climb = df.hasproperty(track, :climb) ? df.getproperty(track, :climb) :
-    [missing for i in t]
-  speed = df.hasproperty(track, :speed) ? df.getproperty(track, :speed) :
-    [missing for i in t]
-  # T = promote_type(eltype(lon), eltype(lat))
-  metadata = FlightMetadata{T}(dbID,flightID,route,aircraft,t,lat,lon,useLON,flex,source,file)
-
-  # Instatiate new FlightTrack
-  return FlightData{T}(DataFrame(time=t,lat=lat,lon=lon,alt=alt,heading=heading,climb=climb,speed=speed),metadata)
-end #constructor 2 FlightTrack
 
 
 """ External constructor for emtpy FlightData """
 FlightData{T}() where T = FlightData{T}(DataFrame(time = DateTime[],
   lat = T[], lon = T[], alt=T[], heading = Int[], climb = T[],
-  speed = T[]), FlightMetadata{T}())
-
-""" External constructor for emtpy FlightData """
-FlightTrack{T}() where T = FlightData{T}()
-
-""" Default FlightData constructor for Float32 """
-FlightData(args...; kwargs...) = FlightData{Float32}(args...; kwargs...)
-
-""" Default FlightData constructor for Float32 """
-FlightTrack(args...; kwargs...) = FlightData(args...; kwargs...)
+  speed = T[]), FlightMetadata{T}()
+)
 
 """ External constructor for conversion of floating point precision """
 function FlightData{T}(flight::FlightData) where T
@@ -457,6 +481,16 @@ function FlightData{T}(flight::FlightData) where T
   end
   FlightData{T}(flight.data, FlightMetadata{T}(flight.metadata))
 end
+
+""" Default FlightData constructor for Float32 """
+FlightData(args...; kwargs...) = FlightData{Float32}(args...; kwargs...)
+
+""" Default FlightTrack constructor for Float32 FlightData """
+FlightTrack(args...; kwargs...) = FlightData{Float32}(args...; kwargs...)
+
+""" FlightTrack constructor for FlightData """
+FlightTrack{T}(args...; kwargs...) where T = FlightData{T}(args...; kwargs...)
+
 
 
 """
@@ -595,11 +629,17 @@ struct FlightSet{T} <: PrimarySet{T}
   end # constructor 2 FlightSet
 end #struct FlightSet
 
+""" Default FlightSet constructor for single floating point precision """
+FlightSet(args...; kwargs...) = FlightSet{Float32}(args...; kwargs...)
 
-""" Default FlightSet constructor for Float32 """
-FlightSet(DBtype::String, folder::String...; altmin::Real=5000,
-  remarks=nothing, odelim::Union{Nothing,Char,String}=nothing) =
-  FlightSet{Float32}(DBtype, folder...; altmin=altmin, remarks=remarks, odelim=odelim)
+""" External FlightSet constructor for floating point conversions """
+FlightSet{T}(flights::FlightSet) where T = FlightSet{T}(
+  FlightData{T}.(flights.inventory),
+  FlightData{T}.(flights.archive),
+  FlightData{T}.(flights.onlineData),
+  SetMetadata{T}(flights.metadata)
+)
+
 
 
 ## Define structs related to cloud data
@@ -636,18 +676,28 @@ struct CloudData{T} <: PrimaryTrack{T}
   end #constructor 1 CloudTrack
 end #struct CloudTrack
 
+""" Default CloudData constructor for single floating point precision """
+CloudData(args...) = CloudData{Float32}(args...)
+
+""" External constructor for emtpy CloudData struct """
+CloudData{T}() where T = CloudData{T}(
+  DataFrame(time = DateTime[], lat = T[], lon = T[]), CloudMetadata{T}()
+)
+
+""" External CloudData constructor for floating point conversions """
+CloudData{T}(cloud::CloudData) where T = CloudData{T}(
+  DataFrame(time = cloud.data.time,
+    lat = T.(cloud.data.lat),
+    lon = T.(cloud.data.lon)
+  ),
+  cloud.metadata
+)
 
 """ CloudTrack constructor for CloudData """
-CloudTrack{T}(data::DataFrame, metadata::CloudMetadata) where T =
-  CloudData{T}(data, metadata)
+CloudTrack{T}(args...) where T = CloudData{T}(args...)
 
 """ CloudTrack default Float32 constructor for CloudData """
-CloudTrack(data::DataFrame, metadata::CloudMetadata) =
-  CloudData{Float32}(data, metadata)
-
-""" CloudTrack default Float32 constructor for CloudData """
-CloudData(data::DataFrame, metadata::CloudMetadata) =
-  CloudData{Float32}(data, metadata)
+CloudTrack(args...) = CloudData{Float32}(args...)
 
 
 """
@@ -662,7 +712,7 @@ struct CloudSet{T} <: PrimarySet{T}
   metadata::SetMetadata{T}
 
   """ unmodified constructor for CloudSet """
-  CloudSet{T}(tracks::Vector{CloudTrack}, metadata::SetMetadata) where T = new{T}(tracks, metadata)
+  CloudSet{T}(tracks::Vector{CloudData{T}}, metadata::SetMetadata{T}) where T = new{T}(tracks, metadata)
 
   """
   Modified constructor creating the database from mat files in the given folder
@@ -689,14 +739,19 @@ struct CloudSet{T} <: PrimarySet{T}
     tmin = minimum(t.data.time[1] for t in tracks)
     tmax = maximum(t.data.time[end] for t in tracks)
 
-    # Instantiate CloudDB
+    # Instantiate CloudSet
     new{T}(tracks, SetMetadata{T}(NaN, (start=tmin, stop=tmax), tc, loadtime, remarks))
   end #modified constructor 2
-end #struct CloudDB
+end #struct CloudSet
 
+""" Default CloudSet constructor for single floating point precision """
+CloudSet(args...; kwargs...) = CloudSet{Float32}(args...; kwargs...)
 
-""" Default CloudSet construct for Float32 """
-CloudSet(folders::String...; remarks=nothing) = CloudSet{Float32}(folders...; remarks)
+""" External CloudSet constructor for floating point conversions """
+CloudSet{T}(cloud::CloudSet) where T = CloudSet{T}(
+  CloudData{T}.(cloud.tracks),
+  SetMetadata{T}(cloud.metadata)
+)
 
 
 ## Define structs related to sat data
@@ -742,93 +797,92 @@ struct SatData{T} <: SatTrack{T}
     checkcols!(data, standardnames, standardtypes, bounds, "CLay")
     new{T}(data, metadata)
   end #constructor 1 SatData
+
+  """
+  Modified constructor creating the database from mat files in the given `folders`
+  or any subfolder using the floating point precision given by `Float`. The sat data
+  `type` is determined from the first 50 files in the database unless directly
+  specified `type`. Any `remarks` can be added to the metadata.
+  """
+  function SatData{T}(
+    folders::String...;
+    type::Symbol=:undef,
+    remarks=nothing
+  ) where T
+    tstart = Dates.now()
+    # Scan folders for HDF4 files
+    files = String[]
+    for folder in folders
+      try findfiles!(files, folder, ".hdf")
+      catch
+        @warn "read error; data skipped" folder
+      end
+    end
+    # If type of satellite data is not defined, find it based on first 50 file names (~2 days)
+    type = type == :CLay || type == :CPro ? string(type) :
+      count(occursin.("CLay", files[1:min(length(files), 50)])) ≥
+      count(occursin.("CPro", files[1:min(length(files), 50)])) ? "CLay" : "CPro"
+    # Select files of type based on file name
+    satfiles = files[occursin.(type, basename.(files))]
+    wrongtype = length(files) - length(satfiles)
+    wrongtype > 0 &&
+      @warn "$wrongtype files with wrong satellite type detected; data skipped"
+    # Create empty struct, if no data files were found
+    isempty(satfiles) && return SatData{T}()
+    # Start MATLAB session
+    ms = mat.MSession()
+    # Initialise arrays
+    utc = Vector{Vector{DateTime}}(undef, length(satfiles))
+    lat = Vector{Vector{T}}(undef, length(satfiles))
+    lon = Vector{Vector{T}}(undef, length(satfiles))
+    fileindex = Vector{Vector{Int}}(undef, length(satfiles))
+    # Loop over files
+    prog = pm.Progress(length(satfiles), "load sat data...")
+    for (i, file) in enumerate(satfiles)
+      # Find files with cloud layer data
+      utc[i], lat[i], lon[i], fileindex[i] = try
+        # Extract time
+        mat.put_variable(ms, :file, file)
+        mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
+        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
+        # Extract lat/lon
+        mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
+        longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
+        mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
+        latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
+        # Save time converted to UTC and lat/lon
+        convertUTC.(t), latitude, longitude, [i for index in t]
+      catch
+        # Skip data on failure and warn
+        @warn "read error in CALIPSO granule; data skipped"  granule = splitext(basename(file))[1]
+        DateTime[], T[], T[], Int[]
+      end
+      # Monitor progress for progress bar
+      pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
+    end #loop over files
+    pm.finish!(prog)
+
+    # Close MATLAB session
+    mat.close(ms)
+    # Calculate time span of satellite data
+    sattime = [utc...;]
+    # Find data range
+    tmin = minimum(sattime)
+    tmax = maximum(sattime)
+    # Save computing times
+    tend = Dates.now()
+    loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
+
+    # Instantiate new struct
+    @info string("SatData data loaded in ",
+      "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
+      "\n▪ data ($(length(sattime)) data rows)\n  – time\n  – lat\n  – lon",
+      "\n  – fileindex\n▪ metadata")
+    satdata = DataFrame(time=sattime, lat=[lat...;],
+      lon=[lon...;], fileindex=[fileindex...;])
+    SatData{T}(satdata, SatMetadata{T}(satfiles, (start=tmin, stop=tmax), loadtime, remarks=remarks))
+  end #constructor 2 SatData
 end #struct SatData
-
-
-"""
-Modified constructor creating the database from mat files in the given `folders`
-or any subfolder using the floating point precision given by `Float`. The sat data
-`type` is determined from the first 50 files in the database unless directly
-specified `type`. Any `remarks` can be added to the metadata.
-"""
-function SatTrack{T}(
-  folders::String...;
-  type::Symbol=:undef,
-  remarks=nothing
-) where T
-  tstart = Dates.now()
-  # Scan folders for HDF4 files
-  files = String[]
-  for folder in folders
-    try findfiles!(files, folder, ".hdf")
-    catch
-      @warn "read error; data skipped" folder
-    end
-  end
-  # If type of satellite data is not defined, find it based on first 50 file names (~2 days)
-  type = type == :CLay || type == :CPro ? string(type) :
-    count(occursin.("CLay", files[1:min(length(files), 50)])) ≥
-    count(occursin.("CPro", files[1:min(length(files), 50)])) ? "CLay" : "CPro"
-  # Select files of type based on file name
-  satfiles = files[occursin.(type, basename.(files))]
-  wrongtype = length(files) - length(satfiles)
-  wrongtype > 0 &&
-    @warn "$wrongtype files with wrong satellite type detected; data skipped"
-  # Create empty struct, if no data files were found
-  isempty(satfiles) && return SatData{T}()
-  # Start MATLAB session
-  ms = mat.MSession()
-  # Initialise arrays
-  utc = Vector{Vector{DateTime}}(undef, length(satfiles))
-  lat = Vector{Vector{T}}(undef, length(satfiles))
-  lon = Vector{Vector{T}}(undef, length(satfiles))
-  fileindex = Vector{Vector{Int}}(undef, length(satfiles))
-  # Loop over files
-  prog = pm.Progress(length(satfiles), "load sat data...")
-  for (i, file) in enumerate(satfiles)
-    # Find files with cloud layer data
-    utc[i], lat[i], lon[i], fileindex[i] = try
-      # Extract time
-      mat.put_variable(ms, :file, file)
-      mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-      t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
-      # Extract lat/lon
-      mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-      longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
-      mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-      latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
-      # Save time converted to UTC and lat/lon
-      convertUTC.(t), latitude, longitude, [i for index in t]
-    catch
-      # Skip data on failure and warn
-      @warn "read error in CALIPSO granule; data skipped"  granule = splitext(basename(file))[1]
-      DateTime[], T[], T[], Int[]
-    end
-    # Monitor progress for progress bar
-    pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
-  end #loop over files
-  pm.finish!(prog)
-
-  # Close MATLAB session
-  mat.close(ms)
-  # Calculate time span of satellite data
-  sattime = [utc...;]
-  # Find data range
-  tmin = minimum(sattime)
-  tmax = maximum(sattime)
-  # Save computing times
-  tend = Dates.now()
-  loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
-
-  # Instantiate new struct
-  @info string("SatData data loaded in ",
-    "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
-    "\n▪ data ($(length(sattime)) data rows)\n  – time\n  – lat\n  – lon",
-    "\n  – fileindex\n▪ metadata")
-  satdata = DataFrame(time=sattime, lat=[lat...;],
-    lon=[lon...;], fileindex=[fileindex...;])
-  SatData{T}(satdata, SatMetadata{T}(satfiles, (start=tmin, stop=tmax), loadtime, remarks=remarks))
-end #external constructor for SatData
 
 
 """ External constructor for emtpy SatData struct """
@@ -839,3 +893,19 @@ SatData{T}() where T = SatData{T}(DataFrame(time=DateTime[], lat=T[],
 
 """ Default Float32 constructor for SatData """
 SatData(args...; kwargs...) = SatData{Float32}(args...; kwargs...)
+
+""" External constructor for floating point precision conversions """
+SatData{T}(sat::SatData) where T = SatData{T}(
+  DataFrame(
+    time = sat.data.time,
+    lat = T.(sat.data.lat),
+    lon = T.(sat.data.lon),
+    fileindex = sat.data.fileindex
+  ), SatMetadata{T}(sat.metadata)
+)
+
+""" SatTrack constructor for SatData """
+SatTrack{T}(args...; kwargs...) where T = SatData{T}(args...; kwargs...)
+
+""" Default Float32 SatTrack constructor for SatData """
+SatTrack(args...; kwargs...) = SatData{Float32}(args...; kwargs...)
