@@ -1,4 +1,5 @@
 ## Define own Metadata structs
+
 """
 # struct FlightMetadata{T}
 
@@ -416,6 +417,8 @@ struct FlightData{T} <: FlightTrack{T}
 
   """ Unmodified constructor for `FlightData` with basic checks for correct `data`"""
   function FlightData{T}(data::DataFrame, metadata::FlightMetadata{T}) where T
+    # Ensure floats of correct precision
+    convertFloats!(data, T)
     # Column checks and warnings
     standardnames = ["time", "lat", "lon", "alt", "heading", "climb", "speed"]
     standardtypes = [Union{DateTime,Vector{DateTime}},
@@ -458,7 +461,7 @@ struct FlightData{T} <: FlightTrack{T}
     metadata = FlightMetadata{T}(dbID,flightID,route,aircraft,t,lat,lon,useLON,flex,source,file)
 
     # Instatiate new FlightTrack
-    return FlightData{T}(DataFrame(time=t,lat=lat,lon=lon,alt=alt,heading=heading,climb=climb,speed=speed),metadata)
+    new{T}(DataFrame(time=t,lat=lat,lon=lon,alt=alt,heading=heading,climb=climb,speed=speed),metadata)
   end #constructor 2 FlightData
 end #struct FlightData
 
@@ -469,16 +472,9 @@ FlightData{T}() where T = FlightData{T}(DataFrame(time = DateTime[],
   speed = T[]), FlightMetadata{T}()
 )
 
-""" External constructor for conversion of floating point precision """
+""" External FlightData constructor for conversion of floating point precision """
 function FlightData{T}(flight::FlightData) where T
-  for (i, col) in enumerate(eachcol(flight.data))
-    eltype(col) <: AbstractFloat || continue
-    v = []
-    for el in col
-      ismissing(el) ? push!(v, el) : push!(v, T(el))
-    end
-    flight.data[!, i] = [v...;]
-  end
+  convertFloats!(flight.data, T)
   FlightData{T}(flight.data, FlightMetadata{T}(flight.metadata))
 end
 
@@ -558,13 +554,15 @@ struct FlightSet{T} <: PrimarySet{T}
   in each dataset field.
   """
   function FlightSet{T}(inventory::Vector{FlightData{T}}, archive::Vector{FlightData{T}},
-    onlineData::Vector{FlightData{T}}, metadata::SetMetadata{T}) where {T}
+    onlineData::Vector{FlightData{T}}, metadata::SetMetadata{T}) where T
 
     # Check for correct dataset type in each vector and for correct floating point precision
     inventory = checkDBtype(inventory, "VOLPE")
     archive = checkDBtype(archive, "FlightAware")
     onlineData = checkDBtype(onlineData, "flightaware.com")
 
+
+    # Instantiate new struct
     new{T}(inventory, archive, onlineData, metadata)
   end #constructor 1 FlightSet
 
@@ -572,13 +570,13 @@ struct FlightSet{T} <: PrimarySet{T}
   Modified constructor creating the database from an identifer of the
   database type and the respective folder path for that database.
   """
-  function FlightSet{T}(DBtype::String, folder::String...; altmin::Real=5000,
+  function FlightSet{T}(DBtype::String, folders::String...; altmin::Real=5000,
     remarks=nothing, odelim::Union{Nothing,Char,String}=nothing) where T
 
     # Save time of database creation
     tstart = Dates.now()
     # Check DBtype addresses all folder paths
-    if length(DBtype) ≠ length(folder)
+    if length(DBtype) ≠ length(folders)
       throw(ArgumentError("Number of characters in `DBtype` must match length of vararg `folder`"))
     end
     # Find database types
@@ -590,18 +588,18 @@ struct FlightSet{T} <: PrimarySet{T}
     # VOLPE AEDT inventory
     ifiles = String[]
     for i in i1
-      findfiles!(ifiles, folder[i], ".csv")
+      findfiles!(ifiles, folders[i], ".csv")
     end
     inventory = loadInventory(ifiles...; Float=T, altmin=altmin)
     # FlightAware commercial archive
     ifiles = String[]
     for i in i2
-      findfiles!(ifiles, folder[i], ".csv")
+      findfiles!(ifiles, folders[i], ".csv")
     end
     archive = loadArchive(ifiles...; Float=T, altmin=altmin)
     ifiles = String[]
     for i in i3
-      findfiles!(ifiles, folder[i], ".tsv", ".txt", ".dat")
+      findfiles!(ifiles, folders[i], ".tsv", ".txt", ".dat")
     end
     onlineData = loadOnlineData(ifiles...; Float=T, altmin=altmin, delim=odelim)
     tmin, tmax = if isempty([inventory; archive; onlineData])
@@ -640,6 +638,20 @@ FlightSet{T}(flights::FlightSet) where T = FlightSet{T}(
   SetMetadata{T}(flights.metadata)
 )
 
+""" PrimarySet constructor for FlightSet """
+PrimarySet{T}(
+  inventory::Vector{FlightData{T}},
+  archive::Vector{FlightData{T}},
+  onlineData::Vector{FlightData{T}},
+  metadata::SetMetadata{T}
+) where T = FlightSet{T}(inventory, archive, onlineData, metadata)
+
+""" PrimarySet constructor for FlightSet """
+PrimarySet{T}(DBtype::String, folders::String...; kwargs...) where T =
+  FlightSet{T}(DBtype, folders; kwargs...)
+
+""" PrimarySet constructor for FlightSet with converted floating point precision """
+PrimarySet{T}(tracks::FlightSet) where T = FlightSet{T}(tracks)
 
 
 ## Define structs related to cloud data
@@ -665,13 +677,13 @@ struct CloudData{T} <: PrimaryTrack{T}
   """ Unmodified constructor for `CloudTrack` with basic checks for correct `data`"""
   function CloudData{T}(data::DataFrame, metadata::CloudMetadata) where T
 
+    # Ensure floats of correct precision
+    convertFloats!(data, T)
     # Column checks and warnings
     standardnames = ["time", "lat", "lon"]
-    standardtypes = [Union{DateTime,Vector{DateTime}},
-      Vector{T}, Vector{T}]
+    standardtypes = [Union{DateTime,Vector{DateTime}}, Vector{T}, Vector{T}]
     bounds = (:lat => (-90, 90), :lon => (-180, 180))
-    checkcols!(data, standardnames, standardtypes, bounds,
-      "CloudTrack", metadata.ID)
+    checkcols!(data, standardnames, standardtypes, bounds, "CloudTrack", metadata.ID)
     new{T}(data,metadata)
   end #constructor 1 CloudTrack
 end #struct CloudTrack
@@ -753,6 +765,17 @@ CloudSet{T}(cloud::CloudSet) where T = CloudSet{T}(
   SetMetadata{T}(cloud.metadata)
 )
 
+""" PrimarySet constructor for CloudSet """
+PrimarySet{T}(tracks::Vector{CloudData{T}}, metadata::SetMetadata{T}) where T =
+  CloudSet{T}(tracks, metadata)
+
+""" PrimarySet constructor for CloudSet """
+PrimarySet{T}(folders::String...; remarks=nothing) where T =
+  CloudSet{T}(folders; remarks)
+
+""" PrimarySet constructor for CloudSet with converted floating point precision """
+PrimarySet{T}(tracks::CloudSet) where T = CloudSet{T}(tracks)
+
 
 ## Define structs related to sat data
 
@@ -790,6 +813,9 @@ struct SatData{T} <: SatTrack{T}
 
   """ Unmodified constructor for `SatData` with basic checks for correct `data`"""
   function SatData{T}(data::DataFrame, metadata::SatMetadata) where T
+    # Ensure floats of correct precision
+    convertFloats!(data, T)
+    # Check for correct column names and data types
     standardnames = ["time", "lat", "lon", "fileindex"]
     standardtypes = [Vector{DateTime}, Vector{T}, Vector{T}, Vector{Int}]
     bounds = (:time => (DateTime(2006), Dates.now()), :lat => (-90,90),

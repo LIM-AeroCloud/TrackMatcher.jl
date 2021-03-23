@@ -26,7 +26,7 @@ function addX!(
   clay::CLay,
   tmf::DateTime,
   tms::DateTime,
-  feature::Symbol,
+  feature::Union{Missing,Symbol},
   fxmeas::T,
   ftmeas::Dates.CompoundPeriod,
   sxmeas::T,
@@ -38,7 +38,6 @@ function addX!(
   for i = 1:size(Xdata, 1)
     # Use most accurate intersection, when duplicates are found within Xradius
     # or intersection with least decay between overpass times for equal accuracies
-      accuracy.intersection[i], Xdata.tdiff[i], dt
     if dist.haversine(Xf, (Xdata.lat[i], Xdata.lon[i]), earthradius(Xf[1])) ≤ Xradius
       dx ≤ accuracy.intersection[i] || return counter # previous intersection more accurate
       # previous intersection equally accurate, but smaller delay time:
@@ -275,11 +274,11 @@ end #function find_timespan
 From the `sat` data of type `CLay` or `CPro`, extract a subset within `timespan`
 and return the reduced struct.
 """
-function extract_timespan(sat::Union{CLay,CPro}, timespan::Vector{DateTime})
+function extract_timespan(sat::ObservationSet{T}, timespan::Vector{DateTime}) where T
   timeindex = [findfirst(sat.data.time .== t) for t in timespan
     if findfirst(sat.data.time .== t) ≠ nothing]
   satdata = sat.data[timeindex,:]
-  typeof(sat) == CPro ? CPro(satdata) : CLay(satdata)
+  typeof(sat) == CPro{T} ? CPro{T}(satdata) : CLay{T}(satdata)
 end #function extract_timespan
 
 
@@ -396,21 +395,21 @@ function get_satdata(
 
   # Get CPro/CLay data from near the intersection
   clay = if sat.metadata.type == :CLay
-    CLay(ms, primfiles, lidarrange, altmin, Float)
+    CLay{Float}(ms, primfiles, lidarrange, altmin)
   else
-    try CLay(ms, secfiles, lidarrange, altmin, Float)
+    try CLay{Float}(ms, secfiles, lidarrange, altmin)
     catch
       println(); @warn "could not load additional layer data" flightid
-      CLay()
+      CLay{Float}()
     end
   end
   cpro = if sat.metadata.type == :CPro
-    CPro(ms, primfiles, timespan, lidarprofile, Float)
+    CPro{Float}(ms, primfiles, timespan, lidarprofile)
   else
-    try CPro(ms, secfiles, timespan, lidarprofile, Float)
+    try CPro{Float}(ms, secfiles, timespan, lidarprofile)
     catch
       println(); @warn "could not load additional profile data" flightid
-      CPro()
+      CPro{Float}()
     end
   end
   clay = extract_timespan(clay, timespan)

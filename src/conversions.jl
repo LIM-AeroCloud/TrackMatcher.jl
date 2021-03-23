@@ -1,4 +1,25 @@
-### Helper functions for format and unit conversions
+### Helper functions for type, format and unit conversions
+
+## Type conversions
+
+# Overload Float functions in Base with new method to ignore missing values
+Base.Float16(::Missing) = missing
+Base.Float32(::Missing) = missing
+Base.Float64(::Missing) = missing
+
+
+"""
+    convertFloats!(data::DataFrame, T::DataType=Float32)
+
+Transform all columns of `Vector{AbstractFloat}` or `Vector{Union{Missing, AbstractFloat}}`
+to the precision of type `T`.
+"""
+function convertFloats!(data::DataFrame, T::DataType=Float32)
+  for (i, col) in enumerate(eachcol(data))
+    eltype(col) <: Union{Missing, AbstractFloat} && (data[!, i] = T.(col))
+  end
+end #function convertFloats!
+
 
 ## Time format conversion of satellite data
 """
@@ -59,18 +80,3 @@ end #function ftpmin2mps
 function knot2mps(knot::T)::T  where T<:Union{Missing,AbstractFloat}
     1.852knot/3.6
 end #function knot2mps
-
-
-## Type conversions
-
-"""
-    Float64(track::FlightData)
-
-Overload `Float64` from Base to convert `FlightData{T}` to `FlightData{Float64}`.
-"""
-# function Float64(track::FlightData)
-#   FlightData{Float64}(DataFrame(time=track.time, lat=Float64.(track.lat, lon=Float64.(track.lon),
-#     alt=Float64.(track.alt), heading=track.heading), climb=Float64.(track.climb),
-#     speed=Float64.(track.speed)),
-#     FlightMetadata{Float64}([getproperty(track.metadata, f) for f in fieldnames(FlightMetadata)]...))
-# end #Float64 for FlightData
