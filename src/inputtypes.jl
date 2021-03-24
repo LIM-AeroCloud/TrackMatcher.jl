@@ -570,38 +570,38 @@ struct FlightSet{T} <: PrimarySet{T}
   Modified constructor creating the database from an identifer of the
   database type and the respective folder path for that database.
   """
-  function FlightSet{T}(DBtype::String, folders::String...; altmin::Real=5000,
+  function FlightSet{T}(;
+    inventory::Union{String,Vector{String}}=String[],
+    archive::Union{String,Vector{String}}=String[],
+    onlineData::Union{String,Vector{String}}=String[],
+    altmin::Real=5000,
     remarks=nothing, odelim::Union{Nothing,Char,String}=nothing) where T
 
     # Save time of database creation
     tstart = Dates.now()
-    # Check DBtype addresses all folder paths
-    if length(DBtype) ≠ length(folders)
-      throw(ArgumentError("Number of characters in `DBtype` must match length of vararg `folder`"))
-    end
-    # Find database types
-    i1 = [findall(isequal('i'), lowercase(DBtype)); findall(isequal('1'), DBtype)]
-    i2 = [findall(isequal('a'), lowercase(DBtype)); findall(isequal('2'), DBtype)]
-    i3 = [findall(isequal('o'), lowercase(DBtype)); findall(isequal('3'), DBtype)]
 
-    # Load databases for each type
+    ## Load databases for each type
     # VOLPE AEDT inventory
-    ifiles = String[]
-    for i in i1
-      findfiles!(ifiles, folders[i], ".csv")
+    inventory isa Vector || (inventory = [inventory])
+    files = String[]
+    for dir in inventory
+      findfiles!(files, dir, ".csv")
     end
-    inventory = loadInventory(ifiles...; Float=T, altmin=altmin)
+    inventory = loadInventory(files...; Float=T, altmin=altmin)
     # FlightAware commercial archive
-    ifiles = String[]
-    for i in i2
-      findfiles!(ifiles, folders[i], ".csv")
+    archive isa Vector || (archive = [archive])
+    files = String[]
+    for dir in archive
+      findfiles!(files, dir, ".csv")
     end
-    archive = loadArchive(ifiles...; Float=T, altmin=altmin)
-    ifiles = String[]
-    for i in i3
-      findfiles!(ifiles, folders[i], ".tsv", ".txt", ".dat")
+    archive = loadArchive(files...; Float=T, altmin=altmin)
+    # FlightAware web content
+    onlineData isa Vector || (onlineData = [onlineData])
+    files = String[]
+    for dir in onlineData
+      findfiles!(files, dir, ".tsv", ".txt", ".dat")
     end
-    onlineData = loadOnlineData(ifiles...; Float=T, altmin=altmin, delim=odelim)
+    onlineData = loadOnlineData(files...; Float=T, altmin=altmin, delim=odelim)
     tmin, tmax = if isempty([inventory; archive; onlineData])
       tstart, tstart
     else
@@ -647,8 +647,8 @@ PrimarySet{T}(
 ) where T = FlightSet{T}(inventory, archive, onlineData, metadata)
 
 """ PrimarySet constructor for FlightSet """
-PrimarySet{T}(DBtype::String, folders::String...; kwargs...) where T =
-  FlightSet{T}(DBtype, folders; kwargs...)
+PrimarySet{T}(; kwargs...) where T =
+  FlightSet{T}(; kwargs...)
 
 """ PrimarySet constructor for FlightSet with converted floating point precision """
 PrimarySet{T}(tracks::FlightSet) where T = FlightSet{T}(tracks)
