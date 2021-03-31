@@ -16,7 +16,7 @@ otherwise specified by `Float`.
 function get_lidarheights(lidarrange::Tuple{Real,Real}, Float::DataType=Float32)
   # Read CPro lidar altitude profile
   hfile = normpath(@__DIR__, "../data/CPro_Lidar_Altitudes_m.dat")
-  hprofile = CSV.File(hfile, type=Float) |> df.DataFrame!
+  hprofile = CSV.read(hfile, DataFrame, copycols = false, type=Float)
   # Consider only levels between max/min given in lidarrange
   itop = findfirst(hprofile.CPro .≤ lidarrange[1])
   ibottom = findlast(hprofile.CPro .≥ lidarrange[2])

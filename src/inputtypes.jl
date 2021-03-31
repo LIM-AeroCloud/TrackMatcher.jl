@@ -326,6 +326,16 @@ struct SatMetadata{T} <: SatTrack{T}
   end #constructor 2 SatMetadata
 end #struct SatMetadata
 
+"""
+    SatMetadata{T}() where T
+
+External constructor for empty `SatMetadata` with floating point precision `T`.
+"""
+SatMetadata{T}() where T = SatMetadata{T}(
+  Dict{Int,String}(), :undef, (start=Dates.now(), stop=Dates.now()),
+  Dates.now(), Dates.CompoundPeriod(), nothing
+)
+
 """ Default SatMetadata constructor for single floating point precision """
 SatMetadata(args...) = SatMetadata{Float32}(args...)
 
@@ -352,6 +362,14 @@ struct SetMetadata{T} <: PrimarySet{T}
   loadtime::Dates.CompoundPeriod
   remarks
 end #struct SetMetadata
+
+"""
+    SetMetadata{T}() where T
+
+External constructor for empty SetMetadata.
+"""
+SetMetadata{T}() where T = SetMetadata{T}(NaN, (start=Dates.now(), stop=Dates.now()),
+  Dates.now(), Dates.CompoundPeriod(), nothing)
 
 """ Default SetMetadata constructor for single floating point precision """
 SetMetadata(args...) = SetMetadata{Float32}(args...)
@@ -577,6 +595,8 @@ struct FlightSet{T} <: PrimarySet{T}
     altmin::Real=5000,
     remarks=nothing, odelim::Union{Nothing,Char,String}=nothing) where T
 
+    # Return empty FlightSet, if no folders are passed to constructor
+    all(isempty.([inventory, archive, onlineData])) && return FlightSet{T}()
     # Save time of database creation
     tstart = Dates.now()
 
@@ -626,6 +646,14 @@ struct FlightSet{T} <: PrimarySet{T}
       SetMetadata{T}(altmin, (start=tmin, stop=tmax), tc, loadtime, remarks))
   end # constructor 2 FlightSet
 end #struct FlightSet
+
+"""
+    FlightSet{T}() where T
+
+External constructor for empty FlightSet.
+"""
+FlightSet{T}() where T = FlightSet{T}(FlightData{T}[], FlightData{T}[], FlightData{T}[],
+  SetMetadata{T}())
 
 """ Default FlightSet constructor for single floating point precision """
 FlightSet(args...; kwargs...) = FlightSet{Float32}(args...; kwargs...)
@@ -731,6 +759,9 @@ struct CloudSet{T} <: PrimarySet{T}
   or any subfolder using the floating point precision given by `Float`.
   """
   function CloudSet{T}(folders::String...; remarks=nothing) where T
+    # Return empty CloudSet, if no folders are passed to constructor
+    all(isempty.(folders)) && return CloudSet{T}()
+    # Track computing time
     tstart = Dates.now()
     # Scan folders for HDF4 files
     files = String[]
@@ -755,6 +786,13 @@ struct CloudSet{T} <: PrimarySet{T}
     new{T}(tracks, SetMetadata{T}(NaN, (start=tmin, stop=tmax), tc, loadtime, remarks))
   end #modified constructor 2
 end #struct CloudSet
+
+"""
+    CloudSet{T}() where T
+
+External constructor for empty CloudSet.
+"""
+CloudSet{T}() where T = CloudSet{T}(CloudData{T}[], SetMetadata{T}())
 
 """ Default CloudSet constructor for single floating point precision """
 CloudSet(args...; kwargs...) = CloudSet{Float32}(args...; kwargs...)
@@ -910,6 +948,16 @@ struct SatData{T} <: SatTrack{T}
   end #constructor 2 SatData
 end #struct SatData
 
+
+"""
+    SatData{T}() where T
+
+External constructor for empty `SatData` with floating point precision `T`.
+"""
+SatData{T}() where T = SatData{T}(
+  DataFrame(time = DateTime[], lat = T[], lon=T[], fileindex=Int[]),
+  SatMetadata{T}()
+)
 
 """ External constructor for emtpy SatData struct """
 SatData{T}() where T = SatData{T}(DataFrame(time=DateTime[], lat=T[],

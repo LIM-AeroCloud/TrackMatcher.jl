@@ -46,7 +46,7 @@ struct XMetadata{T} <: Intersection{T}
     stepwidth::Real,
     Xradius::Real,
     expdist::Real,
-    lidarrange::NamedTuple{(:top,:bottom),Tuple{Real,Real}},
+    lidarrange::Tuple{Real,Real},
     lidarprofile::NamedTuple,
     sattype::Symbol,
     satdates::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
@@ -56,7 +56,8 @@ struct XMetadata{T} <: Intersection{T}
     loadtime::Dates.CompoundPeriod,
     remarks
   ) where T
-    new{T}(maxtimediff, stepwidth, Xradius, expdist, lidarrange, lidarprofile,
+    new{T}(maxtimediff, stepwidth, Xradius, expdist,
+      (top=T(lidarrange[1]), bottom=T(lidarrange[2])), lidarprofile,
       sattype, satdates, altmin, flightdates, created, loadtime, remarks)
   end #constructor 1 XMetaData
 
@@ -65,7 +66,7 @@ struct XMetadata{T} <: Intersection{T}
     stepwidth::Real,
     Xradius::Real,
     expdist::Real,
-    lidarrange::Tuple{Real,Real},
+    lidarrange::NamedTuple{(:top,:bottom),Tuple{T,T}},
     lidarprofile::NamedTuple,
     sattype::Symbol,
     satdates::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
@@ -75,8 +76,8 @@ struct XMetadata{T} <: Intersection{T}
     loadtime::Dates.CompoundPeriod,
     remarks=nothing
   ) where T
-    new{T}(maxtimediff, stepwidth, Xradius, expdist, (top=lidarrange[1], bottom=lidarrange[2]),
-      lidarprofile, sattype, satdates, altmin, flightdates, created, loadtime, remarks)
+    new{T}(maxtimediff, stepwidth, Xradius, expdist, lidarrange, lidarprofile,
+      sattype, satdates, altmin, flightdates, created, loadtime, remarks)
   end #constructor 2 XMetaData
 end #struct XMetaData
 
@@ -89,7 +90,7 @@ XMetadata{T}(meta::XMetadata) where T = XMetadata{T}(
   T(meta.stepwidth),
   T(meta.Xradius),
   T(meta.expdist),
-  T.(meta.lidarrange),
+  (top = T(meta.lidarrange.top), bottom = T(meta.lidarrange.bottom)),
   (coarse = T.(meta.lidarprofile.coarse), fine = T.(meta.lidarprofile.fine),
     ibottom = meta.lidarprofile.ibottom, itop = meta.lidarprofile.itop,
     i30 = meta.lidarprofile.i30),
@@ -226,6 +227,9 @@ struct XData{T} <: Intersection{T}
     # Ensure floats of correct precision
     convertFloats!(data, T)
     convertFloats!(accuracy, T)
+    tracked.flight = FlightData{T}.(tracked.flight)
+    tracked.CPro = CPro{T}.(tracked.CPro)
+    tracked.CLay = CLay{T}.(tracked.CLay)
     # Check data
     standardnames = ["id", "lat", "lon", "alt", "tdiff", "tflight", "tsat", "feature"]
     standardtypes = [Vector{String}, Vector{<:T}, Vector{<:T}, Vector{<:T},
@@ -235,7 +239,7 @@ struct XData{T} <: Intersection{T}
     checkcols!(data, standardnames, standardtypes, bounds, "Intersection.data")
     # Check tracked (measured data)
     standardnames = ["id", "flight", "CPro", "CLay"]
-    standardtypes = [Vector{String}, Vector{FlightTrack}, Vector{CPro{T}}, Vector{CLay{T}}]
+    standardtypes = [Vector{String}, Vector{FlightData{T}}, Vector{CPro{T}}, Vector{CLay{T}}]
     bounds = ()
     checkcols!(tracked, standardnames, standardtypes, bounds, "Intersection.tracked",
       essentialcols = [1])
@@ -269,7 +273,7 @@ struct XData{T} <: Intersection{T}
     Xdata = DataFrame(id=String[], lat=T[], lon=T[], alt=T[],
       tdiff=Dates.CompoundPeriod[], tflight = DateTime[],
       tsat = DateTime[], feature = Union{Missing,Symbol}[])
-    tracked = DataFrame(id=String[], flight=FlightData[], CPro=CPro[], CLay=CLay[])
+    tracked = DataFrame(id=String[], flight=FlightData{T}[], CPro=CPro{T}[], CLay=CLay{T}[])
     accuracy = DataFrame(id=String[], intersection=T[], flightcoord=T[],
       satcoord=T[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
     # Combine all flight datasets and find intersections
@@ -329,7 +333,7 @@ struct XData{T} <: Intersection{T}
     @info string("Intersection data ($(length(Xdata[!,1])) matches) loaded in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
       "\n▪ data\n▪ tracked\n▪ accuracy\n▪ metadata")
-    new{T}(Xdata, tracked, accuracy, XMetadata(maxtimediff, stepwidth, Xradius,
+    new{T}(Xdata, tracked, accuracy, XMetadata{T}(maxtimediff, stepwidth, Xradius,
       expdist, lidarrange, lidarprofile, sat.metadata.type, sat.metadata.date,
       tracks.metadata.altmin, tracks.metadata.date, tc, loadtime, remarks))
   end #constructor 2 XData
@@ -337,11 +341,7 @@ end #struct XData
 
 
 """ External constructor for conversion of floating point precision """
-function XData{T}(X::XData) where T
-  convertFloats!(X.data, T)
-  convertFloats!(X.accuracy, T)
-  XData{T}(X.data, X.tracked, X.accuracy, XMetadata{T}(X.metadata))
-end
+XData{T}(X::XData) where T = XData{T}(X.data, X.tracked, X.accuracy, XMetadata{T}(X.metadata))
 
 """ Default FlightData constructor for Float32 """
 function XData(
@@ -683,3 +683,86 @@ end
 
 """ Default CPro constructor for Float32 """
 CPro(args...; kwargs...) = CPro{Float32}(args...; kwargs...)
+
+
+struct Data{T} <: DataSet{T}
+  flight::Union{Nothing,FlightSet{T}}
+  cloud::Union{Nothing,CloudSet{T}}
+  sat::Union{Nothing,SatData{T}}
+  intersection::Union{Nothing,NamedTuple{(:flight,:cloud), Tuple{XData{T},XData{T}}}}
+
+  function Data{T}(
+    flight::Union{Nothing,FlightSet{T}},
+    cloud::Union{Nothing,CloudSet{T}},
+    sat::Union{Nothing,SatData{T}},
+    intersection::Union{Nothing,NamedTuple{(:flight,:cloud), Tuple{XData{T},XData{T}}}}
+  ) where T
+    new{T}(flight, cloud, sat, intersection)
+  end
+
+  function Data{T}(
+    folders::Vector{<:Pair{String,<:Any}},
+    savesecondsattype::Bool=false;
+    sattype::Symbol=:undef,
+    altmin::Real=5000,
+    odelim::Union{Nothing,Char,String}=nothing,
+    maxtimediff::Int=30,
+    primspan::Int=0,
+    secspan::Int=15,
+    lidarrange::Tuple{Real,Real}=(15_000,-Inf),
+    stepwidth::Real=0.01,
+    Xradius::Real=20_000,
+    expdist::Real=Inf,
+    remarks::Vector{<:Pair{String,<:Any}}=Pair{String,Any}[]
+  ) where T
+    # Process function arguments that need to be distributed to several structs
+    folders = init_dict(folders, String[])
+    remarks = init_dict(remarks, nothing)
+
+    # Load data
+    flights = FlightSet{T}(;
+      inventory = folders["inventory"],
+      archive = folders["archive"],
+      onlineData = folders["onlineData"],
+      altmin, odelim, remarks=remarks["flights"]
+    )
+    @debug trim_vec!.([flights.inventory, flights.archive, flights.onlineData], 300)
+    clouds = CloudSet{T}(folders["cloudtracks"]...; remarks = remarks["clouds"])
+    sat = SatTrack{T}(
+      folders["sat"]...;
+      type = sattype,
+      remarks = remarks["sat"]
+    )
+
+    # Calculate Intersections
+    intersections = (
+    flight=Intersection{T}(
+      flights, sat, savesecondsattype;
+      maxtimediff, primspan, secspan, lidarrange,
+      stepwidth, Xradius, expdist,
+      remarks = remarks["Xflight"]
+    ),
+    cloud = Intersection{T}(
+      clouds, sat, savesecondsattype;
+      maxtimediff, primspan, secspan, lidarrange,
+      stepwidth, Xradius, expdist,
+      remarks = remarks["Xflight"]
+    ))
+    new{T}(flights, clouds, sat, intersections)
+  end #constructor 2 for Data
+end
+
+
+Data(args...; kwargs...) = Data{Float32}(args...; kwargs...)
+
+Data{T}(data::Data) where T = Data{T}(
+  FlightSet{T}(data.flight),
+  CloudSet{T}(data.cloud),
+  SatData{T}(data.sat),
+  (flight = Intersection{T}(data.intersection.flight),
+    cloud = Intersection{T}(data.intersection.cloud))
+)
+
+DataSet{T}(args...; kwargs...) where T = Data{T}(args...; kwargs...)
+
+DataSet(args...; kwargs...) = DataSet{Float32}(args...; kwargs...)

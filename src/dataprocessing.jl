@@ -446,3 +446,31 @@ function interpolate_time(data::DataFrame, X::Tuple{T,T}  where T<:AbstractFloat
   dt = data.time[index[2]] - data.time[index[1]]
   round(data.time[index[1]] + Dates.Millisecond(round(ds/d*dt.value)), Dates.Second)
 end #function interpolate_time
+
+
+## Helper functions for struct Instantiation
+
+"""
+    init_dict(data::Vector{Pair}, default)
+
+From a vector of key, value pairs in `data`, return a DefaultDict with the given
+`default` value. Ensure values are vectors by converting other data to vectors of
+length 1.
+"""
+function init_dict(data::Vector{<:Pair}, default)
+  dict = ds.DefaultDict(default)
+  for (key, val) in data
+    val isa Vector || (val = [val])
+    dict[key] = val
+  end
+
+  return dict
+end #function init_dict
+
+
+"""
+    trim_vec!(vec::Vector, cutoff::Int)
+
+Trim `vec` to the first `cutoff` elements or return unchanged if `cutoff > length(vec)`.
+"""
+trim_vec!(vec::Vector, cutoff::Int) = deleteat!(vec, cutoff+1:length(vec))

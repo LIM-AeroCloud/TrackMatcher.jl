@@ -17,6 +17,8 @@ to the precision of type `T`.
 function convertFloats!(data::DataFrame, T::DataType=Float32)
   for (i, col) in enumerate(eachcol(data))
     eltype(col) <: Union{Missing, AbstractFloat} && (data[!, i] = T.(col))
+    eltype(col) <: Vector{<:Union{Missing, AbstractFloat}} &&
+      (data[!, i] = [T.(c) for c in col])
   end
 end #function convertFloats!
 

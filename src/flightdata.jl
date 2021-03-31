@@ -20,10 +20,10 @@ function loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5
   prog = pm.Progress(2length(files), "load inventory...")
   for file in files
     # Load data
-    flights = CSV.File(file, datarow=3, footerskip=2, ignoreemptylines=true,
-      silencewarnings=true, threaded=true, dateformat="HH:MM:SS.sssm",
+    flights = CSV.read(file, DataFrame, datarow=3, footerskip=2, ignoreemptylines=true,
+      silencewarnings=true, threaded=true, copycols = false, dateformat="HH:MM:SS.sssm",
       types = Dict("LATITUDE" => Float, "LONGITUDE" => Float, "ALTITUDE" => Float,
-      "SPEED" => Float), select = [1:11;16]) |> df.DataFrame!
+      "SPEED" => Float), select = [1:11;16])
     # Monitor progress for progress bar
     pm.next!(prog, showvalues = [(:file,splitext(basename(file))[1])])
 
@@ -178,10 +178,10 @@ function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=
   prog = pm.Progress(length(files), "load online data...")
   for file in files
     # Read flight data
-    flight = CSV.File(file, delim=delim, ignoreemptylines=true, normalizenames=true,
-      silencewarnings=true, threaded=false, types=Dict(:Latitude => Float,
+    flight = CSV.read(file, DataFrame, delim=delim, ignoreemptylines=true, normalizenames=true,
+      silencewarnings=true, threaded=false, copycols=false, types=Dict(:Latitude => Float,
       :Longitude => Float, :feet => String, :kts => Float, :Course => String,
-      :Rate => String), drop = ["mph", "Reporting_Facility"]) |> df.DataFrame!
+      :Rate => String), drop = ["mph", "Reporting_Facility"])
     # Convert knots to m/s
     flight.kts = knot2mps.(flight.kts)
     if length(names(flight)) ≠ 7 || names(flight)[2:7] ≠
@@ -276,7 +276,7 @@ are read with single precision or as defined by kwarg `Float`.
 """
 function readArchive(file, Float=Float32)
   # Read file
-  track = CSV.File(file, datarow=2, normalizenames=true, ignoreemptylines=true,
+  track = CSV.read(file, DataFrame, datarow=2, normalizenames=true, ignoreemptylines=true,
     silencewarnings=true, threaded=true, dateformat="m/d/y H:M:S",
     types = Dict(:Latitude => Float, :Longitude => Float, :Altitude_feet_ => Float,
     :Altitude_ft_ => Float, :Groundspeed_knots_ => Float, :Groundspeed_kts_ => Float,
@@ -284,7 +284,7 @@ function readArchive(file, Float=Float32)
     drop = ["Direction", "Facility_Name", "Facility_Description", "Estimated"])
   ## Get column order and define column names
   # Get column names of current file
-  datacols = propertynames(track[1])
+  datacols = names(track)
   # Define unique key phrases for each column found in every FlightAware version
   keys = [datacols[i] for i in findfirst.(occursin.(str, string.(datacols)) for str in
     ["Flight_ID", "Ident", "Orig", "Dest", "Type",
