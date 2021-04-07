@@ -231,7 +231,7 @@ struct XData{T} <: Intersection{T}
     tracked.CPro = CPro{T}.(tracked.CPro)
     tracked.CLay = CLay{T}.(tracked.CLay)
     # Check data
-    standardnames = ["id", "lat", "lon", "alt", "tdiff", "tflight", "tsat", "feature"]
+    standardnames = ["id", "lat", "lon", "alt", "tdiff", "tflight", "tsat", "atmos_state"]
     standardtypes = [Vector{String}, Vector{<:T}, Vector{<:T}, Vector{<:T},
       Vector{Dates.CompoundPeriod}, Vector{DateTime}, Vector{DateTime},
       Vector{<:Union{Missing,Symbol}}]
@@ -272,7 +272,7 @@ struct XData{T} <: Intersection{T}
     tstart = Dates.now()
     Xdata = DataFrame(id=String[], lat=T[], lon=T[], alt=T[],
       tdiff=Dates.CompoundPeriod[], tflight = DateTime[],
-      tsat = DateTime[], feature = Union{Missing,Symbol}[])
+      tsat = DateTime[], atmos_state = Union{Missing,Symbol}[])
     tracked = DataFrame(id=String[], flight=FlightData{T}[], CPro=CPro{T}[], CLay=CLay{T}[])
     accuracy = DataFrame(id=String[], intersection=T[], flightcoord=T[],
       satcoord=T[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
@@ -294,8 +294,8 @@ struct XData{T} <: Intersection{T}
         overlap = findoverlap(track, sat, maxtimediff, ID)
         if isempty(overlap)
           pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
-            (:featured, length(Xdata.id[.!ismissing.(Xdata.feature) .&
-            (Xdata.feature .≠ :no_signal) .& (Xdata.feature .≠ :clear)]))])
+            (:featured, length(Xdata.id[.!ismissing.(Xdata.atmos_state) .&
+            (Xdata.atmos_state .≠ :no_signal) .& (Xdata.atmos_state .≠ :clear)]))])
           continue
         end
         # Interpolate trajectories with PCHIP method
@@ -319,8 +319,8 @@ struct XData{T} <: Intersection{T}
       end
       # Monitor progress for progress bar
       pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
-        (:featured, length(Xdata.id[.!ismissing.(Xdata.feature) .&
-        (Xdata.feature .≠ :no_signal) .& (Xdata.feature .≠ :clear)]))])
+        (:featured, length(Xdata.id[.!ismissing.(Xdata.atmos_state) .&
+        (Xdata.atmos_state .≠ :no_signal) .& (Xdata.atmos_state .≠ :clear)]))])
     end #loop over flights
     pm.finish!(prog)
     # Close MATLAB session after looping over all data
@@ -405,13 +405,13 @@ struct CLay{T} <: ObservationSet{T}
     # Ensure floats of correct precision
     convertFloats!(data, T)
     # Column checks and warnings
-    standardnames = ["time", "lat", "lon",
-      "layer", "feature", "OD", "IWP", "Ttop", "Htropo", "night", "averaging"]
-      standardtypes = [Vector{DateTime}, Vector{<:T}, Vector{<:T},
-      Vector{NamedTuple{(:top,:base),Tuple{T,T}}} where T<:Vector{<:T},
-      Vector{Vector{Symbol}}, Vector{<:Vector{<:T}},
+    standardnames = ["time", "lat", "lon", "layer_top", "layer_base", "atmos_state",
+      "OD", "IWP", "Ttop", "Htropo", "night", "averaging"]
+    standardtypes = [Vector{DateTime}, Vector{T}, Vector{T},
+      Vector{<:Vector{<:T}}, Vector{<:Vector{<:T}},
+      Vector{<:Vector{Symbol}}, Vector{<:Vector{<:T}},
       Vector{<:Vector{<:Union{Missing,<:T}}}, Vector{<:Vector{<:T}},
-      Vector{<:T}, BitVector, Vector{<:Vector{Int}}]
+      Vector{<:T}, BitVector, Vector{<:Vector{<:Int}}]
     bounds = (:lat => (-90,90), :lon => (-180,180))
     checkcols!(data, standardnames, standardtypes, bounds, "CLay")
     new{T}(data)
@@ -424,8 +424,9 @@ struct CLay{T} <: ObservationSet{T}
   function CLay{T}(
     ms::mat.MSession,
     files::Vector{String},
+    timespan::NamedTuple{(:min,:max), Tuple{DateTime,DateTime}},
     lidarrange::Tuple{Real,Real}=(15_000,-Inf),
-    altmin::Real=5000,
+    altmin::Real=5000
   ) where T
     # Return default empty struct if files are empty
     isempty(files) && return CLay{T}()
@@ -435,16 +436,15 @@ struct CLay{T} <: ObservationSet{T}
     lat = Vector{Vector{T}}(undef, length(files))
     lon = Vector{Vector{T}}(undef, length(files))
     # non-essential data
-    layers = Vector{Vector{NamedTuple{(:top,:base),Tuple{Vector{T},Vector{T}}}}}(undef, length(files))
-    feature = Vector{Vector{Vector{Symbol}}}(undef,length(files))
+    LayTop = Vector{Vector{Vector{T}}}(undef, length(files))
+    LayBase = Vector{Vector{Vector{T}}}(undef, length(files))
+    Atmosph = Vector{Vector{Vector{Symbol}}}(undef,length(files))
     OD = Vector{Vector{Vector{T}}}(undef,length(files))
     IWP = Vector{Vector{Vector{Union{Missing,T}}}}(undef,length(files))
     Ttop = Vector{Vector{Vector{T}}}(undef,length(files))
     Htropo = Vector{Vector{T}}(undef, length(files))
     night = Vector{BitVector}(undef, length(files))
     averaging = Vector{Vector{Vector{Int}}}(undef,length(files))
-    # Convert mininmum flight altitude to meters
-    altmin = ft2km(T(altmin))
     # Loop over files
     for (i, file) in enumerate(files)
       ## Retrieve cloud layer data; assumes faulty files are filtered by SatData
@@ -452,65 +452,68 @@ struct CLay{T} <: ObservationSet{T}
       mat.put_variable(ms, :file, file)
       mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
       utc[i] = convertUTC.(mat.jarray(mat.get_mvariable(ms, :t))[:,2])
+      timeindex = findall(timespan.min .≤ utc[i] .≤ timespan.max)
+      utc[i] = utc[i][timeindex]
       # Extract lat/lon
       mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-      lon[i] = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
+      lon[i] = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2][timeindex]
       mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-      lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
+      lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2][timeindex]
       # Save time converted to UTC and lat/lon
       # utc[i], lon[i], lat[i] = convertUTC.(t), longitude, latitude
 
       ## Extract layer top/base, layer features and optical depth from hdf files
       mat.eval_string(ms, "clear basealt\ntry\nbasealt = hdfread(file, 'Layer_Base_Altitude');\nend")
+      Lbase = 1000mat.jarray(mat.get_mvariable(ms, :basealt))[timeindex,:]
       mat.eval_string(ms, "clear topalt\ntry\ntopalt = hdfread(file, 'Layer_Top_Altitude');\nend")
-      basealt = mat.jarray(mat.get_mvariable(ms, :basealt))
-      topalt = mat.jarray(mat.get_mvariable(ms, :topalt))
+      Ltop = 1000mat.jarray(mat.get_mvariable(ms, :topalt))[timeindex,:]
       mat.eval_string(ms, "clear FCF\ntry\nFCF = hdfread(file, 'Feature_Classification_Flags');\nend")
-      FCF = mat.jarray(mat.get_mvariable(ms, :FCF))
+      FCF = mat.jarray(mat.get_mvariable(ms, :FCF))[timeindex,:]
       mat.eval_string(ms, "clear FOD\ntry\nFOD = hdfread(file, 'Feature_Optical_Depth_532');\nend")
-      FOD = mat.jarray(mat.get_mvariable(ms, :FOD))
+      FOD = mat.jarray(mat.get_mvariable(ms, :FOD))[timeindex,:]
       mat.eval_string(ms, "clear IWPath\ntry\nIWPath = hdfread(file, 'Ice_Water_Path');\nend")
-      IWPath = mat.jarray(mat.get_mvariable(ms, :IWPath))
+      IWPath = mat.jarray(mat.get_mvariable(ms, :IWPath))[timeindex,:]
       mat.eval_string(ms, "clear LTT\ntry\nLTT = hdfread(file, 'Layer_Top_Temperature');\nend")
-      LTT = mat.jarray(mat.get_mvariable(ms, :LTT))
+      LTT = mat.jarray(mat.get_mvariable(ms, :LTT))[timeindex,:]
       mat.eval_string(ms, "clear Htropo\ntry\nHtropo = hdfread(file, 'Tropopause_Height');\nend")
-      Htropo[i] = 1000vec(mat.jarray(mat.get_mvariable(ms, :Htropo)))
+      Htropo[i] = 1000vec(mat.jarray(mat.get_mvariable(ms, :Htropo)))[timeindex]
       mat.eval_string(ms, "clear daynight\ntry\ndaynight = hdfread(file, 'Day_Night_Flag');\nend")
-      night[i] = Bool.(vec(mat.jarray(mat.get_mvariable(ms, :daynight))))
+      night[i] = Bool.(vec(mat.jarray(mat.get_mvariable(ms, :daynight))))[timeindex]
       mat.eval_string(ms, "clear average\ntry\naverage = hdfread(file, 'Horizontal_Averaging');\nend")
-      horav = mat.jarray(mat.get_mvariable(ms, :average))
+      horav = mat.jarray(mat.get_mvariable(ms, :average))[timeindex,:]
       # Loop over data and convert to TrackMatcher format
-      layer = Vector{NamedTuple{(:top,:base),Tuple{Vector{T},Vector{T}}}}(undef,length(utc[i]))
-      feat = Vector{Vector{Symbol}}(undef,length(utc[i]))
+      Lt = Vector{Vector{T}}(undef,length(utc[i]))
+      Lb = Vector{Vector{T}}(undef,length(utc[i]))
+      atm = Vector{Vector{Symbol}}(undef,length(utc[i]))
       optdepth = Vector{Vector{T}}(undef,length(utc[i]))
       icewater = Vector{Vector{Union{Missing,T}}}(undef,length(utc[i]))
       toptemp = Vector{Vector{T}}(undef,length(utc[i]))
       average = Vector{Vector{Int}}(undef,length(utc[i]))
       for n = 1:length(utc[i])
-        l = findall((basealt[n,:] .> 0) .& (topalt[n,:] .> 0) .& (basealt[n,:] .< lidarrange[1]) .&
-          (topalt[n,:] .> lidarrange[2]) .& (topalt[n,:] .> altmin))
-        layer[n], feat[n], optdepth[n], toptemp[n], icewater[n], average[n] = if isempty(l)
-          (top = T[], base = T[]), Symbol[],
-          T[], T[], T[], Int[]
-        else
-          l = findall((basealt[n,:] .> 0) .& (topalt[n,:] .> 0) .& (basealt[n,:] .< lidarrange[1]) .&
-            (topalt[n,:] .> lidarrange[2]))
-          (top = [1000topalt[n, m] for m in l] , base = [1000basealt[n, m] for m in l]),
-          [feature_classification(classification(FCF[n,m])...) for m in l],
-          [FOD[n,m] for m in l],
-          [LTT[n,m] for m in l],
-          [IWPath[n,m] == -9999 ? missing : IWPath[n,m] for m in l],
-          [1000horav[n,m] for m in l]
-        end
+        l = findall((Lbase[n,:] .> 0) .& (Ltop[n,:] .> 0) .& (Lbase[n,:] .< lidarrange[1]) .&
+          (Ltop[n,:] .> lidarrange[2]) .& (Ltop[n,:] .> altmin))
+        Lt[n], Lb[n], atm[n], optdepth[n], toptemp[n], icewater[n], average[n] =
+          if isempty(l)
+            T[], T[], Symbol[], T[], T[], T[], Int[]
+          else
+            l = findall((Lbase[n,:] .> 0) .& (Ltop[n,:] .> 0) .& (Lbase[n,:] .< lidarrange[1]) .&
+              (Ltop[n,:] .> lidarrange[2]))
+            [Ltop[n, m] for m in l] , [Lbase[n, m] for m in l],
+            [feature_classification(classification(FCF[n,m])...) for m in l],
+            [FOD[n,m] for m in l],
+            [LTT[n,m] for m in l],
+            [IWPath[n,m] == -9999 ? missing : IWPath[n,m] for m in l],
+            [horav[n,m] for m in l]
+          end
       end # loop over time steps in current file
-      layers[i], feature[i], OD[i], IWP[i], Ttop[i], averaging[i] =
-        layer, feat, optdepth, icewater, toptemp, average
+      LayTop[i], LayBase[i], Atmosph[i], OD[i], IWP[i], Ttop[i], averaging[i] =
+        Lt, Lb, atm, optdepth, icewater, toptemp, average
     end #loop over files
 
     # Construct and standardise data
     data = DataFrame(time=[utc...;], lat=[lat...;], lon=[lon...;],
-      layer=[layers...;], feature=[feature...;], OD=[OD...;],
-      IWP=[IWP...;], Ttop=[Ttop...;], Htropo = [Htropo...;],
+      layer_top=[LayTop...;], layer_base=[LayBase...;], atmos_state=[Atmosph...;],
+      OD=[OD...;], IWP=[IWP...;], Ttop=[Ttop...;], Htropo = [Htropo...;],
       night = [night...;], averaging = [averaging...;])
     # Save time, lat/lon arrays in CLay struct
     new{T}(data)
@@ -519,11 +522,13 @@ end #struct CLay
 
 
 """ External constructor for emtpy CLay struct """
-CLay{T}() where T = CLay{T}(DataFrame(time = DateTime[], lat = T[], lon = T[],
-  layer = NamedTuple{(:top,:base),Tuple{Vector{T},Vector{T}}}[],
-  feature = Vector{Symbol}[], OD = Vector{T}[], IWP = Vector{T}[],
-  Ttop = Vector{T}[], Htropo = T[], night = BitVector(),
-  averaging = Vector{Int}[]))
+function CLay{T}() where T
+  data = DataFrame(time = DateTime[], lat = T[], lon = T[],
+  layer_top = Vector{T}[], layer_base = Vector{T}[],
+  atmos_state = Vector{Symbol}[], OD = Vector{T}[], IWP = Vector{T}[],
+  Ttop = Vector{T}[], Htropo = T[], night = BitVector(), averaging = Vector{Int}[])
+  CLay{T}(data)
+end
 
 """ External CLay constructor for conversion of floating point precision """
 function CLay{T}(clay::CLay) where T
@@ -572,7 +577,7 @@ struct CPro{T} <: ObservationSet{T}
     # Ensure floats of correct precision
     convertFloats!(data, T)
     # Column checks and warnings
-    standardnames = ["time", "lat", "lon", "feature", "EC532", "Htropo", "temp",
+    standardnames = ["time", "lat", "lon", "atmos_state", "EC532", "Htropo", "temp",
       "pressure", "rH", "IWC", "deltap", "CADscore", "night"]
     standardtypes = [Vector{DateTime}, Vector{<:T}, Vector{<:T},
       Vector{<:Vector{<:Union{Missing,Symbol}}}, Vector{<:Vector{<:Union{Missing,<:T}}},
@@ -591,8 +596,12 @@ struct CPro{T} <: ObservationSet{T}
   Modified constructor of `CPro` reading data from hdf `files` for all given `sattime` indices
   using MATLAB session `ms` and `lidarprofile` data, if data is above `altmin`.
   """
-  function CPro{T}(ms::mat.MSession, files::Vector{String}, sattime::Vector{DateTime},
-    lidarprofile::NamedTuple) where T
+  function CPro{T}(
+    ms::mat.MSession,
+    files::Vector{String},
+    timespan::NamedTuple{(:min,:max), Tuple{DateTime,DateTime}},
+    lidarprofile::NamedTuple
+  ) where T
     # Return default empty struct if files are empty
     isempty(files) && return CPro{T}()
     # Initialise arrays
@@ -618,34 +627,35 @@ struct CPro{T} <: ObservationSet{T}
       mat.put_variable(ms, :file, file)
       mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
       utc[i] = convertUTC.(mat.jarray(mat.get_mvariable(ms, :t))[:,2])
+      timeindex = findall(timespan.min .≤ utc[i] .≤ timespan.max)
+      utc[i] = utc[i][timeindex]
       # Extract lat/lon
       mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-      lon[i] = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
+      lon[i] = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2][timeindex]
       mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-      lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
+      lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2][timeindex]
       fcf[i] = get_lidarcolumn(UInt16, ms, "Atmospheric_Volume_Description", lidarprofile,
-        coarse=false)
+        coarse=false)[timeindex]
       # Extract non-essential data
       ec532[i] = get_lidarcolumn(T, ms, "Extinction_Coefficient_532", lidarprofile,
-        missingvalues = -9999)
+        missingvalues = -9999)[timeindex]
       mat.eval_string(ms, "clear Htropo\ntry\nHtropo = hdfread(file, 'Tropopause_Height');\nend")
-      Htropo[i] = 1000vec(mat.jarray(mat.get_mvariable(ms, :Htropo)))
-      temp[i] = get_lidarcolumn(T, ms, "Temperature", lidarprofile, missingvalues = -9999)
-      pres[i] = get_lidarcolumn(T, ms, "Pressure", lidarprofile, missingvalues = -9999)
-      rH[i] = get_lidarcolumn(T, ms, "Relative_Humidity", lidarprofile, missingvalues = -9999)
+      Htropo[i] = 1000vec(mat.jarray(mat.get_mvariable(ms, :Htropo)))[timeindex]
+      temp[i] = get_lidarcolumn(T, ms, "Temperature", lidarprofile, missingvalues = -9999)[timeindex]
+      pres[i] = get_lidarcolumn(T, ms, "Pressure", lidarprofile, missingvalues = -9999)[timeindex]
+      rH[i] = get_lidarcolumn(T, ms, "Relative_Humidity", lidarprofile, missingvalues = -9999)[timeindex]
       iwc[i] = get_lidarcolumn(T, ms, "Ice_Water_Content_Profile", lidarprofile,
-        missingvalues = -9999)
+        missingvalues = -9999)[timeindex]
       deltap[i] = get_lidarcolumn(T, ms, "Particulate_Depalarization_Ratio_Profile_532",
-        lidarprofile, missingvalues = -9999)
+        lidarprofile, missingvalues = -9999)[timeindex]
       cad[i] = get_lidarcolumn(Int8, ms, "CAD_Score", lidarprofile, coarse=false,
-        missingvalues = -127)
+        missingvalues = -127)[timeindex]
       mat.eval_string(ms, "clear daynight\ntry\ndaynight = hdfread(file, 'Day_Night_Flag');\nend")
-      night[i] = Bool.(vec(mat.jarray(mat.get_mvariable(ms, :daynight))))
+      night[i] = Bool.(vec(mat.jarray(mat.get_mvariable(ms, :daynight))))[timeindex]
     end #loop over files
 
     # Rearrange time vector and get time range
     utc = [utc...;]
-    idx = [findfirst(utc .== t) for t in sattime]
     # Rearrange FCF vector and convert to symbols
     fcf = [fcf...;]
     avd =  Vector{Vector{Union{Missing,Symbol}}}(undef, length(fcf))
@@ -658,11 +668,11 @@ struct CPro{T} <: ObservationSet{T}
       avd[i] = vect
     end
     # Construct and standardise data
-    data = DataFrame(time=utc[idx], lat=[lat...;][idx], lon=[lon...;][idx],
-      feature=avd[idx], EC532=[ec532...;][idx], Htropo = [Htropo...;][idx],
-      temp=[temp...;][idx], pressure = [pres...;][idx], rH = [rH...;][idx],
-      IWC = [iwc...;][idx], deltap = [deltap...;][idx],
-      CADscore = [cad...;][idx], night = [night...;][idx])
+    data = DataFrame(time=utc, lat=[lat...;], lon=[lon...;],
+      atmos_state=avd, EC532=[ec532...;], Htropo = [Htropo...;],
+      temp=[temp...;], pressure = [pres...;], rH = [rH...;],
+      IWC = [iwc...;], deltap = [deltap...;],
+      CADscore = [cad...;], night = [night...;])
     # Save time, lat/lon arrays, and feature classification flags (FCF) in CPro struct
     new{T}(data)
   end #constructor 2 CPro
@@ -671,7 +681,7 @@ end #struct CPro
 
 """ External constructor for emtpy CPro struct """
 CPro{T}() where T = CPro{T}(DataFrame(time = DateTime[], lat = T[], lon = T[],
-  feature = Vector{Symbol}[], EC532 = Vector{T}[], Htropo = T[], temp = Vector{T}[],
+  atmos_state = Vector{Symbol}[], EC532 = Vector{T}[], Htropo = T[], temp = Vector{T}[],
   pressure = Vector{T}[], rH = Vector{T}[], IWC = Vector{T}[],
   deltap = Vector{T}[], CADscore = Vector{Int8}[], night = BitVector()))
 

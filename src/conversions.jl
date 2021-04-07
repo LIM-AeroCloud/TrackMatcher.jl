@@ -15,10 +15,18 @@ Transform all columns of `Vector{AbstractFloat}` or `Vector{Union{Missing, Abstr
 to the precision of type `T`.
 """
 function convertFloats!(data::DataFrame, T::DataType=Float32)
-  for (i, col) in enumerate(eachcol(data))
-    eltype(col) <: Union{Missing, AbstractFloat} && (data[!, i] = T.(col))
-    eltype(col) <: Vector{<:Union{Missing, AbstractFloat}} &&
-      (data[!, i] = [T.(c) for c in col])
+  if isempty(data)
+    for (i, col) in enumerate(eachcol(data))
+      eltype(col) <: Union{Missing, AbstractFloat} && (data[!, i] = T[])
+      eltype(col) <: Vector{<:Union{Missing, AbstractFloat}} &&
+        (data[!, i] = Vector{T}[])
+    end
+  else
+    for (i, col) in enumerate(eachcol(data))
+      eltype(col) <: Union{Missing, AbstractFloat} && (data[!, i] = T.(col))
+      eltype(col) <: Vector{<:Union{Missing, AbstractFloat}} &&
+        (data[!, i] = [T.(c) for c in col])
+    end
   end
 end #function convertFloats!
 

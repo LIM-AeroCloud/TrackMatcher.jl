@@ -72,7 +72,7 @@ function find_intersections(
   # Initialise DataFrames for current flight
   Xdata = DataFrame(id=String[], lat=AbstractFloat[], lon=AbstractFloat[],
     alt=AbstractFloat[], tdiff=Dates.CompoundPeriod[], tflight = DateTime[],
-    tsat = DateTime[], feature = Union{Missing,Symbol}[])
+    tsat = DateTime[], atmos_state = Union{Missing,Symbol}[])
   tracked = DataFrame(id=String[], flight=FlightTrack[], CPro=CPro[], CLay=CLay[])
   accuracy = DataFrame(id=String[], intersection=AbstractFloat[], flightcoord=AbstractFloat[],
     satcoord=AbstractFloat[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])

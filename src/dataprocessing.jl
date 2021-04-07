@@ -26,7 +26,7 @@ function addX!(
   clay::CLay,
   tmf::DateTime,
   tms::DateTime,
-  feature::Union{Missing,Symbol},
+  atmos::Union{Missing,Symbol},
   fxmeas::T,
   ftmeas::Dates.CompoundPeriod,
   sxmeas::T,
@@ -45,7 +45,7 @@ function addX!(
 
       # Save more accurate duplicate
       Xdata[i, 2:end] = (lat = Xf[1], lon = Xf[2], alt = alt,
-        tdiff = dt, tflight = tmf, tsat = tms, feature = feature)
+        tdiff = dt, tflight = tmf, tsat = tms, atmos_state = atmos)
       track[i, 2:end] = (flight = Xflight, CPro = cpro, CLay = clay)
       accuracy[i, 2:end] = (intersection = dx, flightcoord = fxmeas,
         satcoord = sxmeas, flighttime = ftmeas, sattime = stmeas)
@@ -55,7 +55,7 @@ function addX!(
   # Save new intersections that are not identified as duplicates and increase counter
   counter += 1
   push!(Xdata, (id = id, lat = Xf[1], lon = Xf[2], alt = alt,
-    tdiff = dt, tflight = tmf, tsat = tms, feature = feature))
+    tdiff = dt, tflight = tmf, tsat = tms, atmos_state = atmos))
   push!(track, (id = id, flight = Xflight, CPro = cpro, CLay = clay))
   push!(accuracy, (id = id, intersection = dx, flightcoord = fxmeas,
     satcoord = sxmeas, flighttime = ftmeas, sattime = stmeas))
@@ -134,7 +134,7 @@ function add_intersections!(
   # only CloudTrack: NA = T(NaN) # set precision of NaNs according to Float
   # Extract the DataFrame rows of the sat/flight data near the intersection
   Xflight, ift = get_flightdata(track, Xf, primspan)
-  cpro, clay, feature, ist = get_satdata(ms, sat, Xs, secspan, Xflight.data.alt[ift],
+  cpro, clay, atmos, ist = get_satdata(ms, sat, Xs, secspan, Xflight.data.alt[ift],
     altmin, trackID, lidarprofile, lidarrange, savesecondsattype, T)
   Xsat = sat.metadata.type == :CPro ? cpro.data : clay.data
   # Calculate accuracies
@@ -151,7 +151,7 @@ function add_intersections!(
   end
   # Save intersection data
   addX!(Xdata, tracked, accuracy, counter, Xf, id, dx, dt, Xradius, Xflight,
-    cpro, clay, tmf, tms, feature, fxmeas, ftmeas, sxmeas, stmeas, Xflight.data.alt[ift])
+    cpro, clay, tmf, tms, atmos, fxmeas, ftmeas, sxmeas, stmeas, Xflight.data.alt[ift])
 end #function add_intersections
 
 
@@ -221,7 +221,7 @@ function add_intersections!(
   NA = T(NaN) # set precision of NaNs according to Float
   # Don't save additional cloud data near intersections at the moment
   Xcloud, ift = FlightTrack{T}(), 0
-  cpro, clay, feature, ist = get_satdata(ms, sat, Xs, secspan, NA, altmin,
+  cpro, clay, atmos, ist = get_satdata(ms, sat, Xs, secspan, NA, altmin,
     trackID, lidarprofile, lidarrange, savesecondsattype, T)
   Xsat = sat.metadata.type == :CPro ? cpro.data : clay.data
   # Calculate accuracies
@@ -237,7 +237,7 @@ function add_intersections!(
   end
   # Save intersection data
   addX!(Xdata, tracked, accuracy, counter, Xf, id, dx, dt, Xradius, Xcloud,
-    cpro, clay, tmf, tms, feature, fxmeas, ftmeas, sxmeas, stmeas, NA)
+    cpro, clay, tmf, tms, atmos, fxmeas, ftmeas, sxmeas, stmeas, NA)
 end #function add_intersections!
 
 
@@ -263,23 +263,8 @@ function find_timespan(sat::DataFrame, X::Tuple{<:AbstractFloat, <:AbstractFloat
   t1 = max(1, min(imin-dataspan, length(sat.time)))
   t2 = min(length(sat.time), imin+dataspan)
 
-  return sat.time[t1:t2], unique(sat.fileindex[t1:t2])
+  return (min=sat.time[t1], max=sat.time[t2]), unique(sat.fileindex[t1:t2])
 end #function find_timespan
-
-
-"""
-    extract_timespan(sat::T where T<:ObservationSet, timespan::Vector{DateTime})
-      -> T where T<:ObservationSet
-
-From the `sat` data of type `CLay` or `CPro`, extract a subset within `timespan`
-and return the reduced struct.
-"""
-function extract_timespan(sat::ObservationSet{T}, timespan::Vector{DateTime}) where T
-  timeindex = [findfirst(sat.data.time .== t) for t in timespan
-    if findfirst(sat.data.time .== t) ≠ nothing]
-  satdata = sat.data[timeindex,:]
-  typeof(sat) == CPro{T} ? CPro{T}(satdata) : CLay{T}(satdata)
-end #function extract_timespan
 
 
 """
@@ -395,9 +380,9 @@ function get_satdata(
 
   # Get CPro/CLay data from near the intersection
   clay = if sat.metadata.type == :CLay
-    CLay{Float}(ms, primfiles, lidarrange, altmin)
+    CLay{Float}(ms, primfiles, timespan, lidarrange, altmin)
   else
-    try CLay{Float}(ms, secfiles, lidarrange, altmin)
+    try CLay{Float}(ms, secfiles, timespan, lidarrange, altmin)
     catch
       println(); @warn "could not load additional layer data" flightid
       CLay{Float}()
@@ -412,19 +397,17 @@ function get_satdata(
       CPro{Float}()
     end
   end
-  clay = extract_timespan(clay, timespan)
-  cpro = extract_timespan(cpro, timespan)
 
   # Define primary data and index of intersection in primary data
   primdata = sat.metadata.type == :CPro ? cpro : clay
   coords = ((primdata.data.lat[i], primdata.data.lon[i]) for i = 1:size(primdata.data, 1))
   ts = argmin(dist.haversine.(coords, [X], earthradius(X[1])))
 
-  # Get feature classification
-  feature = sat.metadata.type == :CPro ?
+  # Get feature classification (atmospheric state)
+  atmos = sat.metadata.type == :CPro ?
     atmosphericinfo(primdata, lidarprofile.fine, ts, flightalt, flightid) :
     atmosphericinfo(primdata, flightalt, ts)
-  return cpro, clay, feature, ts
+  return cpro, clay, atmos, ts
 end #function get_satdata
 
 
