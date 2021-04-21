@@ -934,9 +934,14 @@ struct CloudSet{T} <: PrimarySet{T}
     tend = Dates.now()
     tc = tz.ZonedDateTime(tend, tz.localzone())
     loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
+
     # For now find min/max times in CloudTracks
     tmin = minimum(t.data.time[1] for t in tracks)
     tmax = maximum(t.data.time[end] for t in tracks)
+
+    @info string("CloudSet loaded in ",
+      "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
+      "\n▪ tracks ($(length(tracks)) entries)\n▪ metadata")
 
     # Instantiate CloudSet
     new{T}(tracks, SetMetadata{T}(NaN, (start=tmin, stop=tmax), tc, loadtime, remarks))

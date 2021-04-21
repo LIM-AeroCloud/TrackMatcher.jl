@@ -194,6 +194,7 @@ import Dates
 import TimeZones as tz
 import Distances as dist
 import MATLAB as mat
+import MAT
 import IntervalRootFinding as root
 import Statistics as stats
 import ProgressMeter as pm
