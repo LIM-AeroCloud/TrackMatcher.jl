@@ -52,15 +52,17 @@ end
 
 """
     storeMAT!(
-      tracks::Vector{CloudTrack},
+      tracks::Vector{CloudData},
       t::Array,
-      lonlat::Array;
+      lonlat::Array,
+      fileID::Int,
+      filename::String;
       Float::DataType=Float32
     )
 
 Append the vector with cloud `tracks` by timestamps `t` and coordinates `lonlat`
 using the floating point precision set by `Float` (default: `Float32`) for the
-positional data.
+positional data. Pass on `fileID` and `filename` to the metadata.
 """
 function storeMAT!(
   tracks::Vector{CloudData},

@@ -1,54 +1,214 @@
 """
 # Module TrackMatcher
 
-Find intersections between different trajectories. The module is aimed to find
-intersections between aircraft and satellite tracks, but can be modified for use
-with ship or cloud tracks.
+Find intersections between different sets of trajectories. The module is aimed to find
+intersections between aircraft and satellite tracks with initial amendments for cloud
+tracks and room for further applications in geosciences.
+
+# Type tree
+
+```
+DataSet──Data
+├─MeasuredSet──MeasuredData
+│ ├─PrimarySet
+│ │ ├─SetMetadata
+│ │ ├─FlightSet
+│ │ ├─CloudSet
+│ │ └─PrimaryTrack
+│ │   ├─FlightTrack──FlightData
+│ │   │ └─FlightMetadata
+│ │   └─CloudTrack──CloudData
+│ │     └─CloudMetadata
+│ ├─SecondaryTrack
+│ │   └─SatTrack──SatData
+│ │     └─SatMetadata
+│ └─ObservationSet
+│   ├─CPro
+│   ├─CLay
+│   ├─APro
+│   └─ALay
+└─ComputedSet
+      └─Intersection──XData
+        └─XMetadata
+```
 
 ## Exported structs
 
-- `FlightDB` stores flight track data and other relevant aircraft related data
+### `DataSet`
+
+- top level abstract type that combines all kinds of TrackMatcher data
+- alias constructor for `Data` to load data of 2 different sets (primary and secondary data)
+  and calculate intersections in 1 step
+
+
+### `Data`
+
+- concrete type to store all types of measured and calculated TrackMatcher data
+- constructor to load all primary and secondary data and calculate intersections
+  between all matching primary/secondary datasets
+
+
+### MeasuredSet
+
+- abstract type for all data set with measured track data and/or observations
+
+
+### PrimarySet
+
+- abstract type for primary data with individual trajectories of a common type
+  (currently `FlightSet` or `CloudSet`)
+- alias constructors for `FlightSet` and `CloudSet`
+
+
+### SetMetadata
+
+- Metadata of all primary data sets
+
+
+### FlightSet
+
+- concrete type to store flight track data and other relevant aircraft related data
   from 3 different inventories:
   - `inventory`: VOLPE AEDT inventory
   - `archive`: commercially available database by FlightAware
   - `onlineData`: free online data by FlightAware
-- `SetMetadata` stores metadata for the primary database (`FLightDB` or `CloudDB`)
-- `FlightTrack` stores data of a single flight in `FlightDB`
-- `FlightMetadata` holds metadata to every flight
-- `SatData` stores CALIPSO position and time and a file index for the granule of each data line
-- `CLay` CALIPSO cloud layer data
-- `CPro` CALIPSO cloud profile data
-- `SatMetadata` stores metadata of the CALIPSO data
-- `Intersection`: positions of intersections between aircraft and satellite trajectories,
-  together with time difference between crossings; and `FlightTrack` and `CPro`/`CLay` in the
-  vicinity of the intersection as well as information about the accuracy of the data
-- `XMetadata` stores metadata for the `Intersection` data
+
+
+### CloudSet
+
+- concrete type to store individual cloud tracks and related observations
+
+
+### PrimaryTrack
+
+- abstract type for structs storing individual (primary) track data
+
+
+### FlightTrack
+
+- abstract type for individual flight tracks
+- alias constructor for `FlightData` to load individual flight track data
+
+
+### FlightData
+
+- concrete type to store data of a single flight within `FlightSet`
+
+
+### FlightMetadata
+
+- concrete type with metadata to individual `FlightData`
+
+
+### CloudTrack
+
+- abstract type for individual cloud tracks
+- alias constructor for `CloudData` to load individual cloud track data
+
+
+### CloudData
+
+- concrete type to store data of a single cloud track within `CloudSet`
+
+
+### CloudMetadata
+
+- concrete type with metadata to individual `CloudData`
+
+
+### SecondaryTrack
+
+- abstract type for structs storing secondary (satellite) track data
+
+
+### SatTrack
+
+- abstract type for satellite track data
+- alias constructor for `SatData` to load satellite track data in a continuous format
+
+
+### SatData
+
+- concrete type to store basic satellite track data as continuous track
+
+
+### SatMetadata
+
+- concrete type with metadata to `SatData`
+
+
+### ObservationSet
+
+- abstract type for struct holding data of satellite observations
+
+
+### CPro
+
+- concrete type holding CALIOP cloud profile data
+
+
+### CLay
+
+- concrete type holding CALIOP cloud layer data
+
+
+### APro
+
+- concrete type holding CALIOP aerosol profile data
+
+
+### ALay
+
+- concrete type holding CALIOP aerosol layer data
+
+
+### ComputedSet
+
+- abstract type for data of computed intersections
+
+
+### Intersection
+
+- abstract type for data of calculated intersections and related observations for
+  specified sets of primary and secondary trajectories
+- alias constructor for `XData`
+
+
+### XData
+
+- concrete type holding calculated intersections and related observations for
+  specified sets of primary and secondary trajectories
+
+
+### XMetadata
+
+- concrete type for intersection metadata
 """
 module TrackMatcher
 
 ## Import Julia packages
-import DataFrames; const df = DataFrames
-import DataStructures; const ds = DataStructures
+import DataFrames as df
+import DataStructures as ds
 import CSV
 import Dates
-import TimeZones; const tz = TimeZones
-import Distances; const dist = Distances
-import MATLAB; const mat = MATLAB
-import IntervalRootFinding; root = IntervalRootFinding
-import IntervalArithmetic...
-import Statistics; const stats = Statistics
-import ProgressMeter; const pm = ProgressMeter
-import Logging; const logg = Logging
+import TimeZones as tz
+import Distances as dist
+import MATLAB as mat
+import IntervalRootFinding as root
+import Statistics as stats
+import ProgressMeter as pm
+import Logging as logg
 
 # Import structs and functions from packages
+import IntervalArithmetic...
 import PCHIP: Polynomial, pchip, interpolate
 import DataFrames.DataFrame
 import Dates: DateTime, Date, Time
 import TimeZones.ZonedDateTime
 
 # Define Logger with log level
-logger = try logg.SimpleLogger(logfile, logg.Debug)
-catch; logg.ConsoleLogger(stdout, logg.Debug)
+logger = try logg.SimpleLogger(logfile, logg.Info)
+catch; logg.ConsoleLogger(stdout, logg.Info)
 end
 logg.global_logger(logger)
 
@@ -74,13 +234,14 @@ abstract type Intersection{T} <: ComputedSet{T} end
 
 
 ## Export types and constructors
-export DataSet, MeasuredSet, ComputedSet, PrimarySet, ObservationSet,
-       PrimaryTrack, SecondaryTrack, FlightTrack, CloudTrack, FlightData, #CloudData,
-       SecondaryTrack, SatData, CLay, CPro, Intersection, #APro, ALay, XData,
+export DataSet, Data, MeasuredSet, ComputedSet, PrimarySet, ObservationSet,
+       FlightSet, CloudSet, PrimaryTrack, SecondaryTrack,
+       FlightTrack, CloudTrack, FlightData, CloudData,
+       SatTrack, SatData, CLay, CPro, Intersection, XData, #APro, ALay,
        FlightMetadata, SatMetadata, SetMetadata, XMetadata
 
 
-## Import functions for Julia include files
+## Import functions from Julia include files
 include("inputtypes.jl")      # structs of concrete types at the end of the type tree
 include("outputtypes.jl")     # structs of abstract types with constructors for concrete types
 include("datachecks.jl")      # helper functions for data checks

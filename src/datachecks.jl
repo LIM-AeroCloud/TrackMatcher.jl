@@ -3,11 +3,12 @@
 ## File system scans and data processing
 
 """
-    findfiles!(inventory::Vector{String}, folder::String, filetypes::String...) -> inventory
+    findfiles!(inventory::Vector{String}, folder::String, extensions::String...)
 
-Scan `folder` recursively for files of `filetypes` and add to the `inventory`.
+Scan `folder` recursively for files with `extensions` and add to the `inventory`.
+Hidden files are ignored.
 """
-function findfiles!(inventory::Vector{String}, folder::String, filetypes::String...)
+function findfiles!(inventory::Vector{String}, folder::String, extensions::String...)
   # Scan directory for files and folders and save directory
   dir = readdir(folder); path = abspath(folder)
   for file in dir
@@ -15,8 +16,8 @@ function findfiles!(inventory::Vector{String}, folder::String, filetypes::String
     cwd = joinpath(path, file)
     if isdir(cwd)
       # Step into subdirectories and scan them, too
-      findfiles!(inventory, cwd, filetypes...)
-    elseif any(endswith.(file, filetypes)) && !startswith(file, ".")
+      findfiles!(inventory, cwd, extensions...)
+    elseif any(endswith.(file, extensions)) && !startswith(file, ".")
       # Save files of correct type
       push!(inventory, cwd)
     end
@@ -28,8 +29,8 @@ end # function findfiles!
     remdup!(data::DataFrame, useLON::Bool)
 
 Remove entries with duplicate x and y (`lat`/`lon` or `lon`/`lat`) values from
-`data` or increase x by an infinitessimal number if x data is identical, but y data
-is not.
+`data` or increase `x` by an infinitessimal number if `x` data is identical, but
+`y` data is not.
 """
 function remdup!(data::DataFrame, useLON::Bool)
   # Define x and y data
@@ -282,9 +283,10 @@ end #function findbyposition!
 
 """
     findbytype!(
+      data::DataFrame,
       correctcols::Vector{Int},
       opencols::Vector{Int},
-      remianingcols::Vector{Int},
+      remainingcols::Vector{Int},
       standardtypes::Vector{<:Type},
       bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
     )
@@ -330,8 +332,12 @@ Correct the column order and/or names in `data` based on the order of indices in
 `essentialcols` otherwise issue warnings for missing columns filled with `missing`
 values or additional columns being deleted.
 """
-function correctDF!(data::DataFrame, correctcols::Vector{Int},
-  standardnames::Vector{String}, essentialcols::Vector{Int})
+function correctDF!(
+  data::DataFrame,
+  correctcols::Vector{Int},
+  standardnames::Vector{String},
+  essentialcols::Vector{Int}
+)
   for (i, col) in enumerate(findall(isequal(0), correctcols))
     data[!,Symbol("missing$i")] = [missing for i = 1:length(data[!,1])]
     correctcols[col] = length(names(data))

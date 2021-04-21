@@ -1,7 +1,8 @@
 ### Routines related to loading FlightTrack
 
 """
-    loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5_000) -> Vector{FlightTrack}
+    loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5_000)
+      -> Vector{FlightTrack}
 
 From a list of `files`, return a `Vector{FlightTrack}` that can
 be saved to the `inventory` field in `FlightSet`.
@@ -267,7 +268,7 @@ end #function loadOnlineData
 
 
 """
-    readArchive(file, parallel, Float=Float32) -> DataFrame
+    readArchive(file, Float=Float32) -> DataFrame
 
 Read FlightAware archived data from a csv `file` and return content as DataFrame.
 

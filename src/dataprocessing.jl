@@ -2,14 +2,34 @@
 ## Storage of intersection data
 
 """
-    addX!(Xdata, track, accuracy, counter, Xf, id, dx, dt, Xradius, Xflight,
-      cpro, clay, tmf, tms, feature, fxmeas, ftmeas, sxmeas, stmeas, alt)
+    addX!(
+      Xdata::DataFrame,
+      track::DataFrame,
+      accuracy::DataFrame,
+      counter::Int,
+      Xf::Tuple{T,T},
+      id::String,
+      dx::T,
+      dt::Dates.CompoundPeriod,
+      Xradius::Real,
+      Xflight::FlightData{T},
+      cpro::CPro,
+      clay::CLay,
+      tmf::DateTime,
+      tms::DateTime,
+      atmos::Union{Missing,Symbol},
+      fxmeas::T,
+      ftmeas::Dates.CompoundPeriod,
+      sxmeas::T,
+      stmeas::Dates.CompoundPeriod,
+      alt::Real
+    ) where T
 
-Append DataFrames `Xdata`, `track`, and `accuracy` by data from `Xf`, `id`,
-`dx`, `dt`, `Xflight`, `cpro`, `clay`, `tmf`, `tms`, `feature`, `fxmeas`,
+Append DataFrames `Xdata`, `track`, and `accuracy` by data `Xf`, `id`,
+`dx`, `dt`, `Xflight`, `cpro`, `clay`, `tmf`, `tms`, `atmos`, `fxmeas`,
 `ftmeas`, `sxmeas`, `stmeas`, and `alt`. If an intersection already exists within
 `Xradius` in `Xdata`, use the more accurate intersection with the lowest
-`accuracy.intersection`.
+`accuracy.intersection`. Increase the `counter` for new entries.
 """
 function addX!(
   Xdata::DataFrame,
@@ -256,7 +276,7 @@ The `sat` data may be smaller than the `dataspan` at the edges of the `sat` `Dat
 """
 function find_timespan(sat::DataFrame, X::Tuple{<:AbstractFloat, <:AbstractFloat},
   dataspan::Int=15)
-  # Find index in sat data array with minimum distance to analytic intersection solutin
+  # Find index in sat data array with minimum distance to analytic intersection solution
   coords = ((sat.lat[i], sat.lon[i]) for i = 1:size(sat,1))
   imin = argmin(dist.haversine.(coords, [X], earthradius(X[1])))
   # Find first/last index of span acknowledging bounds of the data array
@@ -268,8 +288,11 @@ end #function find_timespan
 
 
 """
-    get_flightdata(flight::FlightTrack, X::Tuple{<:AbstractFloat, <:AbstractFloat}, primspan::Int)
-      -> track::FlightTrack, index::Int
+    function get_flightdata(
+      flight::FlightTrack{T},
+      X::Tuple{<:AbstractFloat, <:AbstractFloat},
+      primspan::Int
+    ) where T -> track::FlightTrack, index::Int
 
 From the measured `flight` data and lat/lon coordinates the intersection `X`,
 save the closest measured value to the interpolated intersection ±`primspan` data points
@@ -336,6 +359,7 @@ end #function get_DateTimeRoute
       X::Tuple{<:AbstractFloat, <:AbstractFloat},
       secspan::Int,
       flightalt::Real,
+      altmin::Real,
       flightid::Union{Int,String},
       lidarprofile::NamedTuple,
       lidarrange::Tuple{Real,Real},
@@ -345,9 +369,10 @@ end #function get_DateTimeRoute
 
 Using the `sat` data measurements within the overlap region and the MATLAB session
 `ms`, extract CALIOP cloud profile (`cpro`) and/or layer data (`clay`) together with
-the atmospheric `feature` at flight level (`flightalt`) for the data point closest
-to the calculated intersection `X` ± `secspan` timesteps. In addition, return the
-index `ts` within `cpro`/`clay` of the data point closest to `X`.
+the atmospheric conditions at flight level (`flightalt`) for the data point closest
+to the calculated intersection `X` ± `secspan` timesteps and above the altitude
+threshold `altmin`. In addition, return the index `ts` within `cpro`/`clay` of the
+data point closest to `X`.
 When `savesecondtype` is set to `false`, only the data type (`CLay`/`CPro`) in `sat`
 is saved; if set to `true`, the corresponding data type is saved if available.
 The lidar column data is saved for the height levels givin in the `lidarprofile` data

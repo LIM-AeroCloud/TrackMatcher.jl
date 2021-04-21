@@ -113,12 +113,13 @@ end #function find_intersections
 
 
 """
-    findoverlap(flight::FlightTrack, sat::SatDB, maxtimediff::Int) -> Vector{UnitRange}
+    findoverlap(flight::FlightTrack, sat::SatDB, maxtimediff::Int, ID::Union{Missing,Int,String})
+      -> Vector{UnitRange}
 
-From the data of the current `flight` and the `sat` data, calculate the data ranges
+From the data of the current `flight` and `sat` data, calculate the data ranges
 in the sat data that are in the vicinity of the flight track (min/max of lat/lon).
 Consider only satellite data of ± `maxtimediff` minutes before the start and after
-the end of the flight.
+the end of the flight. Use ID for warnings to identify the flight with problems.
 """
 function findoverlap(track::T where T<:PrimarySet, sat::SatData,
   maxtimediff::Int, ID::Union{Missing,Int,String})
@@ -171,9 +172,9 @@ end#function findoverlap
 
 
 """
-    interpolate_trackdata(flight::FlightTrack)
+    interpolate_trackdata(track::T where T<:PrimaryTrack)
 
-Using the `flight` data, construct a PCHIP polynomial and return it together with
+Using the `track` data, construct a PCHIP polynomial and return it together with
 the x data range (`min`/`max` values).
 """
 function interpolate_trackdata(track::T where T<:PrimaryTrack)

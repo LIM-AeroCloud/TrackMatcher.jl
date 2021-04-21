@@ -5,24 +5,26 @@
 
 Immutable struct with additional information of intersection data:
 
-- `maxtimediff`: maximum time difference in minutes allowed between
+- `maxtimediff::Int`: maximum time difference in minutes allowed between
   satellite overpass and aircraft passing at intersection
-- `stepwidth`: stepwidth (in meters, partially internally converted to degrees at equator)
+- `stepwidth::T`: stepwidth (in meters, partially internally converted to degrees at equator)
   used to interpolate track data
-- `Xradius`: radius in meters around an intersection in which further intersections
+- `Xradius::T`: radius in meters around an intersection in which further intersections
   will be removed as duplicates due to the interpolation algorithm
+- `expdist::T`: threshold for allowed minimum distance of a calculated intersection
+  to the nearest measured track point
 - `lidarrange::NamedTuple{(:top,:bottom),Tuple{Real,Real}}`: user defined level thresholds
   for top/bottom heights for which CALIPSO data is considered
 - `lidarprofile::NamedTuple`: CALIPSO lidar height levels used in the current dataset
 - `sattype::Symbol`: cloud layer or profile data types used for the satellite date
 - `satdates::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}`: date range of
   satellite data
-- `altmin::Real`: minimum threshold for which flight data is considered
+- `altmin::T`: minimum threshold for which flight data is considered
 - `flightdates::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}`: date range
   of flight data
-- `created`: time of creation of database
-- `loadtime`: time it took to find intersections and load it to the struct
-- `remarks`: any additional data or comments that can be attached to the database
+- `created::Union{DateTime,ZonedDateTime}`: time of creation of database
+- `loadtime::Dates.CompoundPeriod`: time it took to find intersections and load it to the struct
+- `remarks::Any`: any additional data or comments that can be attached to the database
 
 XMetadata can be instantiated using a `Tuple` or `NamedTuple` for the `lidarrange`
 """
@@ -81,10 +83,18 @@ struct XMetadata{T} <: Intersection{T}
   end #constructor 2 XMetaData
 end #struct XMetaData
 
-""" Default XMetadata constructor for single floating point precision """
+"""
+    XMetadata(args...)
+
+Default `XMetadata` constructor for single floating point precision.
+"""
 XMetadata(args...) = XMetadata{Float32}(args...)
 
-""" External XMetadata constructor for floating point conversions """
+"""
+    XMetadata{T}(meta::XMetadata) where T
+
+External `XMetadata` constructor for floating point conversions.
+"""
 XMetadata{T}(meta::XMetadata) where T = XMetadata{T}(
   meta.maxtimediff,
   T(meta.stepwidth),
@@ -105,7 +115,7 @@ XMetadata{T}(meta::XMetadata) where T = XMetadata{T}(
 
 
 """
-# struct Intersection
+# struct XData
 
 Intersection-related data with fields
 - `data::DataFrame`
@@ -126,7 +136,7 @@ and flight tracks and the meteorological conditions at the intersections.
 - `tdiff::Vector{Dates.CompoundPeriod}`: time difference between flight and satellite overpass
 - `tflight::Vector{DateTime}`: time of aircraft at intersection
 - `tsat::Vector{DateTime}`: time of satellite at intersection
-- `feature::Vector{<:Union{Missing,Symbol}}`: atmospheric conditions at intersection
+- `atmos_state::Vector{<:Union{Missing,Symbol}}`: atmospheric conditions at intersection
 
 
 ## tracked
@@ -135,7 +145,7 @@ Original track data in the vicinity of the intersection.
 
 `DataFrame` columns are:
 - `id: Vector{String}`: unique intersection identifier
-- `flight::Vector{FlightTrack}`: `FlightTrack` in the vicinity of the intersection
+- `flight::Vector{FlightData}`: `FlightData` in the vicinity of the intersection
 - `CPro::Vector{CPro}`: `CPro` CALIOP profile data in the vicinity of the intersection
 - `CLay::Vector{CLay}`: `CLay` CALIOP layer data in the vicinity of the intersection
 
@@ -159,22 +169,21 @@ Measures about the accuracy of the intersection calculations and the quality of 
 
 # Instantiation
 
-    Intersection(
-      flights::FlightSet,
+    function XData{T}(
+      tracks::PrimarySet,
       sat::SatData,
       savesecondsattype::Bool=false;
       maxtimediff::Int=30,
       primspan::Int=0,
       secspan::Int=15,
       lidarrange::Tuple{Real,Real}=(15_000,-Inf),
-      stepwidth::Real=1000,
+      stepwidth::Real=0.01,
       Xradius::Real=20_000,
       expdist::Real=Inf,
-      Float::DataType=Float32,
       remarks=nothing
-    ) -> struct Intersection
+    ) where T -> struct Intersection
 
-Construct `Intersection` from the preloaded `FlightSet` and `SatData` with the option
+Construct `XData` from the preloaded `PrimarySet` and `SatData` with the option
 to save the other satellite data type not used in `sat` (either `CLay` or `CPro`),
 when `savesecondsattype` is set to `true`. Folder structure and file names must
 be identical only with `CLay`/`CPro` interchanged for this option to work.
@@ -196,14 +205,14 @@ data saved to the struct:
   if intersection is above threshold, it will be ignored
 - `Xradius::Real=20_000`: radius in meters within which multiple finds of an
   intersection are disregarded and only the most accurate is counted
-- `Float::DataType=Float32`: Set the precision of floating point numbers
-  (single precision by default)
 - `remarks=nothing`: any data or remarks attached to the metadata
+
+If `T<:AbstractFloat` is omitted, the default `Float32` precision is used.
 
 Or construct `Intersection` by directly handing over the different `DataFrame`s where the names, order,
 and types of each columns are checked and attempted to correct, together with the metadata:
 
-    function Intersection(
+    function XData{T}(
       data::DataFrame,
       tracked::DataFrame,
       accuracy::DataFrame,
@@ -340,10 +349,24 @@ struct XData{T} <: Intersection{T}
 end #struct XData
 
 
-""" External constructor for conversion of floating point precision """
+"""
+    XData{T}(X::XData) where T
+
+External constructor for conversion of floating point precision.
+"""
 XData{T}(X::XData) where T = XData{T}(X.data, X.tracked, X.accuracy, XMetadata{T}(X.metadata))
 
-""" Default FlightData constructor for Float32 """
+"""
+    function XData(
+      tracks::PrimarySet{T1},
+      sat::SatData{T2},
+      savesecondsattype::Bool=false;
+      kwargs...
+    ) where {T1, T2}
+
+Default `XData` constructor where `T1` and `T2` floating point precisions of the flight
+and sat data are promoted to the higher precision.
+"""
 function XData(
   tracks::PrimarySet{T1},
   sat::SatData{T2},
@@ -355,10 +378,20 @@ function XData(
   sat isa SatData{T} || (sat = SatData{T}(sat))
   XData{T}(tracks, sat, savesecondsattype; kwargs...)
 end
-""" Default FlightTrack constructor for Float32 FlightData """
+
+"""
+    Intersection(args...; kwargs...)
+
+Alias constructor for default `XData` construction with promoted types of flight
+and sat data.
+"""
 Intersection(args...; kwargs...) = XData(args...; kwargs...)
 
-""" FlightTrack constructor for FlightData """
+"""
+    Intersection{T}(args...; kwargs...) where T
+
+Alias constructor for `XData{T}`.
+"""
 Intersection{T}(args...; kwargs...) where T = XData{T}(args...; kwargs...)
 
 
@@ -374,7 +407,7 @@ CALIOP cloud layer `data` stored in a `DataFrame` with columns:
 - `lon::Vector{AbstractFloat}` (longitude position of current time index)
 - `layer::Vector{NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}}`
   (layer top/base heights in meters)
-- `feature::Vector{Vector{Symbol}}` (symbol features of a layer)
+- `atmos_state::Vector{Vector{Symbol}}` (symbols describing the atmospheric conditions at the intersection)
 - `OD::Vector{<:Vector{<:AbstractFloat}}` (layer optical depth)
 - `IWP::Vector{<:Vector{<:Union{Missing,<:AbstractFloat}}}` (layer ice water path)
 - `Ttop::Vector{<:Vector{<:AbstractFloat}}` (layer top temperature)
@@ -384,18 +417,23 @@ CALIOP cloud layer `data` stored in a `DataFrame` with columns:
 
 # Instantiation
 
-    CLay(ms::mat.MSession, files::Vector{String},
-      lidarrange::Tuple{Real,Real}=(15_000,-Inf), altmin::Real=5000, Float::DataType=Float32)
+    function CLay{T}(
+      ms::mat.MSession,
+      files::Vector{String},
+      timespan::NamedTuple{(:min,:max), Tuple{DateTime,DateTime}},
+      lidarrange::Tuple{Real,Real}=(15_000,-Inf),
+      altmin::Real=5000
+    ) where T
 
 Construct `CLay` from a list of file names (including directories) and a running
 MATLAB session `ms` and save data, if layers are within the bounds
-of `lidarrange` and above flight `altmin` threshold. By default, all values are
-saved as `Float32`, but can be set to any other precision by the `Float` kwarg.
+of `lidarrange` and above flight `altmin` threshold and time is within `timesapn`.
+If `T<:AbstractFloat` is not set, `Float32` will be used as default precision.
 
 Or construct `CLay` by directly handing over the `DataFrame` where the names, order,
 and types of each columns are checked and attempted to correct:
 
-    CLay(data::DataFrame) -> struct CLay
+    CLay{T}(data::DataFrame) where T -> struct CLay
 """
 struct CLay{T} <: ObservationSet{T}
   data::DataFrame
@@ -521,7 +559,11 @@ struct CLay{T} <: ObservationSet{T}
 end #struct CLay
 
 
-""" External constructor for emtpy CLay struct """
+"""
+    CLay{T}() where T
+
+External constructor for empty `CLay` struct.
+"""
 function CLay{T}() where T
   data = DataFrame(time = DateTime[], lat = T[], lon = T[],
   layer_top = Vector{T}[], layer_base = Vector{T}[],
@@ -530,7 +572,11 @@ function CLay{T}() where T
   CLay{T}(data)
 end
 
-""" External CLay constructor for conversion of floating point precision """
+"""
+    CLay{T}(clay::CLay) where T
+
+External `CLay` constructor for conversion of floating point precision.
+"""
 function CLay{T}(clay::CLay) where T
   convertFloats!(clay.data, T)
   CLay{T}(clay.data)
@@ -547,27 +593,30 @@ CALIOP cloud profile `data` stored in a `DataFrame` with columns:
 - `time::Vector{DateTime}` (current time index)
 - `lat::Vector{AbstractFloat}` (latitude coordinate for current time index)
 - `lon::Vector{AbstractFloat}` (lonitude coordinate for current time index)
-- `feature::Vector{<:Vector{<:Union{Missing,Symbol}}}`
-  (feature symbols for every height level at current time index)
+- `atmos_state::Vector{<:Vector{<:Union{Missing,Symbol}}}`
+  (symbols describing the atmospheric conditions for every height level at current time index)
 - `EC532::Vector{<:Vector{<:Union{Missing,AbstractFloat}}}`
   (extinction coefficient at 532nm at every height level in current time index)
 
 # Instantiation
 
-    CPro(ms::mat.MSession, files::Vector{String}, sattime::Vector{DateTime}, lidarprofile::NamedTuple,
-      Float::DataType=Float32)
-      -> struct CPro
+    function CPro{T}(
+      ms::mat.MSession,
+      files::Vector{String},
+      timespan::NamedTuple{(:min,:max), Tuple{DateTime,DateTime}},
+      lidarprofile::NamedTuple
+    ) where T -> struct CPro
 
 Construct `CPro` from a list of file names (including directories) and a running
 MATLAB session `ms`. CPro data is only stored in the vicinity of intersections for
-the designated `sattime`. Column data is stored height-resolved as defined by the
-`lidarprofile`. By default, all values are stored as `Float32`, but can be set to
-any other precision by the `Float` kwarg.
+the designated `timespan`. Column data is stored height-resolved as defined by the
+`lidarprofile`. If `T<:AbstractFloat` is not set, `Float32` will be used as
+default precision.
 
 Or construct `CPro` by directly handing over the `DataFrame` where the names, order,
 and types of each columns are checked and attempted to correct:
 
-    CPro(data::DataFrame) -> struct CPro
+    CPro{T}(data::DataFrame) where T -> struct CPro
 """
 struct CPro{T} <: ObservationSet{T}
   data::DataFrame
@@ -679,28 +728,91 @@ struct CPro{T} <: ObservationSet{T}
 end #struct CPro
 
 
-""" External constructor for emtpy CPro struct """
+"""
+    CPro{T}() where T
+
+External constructor for empty `CPro` struct.
+"""
 CPro{T}() where T = CPro{T}(DataFrame(time = DateTime[], lat = T[], lon = T[],
   atmos_state = Vector{Symbol}[], EC532 = Vector{T}[], Htropo = T[], temp = Vector{T}[],
   pressure = Vector{T}[], rH = Vector{T}[], IWC = Vector{T}[],
   deltap = Vector{T}[], CADscore = Vector{Int8}[], night = BitVector()))
 
-""" External CPro constructor for conversion of floating point precision """
+"""
+    CPro{T}(cpro::CPro) where T
+
+External `CPro` constructor for conversion of floating point precision.
+"""
 function CPro{T}(cpro::CPro) where T
   convertFloats!(cpro.data, T)
   CPro{T}(cpro.data)
 end
 
-""" Default CPro constructor for Float32 """
+"""
+    CPro(args...; kwargs...)
+
+Default CPro constructor for Float32.
+"""
 CPro(args...; kwargs...) = CPro{Float32}(args...; kwargs...)
 
 
+## Overall combined data for one-step data loading and intersection calculation
+
+
+"""
+# struct Data
+
+Store all relevant primary and secondary track data and calculated intersections
+depending on the primary source to fields:
+
+- `flight::Union{Nothing,FlightSet{T}}`
+- `cloud::Union{Nothing,CloudSet{T}}`
+- `sat::Union{Nothing,SatData{T}}`
+- `intersection::Union{Nothing,NamedTuple{(:flight,:cloud), Tuple{XData{T},XData{T}}}}`
+
+# Instantiate
+
+Construct `Data` from the individual fields or use a modified constructor to load
+all necessary data from the file names given in a vector of pairs with the following
+`String` keywords for the different databases:
+- `"inventory"`: VOLPE AEDT database
+- `"archive"`: FlightAware commercial data
+- `"onlineData"`: FlightAware web content
+- `"cloudtracks"`: cloud track data
+- `"sat"`: CALIPSO satellite track data
+
+Furthermore, the keyword arguments for `FlightSet`, `CloudSet`, `SatData`, and
+`XData` are passed on.
+
+- `savesecondsattype::Bool=false`
+- `sattype::Symbol=:unde`,
+- `altmin::Real=5000`
+- `odelim::Union{Nothing,Char,String}=nothing`
+- `maxtimediff::Int=30`
+- `primspan::Int=0`
+- `secspan::Int=15`
+- `lidarrange::Tuple{Real,Real}=(15_000,-Inf)`
+- `stepwidth::Real=0.01`
+- `Xradius::Real=20_000`
+- `expdist::Real=Inf`
+- `remarks::Vector{<:Pair{String,<:Any}}=Pair{String,Any}[]`
+
+For remarks, a vector of pairs is used again to differentiate
+between the different datasets:
+
+- `"flight"`: flight data (all sources within `FlightSet`)
+- `"cloud"`: cloud track data
+- `"sat"`: CALIPSO satellite data
+- `"Xflight"`: calculated intersections using flight data as primary source
+- `"Xcloud"`: calculated intersections using cloud data as primary source
+"""
 struct Data{T} <: DataSet{T}
   flight::Union{Nothing,FlightSet{T}}
   cloud::Union{Nothing,CloudSet{T}}
   sat::Union{Nothing,SatData{T}}
   intersection::Union{Nothing,NamedTuple{(:flight,:cloud), Tuple{XData{T},XData{T}}}}
 
+  """ unmodified constructor for `Data` """
   function Data{T}(
     flight::Union{Nothing,FlightSet{T}},
     cloud::Union{Nothing,CloudSet{T}},
@@ -708,8 +820,9 @@ struct Data{T} <: DataSet{T}
     intersection::Union{Nothing,NamedTuple{(:flight,:cloud), Tuple{XData{T},XData{T}}}}
   ) where T
     new{T}(flight, cloud, sat, intersection)
-  end
+  end # unmodified constructor for Data
 
+  """ modified constructor for `Data` """
   function Data{T}(
     folders::Vector{<:Pair{String,<:Any}},
     savesecondsattype::Bool=false;
@@ -756,15 +869,26 @@ struct Data{T} <: DataSet{T}
       clouds, sat, savesecondsattype;
       maxtimediff, primspan, secspan, lidarrange,
       stepwidth, Xradius, expdist,
-      remarks = remarks["Xflight"]
+      remarks = remarks["Xcloud"]
     ))
+
+    # Instantiate
     new{T}(flights, clouds, sat, intersections)
-  end #constructor 2 for Data
-end
+  end # modified constructor for Data
+end #struct Data
 
+"""
+    Data(args...; kwargs...)
 
+Default `Data` constructor for single floating point precision.
+"""
 Data(args...; kwargs...) = Data{Float32}(args...; kwargs...)
 
+"""
+    Data{T}(data::Data) where T
+
+Constructor for floating point conversions.
+"""
 Data{T}(data::Data) where T = Data{T}(
   FlightSet{T}(data.flight),
   CloudSet{T}(data.cloud),
@@ -773,6 +897,17 @@ Data{T}(data::Data) where T = Data{T}(
     cloud = Intersection{T}(data.intersection.cloud))
 )
 
+
+"""
+    DataSet{T}(args...; kwargs...) where T
+
+Alias constructor for `Data` of type `T`.
+"""
 DataSet{T}(args...; kwargs...) where T = Data{T}(args...; kwargs...)
 
+"""
+    DataSet(args...; kwargs...)
+
+Alias default constructor for `Data` of type `Float32`.
+"""
 DataSet(args...; kwargs...) = DataSet{Float32}(args...; kwargs...)

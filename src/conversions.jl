@@ -32,6 +32,7 @@ end #function convertFloats!
 
 
 ## Time format conversion of satellite data
+
 """
     convertUTC(t::AbstractFloat) -> DateTime
 
@@ -51,7 +52,7 @@ function convertUTC(t::AbstractFloat)
 
   # Return a DateTime from date and time (h/m/s) with timezone UTC
   return DateTime(Dates.yearmonthday(d)..., h, m, s, ms)
-end
+end #function convertUTC
 
 
 ## Data/unit conversion
@@ -60,7 +61,7 @@ end
     earthradius(lat::T) -> R::T
 
 Calculate the Earth's radius `R` in dependence of the current `lat`itude
-condidering the ellipsoidal shape of the Earth due to the rotational flattening.
+considering the ellipsoidal shape of the Earth due to the rotational flattening.
 """
 function earthradius(lat::T)::T where T<:AbstractFloat
   req, rpol = 6378137, 6356752
