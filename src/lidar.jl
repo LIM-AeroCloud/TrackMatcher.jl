@@ -16,7 +16,7 @@ otherwise specified by `Float`.
 function get_lidarheights(lidarrange::Tuple{Real,Real}, Float::DataType=Float32)
   # Read CPro lidar altitude profile
   hfile = normpath(@__DIR__, "../data/CPro_Lidar_Altitudes_m.dat")
-  hprofile = CSV.File(hfile, type=Float) |> df.DataFrame!
+  hprofile = CSV.read(hfile, DataFrame, copycols = false, type=Float)
   # Consider only levels between max/min given in lidarrange
   itop = findfirst(hprofile.CPro .≤ lidarrange[1])
   ibottom = findlast(hprofile.CPro .≥ lidarrange[2])
@@ -258,7 +258,7 @@ function atmosphericinfo(
       "missing used for feature in intersections of flight $(flightid)")
     missing
   else
-    try sat.data.feature[isat][i]
+    try sat.data.atmos_state[isat][i]
     catch
       missing
     end
@@ -284,11 +284,11 @@ function atmosphericinfo(
   alt::AbstractFloat,
   isat::Int
 )::Union{Missing,Symbol}
-  top, base = sat.data.layer[isat]
+  top, base = sat.data[isat, [:layer_top, :layer_base]]
   feature = try
     for i = 1:length(top)
       if base[i] ≤ alt ≤ top[i]
-        return sat.data.feature[isat][i]
+        return sat.data.atmos_state[isat][i]
       end
     end
   catch

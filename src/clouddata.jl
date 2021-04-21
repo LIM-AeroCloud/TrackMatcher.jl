@@ -10,7 +10,7 @@ function loadCloudTracks(files::String...; Float::DataType=Float32)
   # Open MATLAB session
   ms = mat.MSession(0)
   # Initialise
-  tracks = CloudTrack[]
+  tracks = CloudData[]
   # Loop over all mat files
   for (i, file) in enumerate(files)
     # Read data from mat files
@@ -52,18 +52,20 @@ end
 
 """
     storeMAT!(
-      tracks::Vector{CloudTrack},
+      tracks::Vector{CloudData},
       t::Array,
-      lonlat::Array;
+      lonlat::Array,
+      fileID::Int,
+      filename::String;
       Float::DataType=Float32
     )
 
 Append the vector with cloud `tracks` by timestamps `t` and coordinates `lonlat`
 using the floating point precision set by `Float` (default: `Float32`) for the
-positional data.
+positional data. Pass on `fileID` and `filename` to the metadata.
 """
 function storeMAT!(
-  tracks::Vector{CloudTrack},
+  tracks::Vector{CloudData},
   t::Array,
   lonlat::Array,
   fileID::Int,
@@ -77,7 +79,7 @@ function storeMAT!(
     # Determine predominant trajectory direction, inflection points, and remove duplicate entries
     flex, useLON = preptrack!(data)
     isempty(flex) && continue
-    push!(tracks, CloudTrack(data, CloudMetadata(string(fileID, ".", i), data,
+    push!(tracks, CloudData{Float}(data, CloudMetadata{Float}(string(fileID, ".", i), data,
       flex, useLON, filename)))
   end
 end #function storeMAT!
