@@ -630,12 +630,13 @@ Immutable struct `SetMetadata`.
 
 # Instantiation
 
-Instantiate by giving a String with identifiers of the `DBtype` and an equal number
-of `folder` paths as characters in the `DBtype` `String`. Optionally add a minimum
-altitude threshold for the data (default = `15000`) and any remarks
-(comments or additional data). Define the delimiter in the input files of the
-online data with the keyword `odelim`. Use any character or string as delimiter.
-By default (`odelim=nothing`), auto-detection is used.
+Instantiate by passing a `String` or `Vector{String}` with any of the keyword
+arguments `inventory`, `archive` or `onlineData` to the modified constructor of
+`FlightSet`. Optionally add a minimum altitude threshold for the flight data
+(default = `15000`) and any remarks (comments or additional data). Define the
+delimiter in the input files of the online data with the keyword `odelim`.
+Use any character or string as delimiter. By default (`odelim=nothing`),
+auto-detection is used.
 
     function FlightSet{T}(;
       inventory::Union{String,Vector{String}}=String[],
@@ -644,16 +645,7 @@ By default (`odelim=nothing`), auto-detection is used.
       altmin::Real=5000,
       remarks=nothing, odelim::Union{Nothing,Char,String}=nothing) where T
 
-`DBtype` can be identified with:
-- `1` or `i`: VOLPE AEDT inventory
-- `2` or `a`: FlightAware archived data (commercially available)
-- `3` or `o`: flightaware.com online data
-
-By default, all values are read in as `Float32`, but can be set to any other
-precision by the `Float` kwarg; `altmin` set the minimum threshold above which
-flight tracking points are considered. Set the delimiter of the input files with
-kwarg `odelim`, if delimiters are any character different from whitespace. Any
-`remarks` can be attached to `FlightSet`.
+Floating point precision is set by `{T}`. If omitted, `Float32` is used.
 
 Alternatively, instantiate directly with the fields of `FlightSet`, where the correct
 database type is checked, and wrong datasets are removed in every field.
@@ -693,7 +685,8 @@ struct FlightSet{T} <: PrimarySet{T}
     archive::Union{String,Vector{String}}=String[],
     onlineData::Union{String,Vector{String}}=String[],
     altmin::Real=5000,
-    remarks=nothing, odelim::Union{Nothing,Char,String}=nothing) where T
+    odelim::Union{Nothing,Char,String}=nothing,
+    remarks=nothing) where T
 
     # Return empty FlightSet, if no folders are passed to constructor
     all(isempty.([inventory, archive, onlineData])) &&
