@@ -243,8 +243,9 @@ export DataSet, Data, MeasuredSet, ComputedSet, PrimarySet, ObservationSet,
 
 
 ## Import functions from Julia include files
-include("inputtypes.jl")      # structs of concrete types at the end of the type tree
-include("outputtypes.jl")     # structs of abstract types with constructors for concrete types
+include("primarytypes.jl")    # concrete types/constructors for primary data/datasets
+include("sattypes.jl")        # concrete types/constructors for secondary sat track data and observations
+include("computedtypes.jl")   # concrete types/constructors for intersections and combined datasets
 include("datachecks.jl")      # helper functions for data checks
 include("dataprocessing.jl")  # helper functions for data processing
 include("conversions.jl")     # helper functions for time/unit conversions
