@@ -208,9 +208,7 @@ import Dates: DateTime, Date, Time
 import TimeZones.ZonedDateTime
 
 # Define Logger with log level
-logger = try logg.SimpleLogger(logfile, logg.Info)
-catch; logg.ConsoleLogger(stdout, logg.Info)
-end
+logger = logg.ConsoleLogger(stdout, logg.Info)
 logg.global_logger(logger)
 
 
@@ -245,7 +243,7 @@ export DataSet, Data, MeasuredSet, ComputedSet, PrimarySet, ObservationSet,
 ## Import functions from Julia include files
 include("primarytypes.jl")    # concrete types/constructors for primary data/datasets
 include("sattypes.jl")        # concrete types/constructors for secondary sat track data and observations
-include("computedtypes.jl")   # concrete types/constructors for intersections and combined datasets
+include("outputtypes.jl")   # concrete types/constructors for intersections and combined datasets
 include("datachecks.jl")      # helper functions for data checks
 include("dataprocessing.jl")  # helper functions for data processing
 include("conversions.jl")     # helper functions for time/unit conversions
