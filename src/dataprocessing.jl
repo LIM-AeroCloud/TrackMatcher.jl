@@ -1,4 +1,8 @@
 ### Helper functions for data processing
+
+# Overload abs function from base to get the absolute number of CompoundPeriod
+Base.abs(dt::Dates.CompoundPeriod) = dt > Dates.CompoundPeriod(Dates.Millisecond(0)) ? dt : -dt
+
 ## Storage of intersection data
 
 """

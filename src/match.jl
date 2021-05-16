@@ -265,11 +265,13 @@ function findXcoords(
   xstart, xend = max(flight.min, sat.min), min(flight.max, sat.max)
   xdata = xstart < xend ? collect(Float, xstart:stepwidth:xend) : collect(Float, xend:stepwidth:xstart)
   ydata = flight.track(xdata) .- sat.track(xdata)
+
   length(xdata) > 1 || return Tuple{Float,Float}[], Tuple{Float,Float}[]
 
+  # Use double precision for intersection finding
+  xdata, ydata = Float64.(xdata), Float64.(ydata)
   # Define function to find minimum distance between both tracks
   coorddist(x) = interpolate(pchip(xdata, ydata), x)
-
   # Find minimum distance by solving flight track - sat track = 0
   rts = root.roots(coorddist, xdata[1] .. xdata[end], root.Krawczyk)
   X = Float.(root.mid.(root.interval.(rts)))
