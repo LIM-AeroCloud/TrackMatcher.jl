@@ -178,6 +178,7 @@ struct SatData{T} <: SatTrack{T}
   function SatData{T}(
     folders::String...;
     type::Symbol=:undef,
+    savedir::Union{String,Bool}="abs",
     remarks=nothing
   ) where T
     tstart = Dates.now()
@@ -189,6 +190,7 @@ struct SatData{T} <: SatTrack{T}
         @warn "read error; data skipped" folder
       end
     end
+    files = convertdir.(files, savedir)
     # If type of satellite data is not defined, find it based on first 50 file names (~2 days)
     type = type == :CLay || type == :CPro ? string(type) :
       count(occursin.("CLay", files[1:min(length(files), 50)])) ≥
@@ -370,10 +372,11 @@ struct CLay{T} <: ObservationSet{T}
     files::Vector{String},
     timespan::NamedTuple{(:min,:max), Tuple{DateTime,DateTime}},
     lidarrange::Tuple{Real,Real}=(15_000,-Inf),
-    altmin::Real=5000
+    altmin::Real=5000,
+    saveobs::Union{String,Bool}="abs"
   ) where T
     # Return default empty struct if files are empty
-    isempty(files) && return CLay{T}()
+    (isempty(files) || saveobs === false || isempty(saveobs)) && return CLay{T}()
     # Initialise arrays
     # essential data
     utc = Vector{Vector{DateTime}}(undef, length(files))
@@ -555,10 +558,11 @@ struct CPro{T} <: ObservationSet{T}
     ms::mat.MSession,
     files::Vector{String},
     timespan::NamedTuple{(:min,:max), Tuple{DateTime,DateTime}},
-    lidarprofile::NamedTuple
+    lidarprofile::NamedTuple,
+    saveobs::Union{String,Bool}="abs"
   ) where T
     # Return default empty struct if files are empty
-    isempty(files) && return CPro{T}()
+    (isempty(files) || saveobs === false || isempty(saveobs)) && return CPro{T}()
     # Initialise arrays
     # essential data
     utc = Vector{Vector{DateTime}}(undef, length(files))

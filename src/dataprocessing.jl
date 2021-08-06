@@ -153,20 +153,24 @@ function add_intersections!(
   expdist::Real,
   lidarprofile::NamedTuple,
   lidarrange::Tuple{Real,Real},
+  saveobs::Union{String,Bool},
   savesecondsattype::Bool
 ) where T<:AbstractFloat
   # only CloudTrack: NA = T(NaN) # set precision of NaNs according to Float
   # Extract the DataFrame rows of the sat/flight data near the intersection
-  Xflight, ift = get_flightdata(track, Xf, primspan)
-  cpro, clay, atmos, ist = get_satdata(ms, sat, Xs, secspan, Xflight.data.alt[ift],
-    altmin, trackID, lidarprofile, lidarrange, savesecondsattype, T)
+  Xflight, ift = get_flightdata(track, Xf, primspan, saveobs)
+  alt = ift == 0 ? NaN : Xflight.data.alt[ift]
+  cpro, clay, atmos, ist = get_satdata(ms, sat, Xs, secspan, alt, altmin,
+    trackID, lidarprofile, lidarrange, saveobs, savesecondsattype, T)
   Xsat = sat.metadata.type == :CPro ? cpro.data : clay.data
-  # Calculate accuracies
-  fxmeas = dist.haversine(Xf,(Xflight.data.lat[ift], Xflight.data.lon[ift]),
-    earthradius(Xf[1]))
-  ftmeas = Dates.canonicalize(Dates.CompoundPeriod(tmf - Xflight.data.time[ift]))
-  sxmeas = dist.haversine(Xs, (Xsat.lat[ist], Xsat.lon[ist]), earthradius(Xs[1]))
-  stmeas = Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.time[ist]))
+  # Calculate accuracies (unless data is not saved, i.e. savedir = false)
+  fxmeas, ftmeas, sxmeas, stmeas = ift == 0 ?
+    (0, Dates.CompoundPeriod(), 0, Dates.CompoundPeriod()) :
+    (dist.haversine(Xf,(Xflight.data.lat[ift], Xflight.data.lon[ift]),
+    earthradius(Xf[1])),
+    Dates.canonicalize(Dates.CompoundPeriod(tmf - Xflight.data.time[ift])),
+    dist.haversine(Xs, (Xsat.lat[ist], Xsat.lon[ist]), earthradius(Xs[1])),
+    Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.time[ist])))
   # Exclude data with long distances to nearest flight measurement
   if fxmeas > expdist || sxmeas > expdist
     @info("maximum distance of intersection to next track point exceeded; data excluded",
@@ -175,7 +179,7 @@ function add_intersections!(
   end
   # Save intersection data
   addX!(Xdata, tracked, accuracy, counter, Xf, id, dx, dt, Xradius, Xflight,
-    cpro, clay, tmf, tms, atmos, fxmeas, ftmeas, sxmeas, stmeas, Xflight.data.alt[ift])
+    cpro, clay, tmf, tms, atmos, fxmeas, ftmeas, sxmeas, stmeas, alt)
 end #function add_intersections
 
 
@@ -240,13 +244,14 @@ function add_intersections!(
   expdist::Real,
   lidarprofile::NamedTuple,
   lidarrange::Tuple{Real,Real},
+  saveobs::Union{String,Bool},
   savesecondsattype::Bool
 ) where T<:AbstractFloat
   NA = T(NaN) # set precision of NaNs according to Float
   # Don't save additional cloud data near intersections at the moment
   Xcloud, ift = FlightTrack{T}(), 0
   cpro, clay, atmos, ist = get_satdata(ms, sat, Xs, secspan, NA, altmin,
-    trackID, lidarprofile, lidarrange, savesecondsattype, T)
+    trackID, lidarprofile, lidarrange, saveobs, savesecondsattype, T)
   Xsat = sat.metadata.type == :CPro ? cpro.data : clay.data
   # Calculate accuracies
   fxmeas = NA
@@ -306,8 +311,11 @@ closest to `X`.
 function get_flightdata(
   flight::FlightTrack{T},
   X::Tuple{<:AbstractFloat, <:AbstractFloat},
-  primspan::Int
+  primspan::Int,
+  saveobs::Union{String,Bool}
 ) where T
+  # Retrieve observations, if saveobs is true
+  (saveobs === false || isempty(saveobs)) && return FlightData{T}(), 0
   # Generate coordinate pairs from lat/lon columns
   coords = ((flight.data.lat[i], flight.data.lon[i]) for i = 1:size(flight.data,1))
   # Find the index (DataFrame row) of the intersection in the flight data
@@ -393,6 +401,7 @@ function get_satdata(
   flightid::Union{Int,String},
   lidarprofile::NamedTuple,
   lidarrange::Tuple{Real,Real},
+  saveobs::Union{String,Bool},
   savesecondtype::Bool,
   Float::DataType=Float32
 )
@@ -409,7 +418,7 @@ function get_satdata(
 
   # Get CPro/CLay data from near the intersection
   clay = if sat.metadata.type == :CLay
-    CLay{Float}(ms, primfiles, timespan, lidarrange, altmin)
+    CLay{Float}(ms, primfiles, timespan, lidarrange, altmin, saveobs)
   else
     try CLay{Float}(ms, secfiles, timespan, lidarrange, altmin)
     catch
@@ -418,9 +427,9 @@ function get_satdata(
     end
   end
   cpro = if sat.metadata.type == :CPro
-    CPro{Float}(ms, primfiles, timespan, lidarprofile)
+    CPro{Float}(ms, primfiles, timespan, lidarprofile, saveobs)
   else
-    try CPro{Float}(ms, secfiles, timespan, lidarprofile)
+    try CPro{Float}(ms, secfiles, timespan, lidarprofile, saveobs)
     catch
       println(); @warn "could not load additional profile data" flightid
       CPro{Float}()

@@ -275,6 +275,7 @@ struct XData{T} <: Intersection{T}
     stepwidth::Real=0.01,
     Xradius::Real=20_000,
     expdist::Real=Inf,
+    savedir::Union{String,Bool}="abs",
     remarks=nothing
   ) where T
     # Initialise DataFrames with Intersection data and monitor start time
@@ -314,7 +315,7 @@ struct XData{T} <: Intersection{T}
         currdata, currtrack, curraccuracy = find_intersections(ms, track,
           primtracks, tracks.metadata.altmin, sat, sectracks, dataset, ID, maxtimediff,
           stepwidth, Xradius, lidarprofile, lidarrange, primspan, secspan,
-          expdist, savesecondsattype, T)
+          expdist, savedir, savesecondsattype, T)
         append!(Xdata, currdata); append!(tracked, currtrack)
         append!(accuracy, curraccuracy)
       catch err
@@ -453,6 +454,7 @@ struct MeasuredData{T} <: MeasuredSet{T}
     sattype::Symbol=:undef,
     altmin::Real=5000,
     odelim::Union{Nothing,Char,String}=nothing,
+    savedir::Union{String,Bool}="abs",
     remarks::Vector{<:Pair{String,<:Any}}=Pair{String,Any}[]
   ) where T
     # Process function arguments that need to be distributed to several structs
@@ -464,13 +466,14 @@ struct MeasuredData{T} <: MeasuredSet{T}
       inventory = folders["inventory"],
       archive = folders["archive"],
       onlineData = folders["onlineData"],
-      altmin, odelim, remarks=remarks["flights"]
+      altmin, odelim, savedir, remarks=remarks["flights"]
     )
     @debug trim_vec!.([flights.inventory, flights.archive, flights.onlineData], 300)
-    clouds = CloudSet{T}(folders["cloudtracks"]...; remarks = remarks["clouds"])
+    clouds = CloudSet{T}(folders["cloudtracks"]...; savedir, remarks = remarks["clouds"])
     sat = SatTrack{T}(
       folders["sat"]...;
       type = sattype,
+      savedir,
       remarks = remarks["sat"]
     )
 
@@ -576,6 +579,7 @@ struct Data{T} <: DataSet{T}
     sattype::Symbol=:undef,
     altmin::Real=5000,
     odelim::Union{Nothing,Char,String}=nothing,
+    savedir::Union{String,Bool}="abs",
     maxtimediff::Int=30,
     primspan::Int=0,
     secspan::Int=15,
@@ -587,7 +591,7 @@ struct Data{T} <: DataSet{T}
   ) where T
 
     # Load data
-    tracks = MeasuredSet{T}(folders; sattype, altmin, odelim, remarks)
+    tracks = MeasuredSet{T}(folders; sattype, altmin, odelim, savedir, remarks)
 
     # Process function arguments that need to be distributed to several structs
     folders = init_dict(folders, String[])
@@ -598,13 +602,13 @@ struct Data{T} <: DataSet{T}
     flight=Intersection{T}(
       tracks.flight, tracks.sat, savesecondsattype;
       maxtimediff, primspan, secspan, lidarrange,
-      stepwidth, Xradius, expdist,
+      stepwidth, Xradius, expdist, savedir,
       remarks = remarks["Xflight"]
     ),
     cloud = Intersection{T}(
       tracks.cloud, tracks.sat, savesecondsattype;
       maxtimediff, primspan, secspan, lidarrange,
-      stepwidth, Xradius, expdist,
+      stepwidth, Xradius, expdist, savedir,
       remarks = remarks["Xcloud"]
     ))
 

@@ -2,6 +2,15 @@
 
 ## File system scans and data processing
 
+convertdir(dir::AbstractString, savedir::Union{String,Bool}="abs") =
+  if isempty(savedir) || savedir === false
+    dir
+  elseif lowercase(savedir[1:3]) == "abs"
+    abspath(dir)
+  elseif lowercase(savedir[1:3]) == "rel"
+    relpath(dir)
+  end
+
 """
     findfiles!(inventory::Vector{String}, folder::String, extensions::String...)
 

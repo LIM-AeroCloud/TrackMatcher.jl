@@ -6,7 +6,10 @@
 Load cloud track data from mat `files` and store in Julia format as `CloudTrack` structs.
 Set the floating point precision to `Float` (default: `Float32`).
 """
-function loadCloudTracks(files::String...; Float::DataType=Float32)
+function loadCloudTracks(
+  files::String...;
+  Float::DataType=Float32
+)
   # Initialise
   tracks = CloudData[]
   # Loop over all mat files
@@ -14,7 +17,7 @@ function loadCloudTracks(files::String...; Float::DataType=Float32)
     # Read data from mat files
     t, lonlat = readMAT(file)
     # Store data in Julia format as Vector of CloudTrack structs
-    storeMAT!(tracks, t, lonlat, i, file; Float=Float)
+    storeMAT!(tracks, t, lonlat, i, file; Float)
   end #loop over files
 
   return tracks

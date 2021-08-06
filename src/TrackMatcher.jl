@@ -237,7 +237,7 @@ export DataSet, Data, MeasuredSet, ComputedSet, PrimarySet, ObservationSet,
        FlightSet, CloudSet, PrimaryTrack, SecondaryTrack,
        FlightTrack, CloudTrack, FlightData, CloudData,
        SatTrack, SatData, CLay, CPro, Intersection, XData, #APro, ALay,
-       FlightMetadata, SatMetadata, SetMetadata, XMetadata
+       FlightMetadata, CloudMetadata, SatMetadata, SetMetadata, XMetadata
 
 
 ## Import functions from Julia include files

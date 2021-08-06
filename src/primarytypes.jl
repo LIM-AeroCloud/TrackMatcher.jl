@@ -434,7 +434,8 @@ struct FlightData{T} <: FlightTrack{T}
       [missing for i in t]
     speed = df.hasproperty(track, :speed) ? df.getproperty(track, :speed) :
       [missing for i in t]
-    metadata = FlightMetadata{T}(dbID,flightID,route,aircraft,t,lat,lon,useLON,flex,source,file)
+    metadata = FlightMetadata{T}(dbID,flightID,route,aircraft,t,lat,lon,useLON,flex,
+      source,file)
 
     # Instatiate new FlightTrack
     new{T}(DataFrame(time=t,lat=lat,lon=lon,alt=alt,heading=heading,climb=climb,speed=speed),metadata)
@@ -570,6 +571,7 @@ struct FlightSet{T} <: PrimarySet{T}
     onlineData::Union{String,Vector{String}}=String[],
     altmin::Real=5000,
     odelim::Union{Nothing,Char,String}=nothing,
+    savedir::Union{String,Bool}="abs",
     remarks=nothing) where T
 
     # Return empty FlightSet, if no folders are passed to constructor
@@ -585,21 +587,24 @@ struct FlightSet{T} <: PrimarySet{T}
     for dir in inventory
       findfiles!(files, dir, ".csv")
     end
-    inventory = loadInventory(files...; Float=T, altmin=altmin)
+    files = convertdir.(files, savedir)
+    inventory = loadInventory(files...; Float=T, altmin)
     # FlightAware commercial archive
     archive isa Vector || (archive = [archive])
     files = String[]
     for dir in archive
       findfiles!(files, dir, ".csv")
     end
-    archive = loadArchive(files...; Float=T, altmin=altmin)
+    files = convertdir.(files, savedir)
+    archive = loadArchive(files...; Float=T, altmin)
     # FlightAware web content
     onlineData isa Vector || (onlineData = [onlineData])
     files = String[]
     for dir in onlineData
       findfiles!(files, dir, ".tsv", ".txt", ".dat")
     end
-    onlineData = loadOnlineData(files...; Float=T, altmin=altmin, delim=odelim)
+    files = convertdir.(files, savedir)
+    onlineData = loadOnlineData(files...; Float=T, altmin, delim=odelim)
     tmin, tmax = if isempty([inventory; archive; onlineData])
       tstart, tstart
     else
@@ -791,7 +796,11 @@ struct CloudSet{T} <: PrimarySet{T}
   Modified constructor creating the database from mat files in the given folder
   or any subfolder using the floating point precision given by `Float`.
   """
-  function CloudSet{T}(folders::String...; remarks=nothing) where T
+  function CloudSet{T}(
+    folders::String...;
+    savedir::Union{String,Bool}="abs",
+    remarks=nothing
+  ) where T
     # Return empty CloudSet, if no folders are passed to constructor
     all(isempty.(folders)) && return CloudSet{T}()
     # Track computing time
@@ -804,6 +813,7 @@ struct CloudSet{T} <: PrimarySet{T}
         @warn "read error; data skipped" folder
       end
     end
+    files = convertdir.(files, savedir)
 
     # Load cloud tracks from mat files into TrackMatcher in Julia format
     tracks = loadCloudTracks(files...; Float=T)

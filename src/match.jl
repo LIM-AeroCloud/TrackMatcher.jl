@@ -66,6 +66,7 @@ function find_intersections(
   primspan::Int,
   secspan::Int,
   expdist::Real,
+  savedir::Union{String,Bool},
   savesecondsattype::Bool,
   Float::DataType=Float32
 )
@@ -101,10 +102,10 @@ function find_intersections(
       counter =  track isa FlightTrack ?
         add_intersections!(ms, Xdata, tracked, accuracy, track, sat, Xf[i], Xs[i],
           counter, id, dx, dt, tmf, tms, primspan, secspan, altmin, trackID,
-          Xradius, expdist, lidarprofile, lidarrange, savesecondsattype) :
+          Xradius, expdist, lidarprofile, lidarrange, savedir, savesecondsattype) :
         add_intersections!(ms, Xdata, tracked, accuracy, sat, Xf[i], Xs[i],
           counter, id, dx, dt, tmf, tms, secspan, altmin, trackID,
-          Xradius, expdist, lidarprofile, lidarrange, savesecondsattype)
+          Xradius, expdist, lidarprofile, lidarrange, savedir, savesecondsattype)
     end #loop over intersections of current flight
   end #loop over flight and sat tracks
   # Return intersection data of current flight
@@ -168,7 +169,7 @@ function findoverlap(track::T where T<:PrimarySet, sat::SatData,
   end
   # Return tuple with sat ranges, and the type of sat data that was used for the calculations
   return overlap
-end#function findoverlap
+end #function findoverlap
 
 
 """
