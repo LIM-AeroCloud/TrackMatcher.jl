@@ -428,3 +428,23 @@ function closest_points(arr::Vector{T}) where T<:AbstractFloat
   end
   return m1, m2
 end #function closest_points
+
+
+"""
+    lonextrema(lon::Vector{T}, rel::Function) where T
+
+Find extrema in `lon`gitude values for eastern and western hemisphere by defining
+`rel` as `>` or `<` 0 filtering for the respective longitude values.
+"""
+function lonextrema(lon::Vector{T}, rel::Function) where T
+  # Return minimum or NaN for non-existing track data in current hemisphere
+  try minimum(filter(rel(0), lon))
+  catch
+    T(NaN)
+  end,
+  # Return maximum or NaN for non-existing track data in current hemisphere
+  try maximum(filter(rel(0), lon))
+  catch
+    T(NaN)
+  end
+end #function lonextrema

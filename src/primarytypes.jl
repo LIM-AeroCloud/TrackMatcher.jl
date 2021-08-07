@@ -147,13 +147,9 @@ struct FlightMetadata{T} <: FlightTrack{T}
     source::AbstractString,
     file::AbstractString
   ) where T
-    # T = promote_type(eltype(lat), eltype(lon))
-    elonmax = isempty(lon[lon.≥0]) ? T(NaN) : maximum(lon[lon.≥0])
-    elonmin = isempty(lon[lon.≥0]) ? T(NaN) : minimum(lon[lon.≥0])
-    wlonmax = isempty(lon[lon.<0]) ? T(NaN) : maximum(lon[lon.<0])
-    wlonmin = isempty(lon[lon.<0]) ? T(NaN) : minimum(lon[lon.<0])
-    area = (latmin=minimum(lat), latmax=maximum(lat),
-      elonmin=elonmin, elonmax=elonmax, wlonmin=wlonmin, wlonmax=wlonmax)
+    elonmin, elonmax = lonextrema(lon, ≥)
+    wlonmin, wlonmax = lonextrema(lon, <)
+    area = (latmin=minimum(lat), latmax=maximum(lat), elonmin, elonmax, wlonmin, wlonmax)
     new{T}(dbID, flightID, route, aircraft, (start=date[1], stop=date[end]), area,
       flex, useLON, source, file)
   end #constructor 2 FlightMetadata
@@ -296,7 +292,7 @@ CloudMetadata{T}(meta::CloudMetadata) where T = CloudMetadata{T}(
 
 
 """
-# struct SetMetadata
+# struct PrimaryMetadata
 
 Immutable struct with additional information of databases:
 
@@ -306,35 +302,35 @@ Immutable struct with additional information of databases:
 - `loadtime`: time it took to read data files and load it to the struct
 - `remarks`: any additional data or comments that can be attached to the database
 """
-struct SetMetadata{T} <: PrimarySet{T}
+struct PrimaryMetadata{T} <: PrimarySet{T}
   altmin::T
   date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
   created::Union{DateTime,ZonedDateTime}
   loadtime::Dates.CompoundPeriod
   remarks
-end #struct SetMetadata
+end #struct PrimaryMetadata
 
 """
-    SetMetadata{T}() where T
+    PrimaryMetadata{T}() where T
 
-External constructor for empty SetMetadata.
+External constructor for empty PrimaryMetadata.
 """
-SetMetadata{T}() where T = SetMetadata{T}(NaN, (start=Dates.now(), stop=Dates.now()),
-  Dates.now(), Dates.CompoundPeriod(), nothing)
-
-"""
-    SetMetadata(args...)
-
-Default SetMetadata constructor for single floating point precision.
-"""
-SetMetadata(args...) = SetMetadata{Float32}(args...)
+PrimaryMetadata{T}() where T = PrimaryMetadata{T}(NaN,
+  (start=Dates.now(), stop=Dates.now()), Dates.now(), Dates.CompoundPeriod(), nothing)
 
 """
-    SetMetadata{T}(meta::SetMetadata) where T
+    PrimaryMetadata(args...)
 
-External SetMetadata constructor for floating point conversions.
+Default PrimaryMetadata constructor for single floating point precision.
 """
-SetMetadata{T}(meta::SetMetadata) where T = SetMetadata{T}(T(meta.altmin),
+PrimaryMetadata(args...) = PrimaryMetadata{Float32}(args...)
+
+"""
+    PrimaryMetadata{T}(meta::PrimaryMetadata) where T
+
+External PrimaryMetadata constructor for floating point conversions.
+"""
+PrimaryMetadata{T}(meta::PrimaryMetadata) where T = PrimaryMetadata{T}(T(meta.altmin),
   meta.date, meta.created, meta.loadtime, meta.remarks)
 
 
@@ -405,7 +401,7 @@ struct FlightData{T} <: FlightTrack{T}
       Vector{<:Union{Missing,<:T}}]
     bounds = (:lat => (-90, 90), :lon => (-180, 180), :alt => (0,Inf),
       :heading => (0, 360), :speed => (0, Inf))
-    checkcols!(data, standardnames, standardtypes, bounds,
+    click(data, standardnames, standardtypes, bounds,
       metadata.source, metadata.dbID)
     new{T}(data,metadata)
   end #constructor 1 FlightData
@@ -510,7 +506,7 @@ Commercial flight data by FlightAware from a csv file.
 Online data from the FlightAware website copied to whitespace-separated files.
 
 ## metadata
-Immutable struct `SetMetadata`.
+Immutable struct `PrimaryMetadata`.
 
 
 # Instantiation
@@ -536,20 +532,20 @@ Alternatively, instantiate directly with the fields of `FlightSet`, where the co
 database type is checked, and wrong datasets are removed in every field.
 
     FlightSet{T}(inventory::Vector{FlightData{T}}, archive::Vector{FlightData{T}},
-        onlineData::Vector{FlightData{T}}, metadata::SetMetadata{T}) where T
+        onlineData::Vector{FlightData{T}}, metadata::PrimaryMetadata{T}) where T
 """
 struct FlightSet{T} <: PrimarySet{T}
   inventory::Vector{FlightData{T}}
   archive::Vector{FlightData{T}}
   onlineData::Vector{FlightData{T}}
-  metadata::SetMetadata{T}
+  metadata::PrimaryMetadata{T}
 
   """
   Unmodified constructor for `FlightSet` with basic checks for correct dataset type
   in each dataset field.
   """
   function FlightSet{T}(inventory::Vector{FlightData{T}}, archive::Vector{FlightData{T}},
-    onlineData::Vector{FlightData{T}}, metadata::SetMetadata{T}) where T
+    onlineData::Vector{FlightData{T}}, metadata::PrimaryMetadata{T}) where T
 
     # Check for correct dataset type in each vector and for correct floating point precision
     inventory = checkDBtype(inventory, "VOLPE")
@@ -576,7 +572,7 @@ struct FlightSet{T} <: PrimarySet{T}
 
     # Return empty FlightSet, if no folders are passed to constructor
     all(isempty.([inventory, archive, onlineData])) &&
-      return FlightSet{T}(FlightData{T}[], FlightData{T}[], FlightData{T}[], SetMetadata{T}())
+      return FlightSet{T}(FlightData{T}[], FlightData{T}[], FlightData{T}[], PrimaryMetadata{T}())
     # Save time of database creation
     tstart = Dates.now()
 
@@ -628,7 +624,7 @@ struct FlightSet{T} <: PrimarySet{T}
 
     # Instantiate
     new{T}(inventory, archive, onlineData,
-      SetMetadata{T}(altmin, (start=tmin, stop=tmax), tc, loadtime, remarks))
+      PrimaryMetadata{T}(altmin, (start=tmin, stop=tmax), tc, loadtime, remarks))
   end # constructor 2 FlightSet
 end #struct FlightSet
 
@@ -652,7 +648,7 @@ FlightSet{T}(flights::FlightSet) where T = FlightSet{T}(
   FlightData{T}.(flights.inventory),
   FlightData{T}.(flights.archive),
   FlightData{T}.(flights.onlineData),
-  SetMetadata{T}(flights.metadata)
+  PrimaryMetadata{T}(flights.metadata)
 )
 
 """
@@ -660,7 +656,7 @@ FlightSet{T}(flights::FlightSet) where T = FlightSet{T}(
       inventory::Vector{FlightData{T}},
       archive::Vector{FlightData{T}},
       onlineData::Vector{FlightData{T}},
-      metadata::SetMetadata{T}
+      metadata::PrimaryMetadata{T}
 ) where T
 
 Alias constructor for `FlightSet{T}` instantiation with unmodified constructor.
@@ -669,7 +665,7 @@ PrimarySet{T}(
   inventory::Vector{FlightData{T}},
   archive::Vector{FlightData{T}},
   onlineData::Vector{FlightData{T}},
-  metadata::SetMetadata{T}
+  metadata::PrimaryMetadata{T}
 ) where T = FlightSet{T}(inventory, archive, onlineData, metadata)
 
 """
@@ -718,7 +714,7 @@ struct CloudData{T} <: PrimaryTrack{T}
     standardnames = ["time", "lat", "lon"]
     standardtypes = [Union{DateTime,Vector{DateTime}}, Vector{T}, Vector{T}]
     bounds = (:lat => (-90, 90), :lon => (-180, 180))
-    checkcols!(data, standardnames, standardtypes, bounds, "CloudTrack", metadata.ID)
+    click(data, standardnames, standardtypes, bounds, "CloudTrack", metadata.ID)
     new{T}(data,metadata)
   end #constructor 1 CloudTrack
 end #struct CloudTrack
@@ -772,7 +768,7 @@ CloudTrack(args...) = CloudData{Float32}(args...)
 
 Database for cloud track data with fields:
 - `tracks::Vector{CloudTrack}`
-- `metadata::SetMetadata`
+- `metadata::PrimaryMetadata`
 
 # Instantiation
 
@@ -783,14 +779,14 @@ and optional remarks.
 
 Or use the unmodified constructor.
 
-    CloudSet{T}(tracks::Vector{CloudData{T}}, metadata::SetMetadata{T}) where T
+    CloudSet{T}(tracks::Vector{CloudData{T}}, metadata::PrimaryMetadata{T}) where T
 """
 struct CloudSet{T} <: PrimarySet{T}
   tracks::Vector{CloudData{T}}
-  metadata::SetMetadata{T}
+  metadata::PrimaryMetadata{T}
 
   """ unmodified constructor for CloudSet """
-  CloudSet{T}(tracks::Vector{CloudData{T}}, metadata::SetMetadata{T}) where T = new{T}(tracks, metadata)
+  CloudSet{T}(tracks::Vector{CloudData{T}}, metadata::PrimaryMetadata{T}) where T = new{T}(tracks, metadata)
 
   """
   Modified constructor creating the database from mat files in the given folder
@@ -831,7 +827,7 @@ struct CloudSet{T} <: PrimarySet{T}
       "\n▪ tracks ($(length(tracks)) entries)\n▪ metadata")
 
     # Instantiate CloudSet
-    new{T}(tracks, SetMetadata{T}(NaN, (start=tmin, stop=tmax), tc, loadtime, remarks))
+    new{T}(tracks, PrimaryMetadata{T}(NaN, (start=tmin, stop=tmax), tc, loadtime, remarks))
   end #modified constructor 2
 end #struct CloudSet
 
@@ -840,7 +836,7 @@ end #struct CloudSet
 
 External constructor for empty `CloudSet{T}`.
 """
-CloudSet{T}() where T = CloudSet{T}(CloudData{T}[], SetMetadata{T}())
+CloudSet{T}() where T = CloudSet{T}(CloudData{T}[], PrimaryMetadata{T}())
 
 """
     CloudSet(args...; kwargs...)
@@ -856,15 +852,15 @@ External `CloudSet` constructor for floating point conversions.
 """
 CloudSet{T}(cloud::CloudSet) where T = CloudSet{T}(
   CloudData{T}.(cloud.tracks),
-  SetMetadata{T}(cloud.metadata)
+  PrimaryMetadata{T}(cloud.metadata)
 )
 
 """
-    PrimarySet{T}(tracks::Vector{CloudData{T}}, metadata::SetMetadata{T}) where T
+    PrimarySet{T}(tracks::Vector{CloudData{T}}, metadata::PrimaryMetadata{T}) where T
 
 Alias constructor for CloudSet{T} unmodified constructor.
 """
-PrimarySet{T}(tracks::Vector{CloudData{T}}, metadata::SetMetadata{T}) where T =
+PrimarySet{T}(tracks::Vector{CloudData{T}}, metadata::PrimaryMetadata{T}) where T =
   CloudSet{T}(tracks, metadata)
 
 """
