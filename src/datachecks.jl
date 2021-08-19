@@ -415,8 +415,8 @@ next larger value.
 
 Vector `arr` consists of distances between coinciding coordinate pairs of different tracks.
 """
-function closest_points(arr::Vector{T}) where T<:AbstractFloat
-  m1 = argmin(arr)
+function closest_points(arr::Vector{T})::Tuple{Int,Int} where T<:Real
+  m1 = argmin(abs.(arr))
   m2 = if m1 == 1
     2
   elseif m1 == length(arr)
@@ -448,3 +448,24 @@ function lonextrema(lon::Vector{T}, rel::Function) where T
     T(NaN)
   end
 end #function lonextrema
+
+
+
+function withinbounds(area::NamedTuple, track::DataFrame)
+  (area.latmin .≤ track.lat .≤ area.latmax) .&
+    ((area.elonmin .≤ track.lon .≤ area.elonmax) .|
+    (area.wlonmin .≤ track.lon .≤ area.wlonmax))
+end #function withinbounds
+
+
+"""
+    withinbounds(area::NamedTuple) -> function (track) -> Vector{Bool}
+Generates a function that takes one argument `track` with fields `lat` and `lon` and
+compares the coordinate pairs in vectors `lat` and `lon` to the `area` bounds
+`latmin`, `latmax`, `elonmin`, `elonmax`, `wlonmin`, and `wlonmax`.
+"""
+function withinbounds(area::NamedTuple)
+  track -> (area.latmin .≤ track.lat .≤ area.latmax) .&
+    ((area.elonmin .≤ track.lon .≤ area.elonmax) .|
+    (area.wlonmin .≤ track.lon .≤ area.wlonmax))
+end #function withinbounds

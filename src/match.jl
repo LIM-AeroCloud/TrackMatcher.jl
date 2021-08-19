@@ -54,7 +54,7 @@ function find_intersections(
   track::T where T<:PrimaryTrack,
   primtracks::Vector,
   altmin::Real,
-  sat::SatData,
+  sat::SatSet,
   sectracks::Vector,
   dataset::AbstractString,
   trackID::Union{Missing,Int,AbstractString},
@@ -94,12 +94,12 @@ function find_intersections(
       # from the flex data in the flight metadata, which coincides with the flighttracks
       # For each flight segment between flex points, one interpolated flight-track exists
       tmf = interpolate_time(track.data[track.metadata.flex[n].range,:], Xf[i])
-      tms = interpolate_time(sat.data, Xs[i])
+      tms = interpolate_time(sat, st.timeindex, Xs[i])
       dt = Dates.canonicalize(Dates.CompoundPeriod(tms-tmf))
       # Skip intersections that exceed allowed time difference
       abs(tmf - tms) < Dates.Minute(maxtimediff) || continue
       # Add intersection and nearby measurements
-      counter =  track isa FlightTrack ?
+      counter = track isa FlightTrack ?
         add_intersections!(ms, Xdata, tracked, accuracy, track, sat, Xf[i], Xs[i],
           counter, id, dx, dt, tmf, tms, primspan, secspan, altmin, trackID,
           Xradius, expdist, lidarprofile, lidarrange, savedir, savesecondsattype) :
@@ -114,61 +114,42 @@ end #function find_intersections
 
 
 """
-    findoverlap(flight::FlightTrack, sat::SatDB, maxtimediff::Int, ID::Union{Missing,Int,String})
-      -> Vector{UnitRange}
+    function findoverlap(
+      primtrack::PrimaryTrack,
+      sectrack::SatSet,
+      maxtimediff::Int
+    ) -> Vector{Vector{DataFrame}}
 
-From the data of the current `flight` and `sat` data, calculate the data ranges
-in the sat data that are in the vicinity of the flight track (min/max of lat/lon).
-Consider only satellite data of ± `maxtimediff` minutes before the start and after
-the end of the flight. Use ID for warnings to identify the flight with problems.
+Find all track segments in `sectrack` that are within the time frame ± `maxtimediff`
+of the `primtrack` and within the spatial bounding box of `primtrack`.
 """
-function findoverlap(track::T where T<:PrimarySet, sat::SatData,
-  maxtimediff::Int, ID::Union{Missing,Int,String})
-
-  # Initialise
-  overlap = NamedTuple{(:range, :min, :max),Tuple{UnitRange, Real, Real}}[]
-  ## Retrieve sat data in the range ±maxtimediff minutes before and after the flight
-  # Set time span
-  t1 = findfirst(sat.data.time .≥ track.data.time[1] - Dates.Minute(maxtimediff))
-  t2 = findlast(sat.data.time .≤ track.data.time[end] + Dates.Minute(maxtimediff))
-  # return empty ranges, if no complete overlap is found
-  if isnothing(t1) || isnothing(t2)
-    @warn string("no sufficient satellite data for time index ",
-      "$(track.data.time[1] - Dates.Minute(maxtimediff))...",
-      "$(track.data.time[end] + Dates.Minute(maxtimediff))")
-    return overlap
-  elseif length(t1:t2) ≤ 1
-    @warn string("no sufficient overlap between primary/secondary trajectory for track ",
-      "$(ID) at $(sat.data.time[t1]) ... $(sat.data.time[t2])")
-    return overlap
-  end
-
-  ## Find overlaps in flight and sat data
-  satoverlap = (track.metadata.area.latmin .≤ sat.data.lat[t1:t2] .≤ track.metadata.area.latmax) .&
-    ((track.metadata.area.elonmin .≤ sat.data.lon[t1:t2] .≤ track.metadata.area.elonmax) .|
-    (track.metadata.area.wlonmin .≤ sat.data.lon[t1:t2] .≤ track.metadata.area.wlonmax))
-  # Convert boolean vector of satellite overlapping data into ranges
-  r = false # flag, whether index is part of a current range
-  ind = 0   # index in the data array, when looping over data points
-  for i = 1:length(satoverlap)
-    if satoverlap[i] && !r #First data point of a range found
-      r = true # flag as part of a range
-      ind = i  # save start index
-    elseif r && !satoverlap[i] && length(t1+ind-1:t1+i-2) > 1 # first index of non-overlapping data found
-      r = false # flag as non-overlapping data
-      # Define current track segment from saved first index to last index
-      seg = t1+ind-1:t1+i-2
-      # Find flex points at poles in sat tracks
-      xdata = track.metadata.useLON ? sat.data.lon[seg] : sat.data.lat[seg]
-      satsegments = findflex(xdata)
-      # Save current range split into segments with monotonic latitude values
-      for s in satsegments
-        length(s.range) > 1 && push!(overlap, (range = seg[s.range], min = s.min, max = s.max))
-      end
+function findoverlap(
+  primtrack::PrimaryTrack,
+  sectrack::SatSet,
+  maxtimediff::Int
+)
+  # Select granules within flight time frame ± tolerance
+  t1 = findlast(primtrack.metadata.date.start .≥ sectrack.metadata.granules.tstart)
+  t2 = findfirst(primtrack.metadata.date.stop .≤ sectrack.metadata.granules.tstop)
+    if isnothing(t1) || isnothing(t2)
+      @warn string("no sufficient satellite data for time index ",
+        "$(track.data.time[1] - Dates.Minute(maxtimediff))...",
+        "$(track.data.time[end] + Dates.Minute(maxtimediff))")
+      return DataFrame[]
     end
+  dt = t1 < t2 ? (t1:t2) : (t2:t1)
+  # Filter granules without an overlapping area
+  inarea = [!(granule.elonmin > primtrack.metadata.area.elonmax ||
+    granule.elonmax < primtrack.metadata.area.elonmin ||
+    granule.wlonmin > primtrack.metadata.area.wlonmax ||
+    granule.wlonmax < primtrack.metadata.area.wlonmin)
+    for granule in df.eachrow(sectrack.metadata.granules[t1:t2,:])]
+  segments = [granule.data for granule in sectrack.granules[dt][inarea]]
+  if size(segments, 1) ≤ 1
+    return DataFrame[]
   end
-  # Return tuple with sat ranges, and the type of sat data that was used for the calculations
-  return overlap
+  # filter granules for segments within a bounding box of the flight track
+  filter(!isempty, filter.(withinbounds(primtrack.metadata.area), segments)), dt
 end #function findoverlap
 
 
@@ -201,33 +182,38 @@ end #function interpolate_trackdata
 
 """
     function interpolate_satdata(
-      sat::SatData,
-      overlap::Vector{NamedTuple{(:range, :min, :max),Tuple{UnitRange, Real, Real}}},
+      trackdata::Vector{DataFrame},
       useLON::Bool
     ) -> Vector{Any}
 
-Using the `sat` data and the stored `overlap` ranges, construct a PCHIP polynomial
-and define the range of the x data (`min`/`max` values). X data is defined by the
-prevailing flight direction from the `useLON` flag.
+Interpolate `trackdata` with a PCHIP polynomial and define the range of the x data
+(`min`/`max` values). X data is defined by theprevailing flight direction from the
+`useLON` flag.
 """
 function interpolate_satdata(
-  sat::SatData,
-  overlap::Vector{NamedTuple{(:range, :min, :max),Tuple{UnitRange, Real, Real}}},
+  trackdata::Vector{DataFrame},
+  isat::UnitRange{Int},
   useLON::Bool
 )
   # Define x and y data based on useLON
-  x, y = useLON ?
-    (sat.data.lon, sat.data.lat) : (sat.data.lat, sat.data.lon)
+  x, y = useLON ? (:lon, :lat) : (:lat, :lon)
 
   # Interpolate satellite tracks and flight times for all segments of interest
   idata = []
   # Loop over satellite data
-  for r in overlap
-    # Interpolate track data with PCHIP and save all interpolated segments together with min/max
-    ps = pchip(x[r.range], y[r.range])
-    first(x[r.range]) < last(x[r.range]) ?
-      push!(idata, (track = interpolate(ps), min = first(x[r.range]), max = last(x[r.range]))) :
-      push!(idata, (track = interpolate(ps), min = last(x[r.range]), max = first(x[r.range])))
+  for segment in trackdata
+    # Split track in segments with monotonic x data
+    seg = findall((segment[1:end-2, x] .< segment[2:end-1, x] .> segment[3:end, x]) .|
+        (segment[1:end-2, x] .> segment[2:end-1, x] .< segment[3:end, x])) .+ 1
+    pushfirst!(seg, 1); push!(seg, size(segment, 1))
+    # Interpolate track segments with PCHIP and save all interpolated segments together with min/max
+    for i = 2:length(seg)
+      currseg = segment[seg[i-1]:seg[i], :]
+      ps = pchip(currseg[:, x], currseg[:, y])
+      x0, x1 = currseg[1, x] < currseg[end, x] ?
+        (currseg[1, x], currseg[end, x]) : (currseg[end, x], currseg[1, x])
+        push!(idata, (track = interpolate(ps), min = x0, max = x1, timeindex = isat))
+    end
   end #loop over sat ranges
 
   # Return a vector with interpolation functions for each dataset

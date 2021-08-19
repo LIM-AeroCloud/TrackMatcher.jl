@@ -111,7 +111,7 @@ struct SatData{T} <: SatTrack{T}
     standardtypes = [Vector{DateTime}, Vector{T}, Vector{T}]
     bounds = (:time => (DateTime(2006), Dates.now()), :lat => (-90,90),
       :lon => (-180,180))
-    checkbounds!(data, standardnames, standardtypes, bounds, "CLay")
+    checkcols!(data, standardnames, standardtypes, bounds, "CLay")
     new{T}(data)
   end #constructor 1 SatData
 
@@ -122,18 +122,25 @@ struct SatData{T} <: SatTrack{T}
   specified `type`. Any `remarks` can be added to the metadata.
   """
   function SatData{T}(ms::mat.MSession, file::String) where T
-    # Extract time
+    # Send file name to MATLAB
     mat.put_variable(ms, :file, file)
-    mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-    t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
-    utc = convertUTC.(t)
-    # Extract lat/lon
-    mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-    longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
-    mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-    latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
+    # Read hdf file with MATLAB
+    mat.eval_string(ms,
+    """
+    clear t longitude latitude
+    try
+      t = hdfread(file, 'Profile_UTC_Time');
+      longitude = hdfread(file, 'Longitude');
+      latitude = hdfread(file, 'Latitude');
+    end
+    data = struct('time', t(:, 2), 'lat', latitude(:, 2), 'lon', longitude(:, 2));
+    """)
+    # Retrieve data from MATLAB
+    data = mat.jdict(mat.get_mvariable(ms, :data))
+    # Convert time to UTC DateTime
+    utc = convertUTC.(data["time"])
     # instantiate new struct
-    new{T}(DataFrame(time = utc, lat = latitude, lon = longitude))
+    new{T}(DataFrame(time = utc, lat = data["lat"], lon = data["lon"]))
   end #constructor 2 SatData
 end #struct SatData
 
@@ -257,6 +264,7 @@ struct SatSet{T} <: SecondarySet{T}
     sattype = type == :CLay || type == :CPro ? string(type) :
       count(occursin.("CLay", files[1:min(length(files), 50)])) ≥
       count(occursin.("CPro", files[1:min(length(files), 50)])) ? "CLay" : "CPro"
+    type == :undef && (type = Symbol(type, sattype))
     # Select files of type based on file name
     satfiles = files[occursin.(sattype, basename.(files))]
     wrongtype = length(files) - length(satfiles)
@@ -407,13 +415,13 @@ struct CLay{T} <: ObservationSet{T}
   function CLay{T}(
     ms::mat.MSession,
     files::Vector{String},
-    timespan::NamedTuple{(:min,:max), Tuple{DateTime,DateTime}},
+    timeindex::Vector{UnitRange{Int}},
     lidarrange::Tuple{Real,Real}=(15_000,-Inf),
     altmin::Real=5000,
     saveobs::Union{String,Bool}="abs"
   ) where T
     # Return default empty struct if files are empty
-    (isempty(files) || saveobs === false || isempty(saveobs)) && return CLay{T}()
+    (isempty(files) || saveobs === false || isempty(saveobs)) && CLay()
     # Initialise arrays
     # essential data
     utc = Vector{Vector{DateTime}}(undef, length(files))
@@ -431,40 +439,55 @@ struct CLay{T} <: ObservationSet{T}
     averaging = Vector{Vector{Vector{Int}}}(undef,length(files))
     # Loop over files
     for (i, file) in enumerate(files)
-      ## Retrieve cloud layer data; assumes faulty files are filtered by SatData
-      # Extract time
+      # Send file name to MATLAB
       mat.put_variable(ms, :file, file)
-      mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-      utc[i] = convertUTC.(mat.jarray(mat.get_mvariable(ms, :t))[:,2])
-      timeindex = findall(timespan.min .≤ utc[i] .≤ timespan.max)
-      utc[i] = utc[i][timeindex]
-      # Extract lat/lon
-      mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-      lon[i] = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2][timeindex]
-      mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-      lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2][timeindex]
-      # Save time converted to UTC and lat/lon
-      # utc[i], lon[i], lat[i] = convertUTC.(t), longitude, latitude
+      # Read hdf file with MATLAB
+      mat.eval_string(ms,
+        """
+        clear t longitude latitude basealt topalt ...
+          FCF FOD IWPath LTT Htropo daynight average
+        try
+          t = hdfread(file, 'Profile_UTC_Time');
+          t = t(:, 2);
+          longitude = hdfread(file, 'Longitude');
+          longitude = longitude(:, 2);
+          latitude = hdfread(file, 'Latitude');
+          latitude = latitude(:, 2);
+          basealt = hdfread(file, 'Layer_Base_Altitude');
+          topalt = hdfread(file, 'Layer_Top_Altitude');
+          FCF = hdfread(file, 'Feature_Classification_Flags');
+          FOD = hdfread(file, 'Feature_Optical_Depth_532');
+          IWPath = hdfread(file, 'Ice_Water_Path');
+          LTT = hdfread(file, 'Layer_Top_Temperature');
+          Htropo = hdfread(file, 'Tropopause_Height');
+          daynight = hdfread(file, 'Day_Night_Flag');
+          average = hdfread(file, 'Horizontal_Averaging');
+        end
 
-      ## Extract layer top/base, layer features and optical depth from hdf files
-      mat.eval_string(ms, "clear basealt\ntry\nbasealt = hdfread(file, 'Layer_Base_Altitude');\nend")
-      Lbase = 1000mat.jarray(mat.get_mvariable(ms, :basealt))[timeindex,:]
-      mat.eval_string(ms, "clear topalt\ntry\ntopalt = hdfread(file, 'Layer_Top_Altitude');\nend")
-      Ltop = 1000mat.jarray(mat.get_mvariable(ms, :topalt))[timeindex,:]
-      mat.eval_string(ms, "clear FCF\ntry\nFCF = hdfread(file, 'Feature_Classification_Flags');\nend")
-      FCF = mat.jarray(mat.get_mvariable(ms, :FCF))[timeindex,:]
-      mat.eval_string(ms, "clear FOD\ntry\nFOD = hdfread(file, 'Feature_Optical_Depth_532');\nend")
-      FOD = mat.jarray(mat.get_mvariable(ms, :FOD))[timeindex,:]
-      mat.eval_string(ms, "clear IWPath\ntry\nIWPath = hdfread(file, 'Ice_Water_Path');\nend")
-      IWPath = mat.jarray(mat.get_mvariable(ms, :IWPath))[timeindex,:]
-      mat.eval_string(ms, "clear LTT\ntry\nLTT = hdfread(file, 'Layer_Top_Temperature');\nend")
-      LTT = mat.jarray(mat.get_mvariable(ms, :LTT))[timeindex,:]
-      mat.eval_string(ms, "clear Htropo\ntry\nHtropo = hdfread(file, 'Tropopause_Height');\nend")
-      Htropo[i] = 1000vec(mat.jarray(mat.get_mvariable(ms, :Htropo)))[timeindex]
-      mat.eval_string(ms, "clear daynight\ntry\ndaynight = hdfread(file, 'Day_Night_Flag');\nend")
-      night[i] = Bool.(vec(mat.jarray(mat.get_mvariable(ms, :daynight))))[timeindex]
-      mat.eval_string(ms, "clear average\ntry\naverage = hdfread(file, 'Horizontal_Averaging');\nend")
-      horav = mat.jarray(mat.get_mvariable(ms, :average))[timeindex,:]
+        data = struct('time', t, 'lat', latitude, 'lon', longitude, ...
+          'LB', basealt, 'LT', topalt, 'FCF', FCF, 'FOD', FOD, 'IWP', IWPath, ...
+          'LTT', LTT, 'Htropo', Htropo, 'daynight', daynight, 'average', average);
+        """
+      )
+
+      # Get data from MATLAB
+      data = mat.jdict(mat.get_mvariable(ms, :data))
+      # Convert time to UTC DateTime
+      utc[i] = convertUTC.(data["time"])
+      utc[i] = utc[i][timeindex[i]]
+      # Extract lat/lon
+      lat[i], lon[i] = data["lat"][timeindex[i]], data["lon"][timeindex[i]]
+
+      ## Extract non-essential information from satellite files
+      Ltop, Lbase = 1000data["LT"][timeindex[i],:], 1000data["LB"][timeindex[i],:]
+      FCF = data["FCF"][timeindex[i],:]
+      FOD = data["FOD"][timeindex[i],:]
+      IWPath = data["IWP"][timeindex[i],:]
+      LTT = data["LTT"][timeindex[i],:]
+      Htropo[i] = 1000data["Htropo"][timeindex[i]]
+      night[i] = Bool.(data["daynight"][timeindex[i]])
+      horav = data["average"][timeindex[i]]
+
       # Loop over data and convert to TrackMatcher format
       Lt = Vector{Vector{T}}(undef,length(utc[i]))
       Lb = Vector{Vector{T}}(undef,length(utc[i]))
@@ -584,7 +607,7 @@ struct CPro{T} <: ObservationSet{T}
       :temp => (-120,60), :pressure => (1,1086), :rH => (0,1.5), :IWC => (0,0.54),
       :deltap => (0,1), :CADscore => (-101,106))
     checkcols!(data, standardnames, standardtypes, bounds, "CPro")
-    new(data)
+    new{T}(data)
   end #constructor 1 CPro
 
   """
@@ -594,7 +617,7 @@ struct CPro{T} <: ObservationSet{T}
   function CPro{T}(
     ms::mat.MSession,
     files::Vector{String},
-    timespan::NamedTuple{(:min,:max), Tuple{DateTime,DateTime}},
+    timeindex::Vector{UnitRange{Int}},
     lidarprofile::NamedTuple,
     saveobs::Union{String,Bool}="abs"
   ) where T
@@ -619,35 +642,53 @@ struct CPro{T} <: ObservationSet{T}
     # Loop over files with cloud profile data
     for (i, file) in enumerate(files)
       ## Retrieve cloud profile data; assumes faulty files are filtered by SatData
-      # Extract time
       mat.put_variable(ms, :file, file)
-      mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-      utc[i] = convertUTC.(mat.jarray(mat.get_mvariable(ms, :t))[:,2])
-      timeindex = findall(timespan.min .≤ utc[i] .≤ timespan.max)
-      utc[i] = utc[i][timeindex]
-      # Extract lat/lon
-      mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-      lon[i] = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2][timeindex]
-      mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-      lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2][timeindex]
-      fcf[i] = get_lidarcolumn(UInt16, ms, "Atmospheric_Volume_Description", lidarprofile,
-        coarse=false)[timeindex]
+      mat.eval_string(ms,
+        """
+        clear t longitude latitude
+        try
+          t = hdfread(file, 'Profile_UTC_Time');
+          t = t(:, 2);
+          longitude = hdfread(file, 'Longitude');
+          longitude = longitude(:, 2);
+          latitude = hdfread(file, 'Latitude');
+          latitude = latitude(:, 2);
+          FCF = hdfread(file, 'Atmospheric_Volume_Description');
+          EC532 = hdfread(file, 'Extinction_Coefficient_532');
+          Htropo = hdfread(file, 'Tropopause_Height');
+          temp = hdfread(file, 'Temperature');
+          pres = hdfread(file, 'Pressure');
+          rH = hdfread(file, 'Relative_Humidity');
+          IWC = hdfread(file, 'Ice_Water_Content_Profile');
+          deltap = hdfread(file, 'Particulate_Depolarization_Ratio_Profile_532');
+          CAD = hdfread(file, 'CAD_Score');
+          daynight = hdfread(file, 'Day_Night_Flag');
+        end
+
+        data = struct('time', t, 'lat', latitude, 'lon', longitude, ...
+          'FCF', FCF, 'EC532', EC532, 'Htropo', Htropo, 'temp', temp, 'pres', pres, ...
+          'rH', rH, 'IWC', IWC, 'deltap', deltap, 'CAD', CAD, 'daynight', daynight);
+        """
+      )
+      # Get data from MATLAB
+      data = mat.jdict(mat.get_mvariable(ms, :data))
+      # Convert time to UTC DateTime
+      utc[i] = convertUTC.(data["time"])
+      utc[i] = utc[i][timeindex[i]]
+      # Extract essential data
+      lat[i], lon[i] = data["lat"][timeindex[i]], data["lon"][timeindex[i]]
+      fcf[i] = get_lidarcolumn(UInt16, data["FCF"], lidarprofile, coarse=false)[timeindex[i]]
       # Extract non-essential data
-      ec532[i] = get_lidarcolumn(T, ms, "Extinction_Coefficient_532", lidarprofile,
-        missingvalues = -9999)[timeindex]
-      mat.eval_string(ms, "clear Htropo\ntry\nHtropo = hdfread(file, 'Tropopause_Height');\nend")
-      Htropo[i] = 1000vec(mat.jarray(mat.get_mvariable(ms, :Htropo)))[timeindex]
-      temp[i] = get_lidarcolumn(T, ms, "Temperature", lidarprofile, missingvalues = -9999)[timeindex]
-      pres[i] = get_lidarcolumn(T, ms, "Pressure", lidarprofile, missingvalues = -9999)[timeindex]
-      rH[i] = get_lidarcolumn(T, ms, "Relative_Humidity", lidarprofile, missingvalues = -9999)[timeindex]
-      iwc[i] = get_lidarcolumn(T, ms, "Ice_Water_Content_Profile", lidarprofile,
-        missingvalues = -9999)[timeindex]
-      deltap[i] = get_lidarcolumn(T, ms, "Particulate_Depalarization_Ratio_Profile_532",
-        lidarprofile, missingvalues = -9999)[timeindex]
-      cad[i] = get_lidarcolumn(Int8, ms, "CAD_Score", lidarprofile, coarse=false,
-        missingvalues = -127)[timeindex]
-      mat.eval_string(ms, "clear daynight\ntry\ndaynight = hdfread(file, 'Day_Night_Flag');\nend")
-      night[i] = Bool.(vec(mat.jarray(mat.get_mvariable(ms, :daynight))))[timeindex]
+      ec532[i] = get_lidarcolumn(T, data["EC532"], lidarprofile, missingvalues = -9999)[timeindex[i]]
+      Htropo[i] = 1000data["Htropo"][timeindex[i]]
+      temp[i] = get_lidarcolumn(T, data["temp"], lidarprofile, missingvalues = -9999)[timeindex[i]]
+      pres[i] = get_lidarcolumn(T, data["pres"], lidarprofile, missingvalues = -9999)[timeindex[i]]
+      rH[i] = get_lidarcolumn(T, data["rH"], lidarprofile, missingvalues = -9999)[timeindex[i]]
+      iwc[i] = get_lidarcolumn(T, data["IWC"], lidarprofile, missingvalues = -9999)[timeindex[i]]
+      deltap[i] = get_lidarcolumn(T, data["deltap"], lidarprofile, missingvalues = -9999)[timeindex[i]]
+      cad[i] = get_lidarcolumn(Int8, data["CAD"], lidarprofile, coarse=false,
+        missingvalues = -127)[timeindex[i]]
+      night[i] = Bool.(data["daynight"])[timeindex[i]]
     end #loop over files
 
     # Rearrange time vector and get time range
@@ -669,7 +710,7 @@ struct CPro{T} <: ObservationSet{T}
       temp=[temp...;], pressure = [pres...;], rH = [rH...;],
       IWC = [iwc...;], deltap = [deltap...;],
       CADscore = [cad...;], night = [night...;])
-    # Save time, lat/lon arrays, and feature classification flags (FCF) in CPro struct
+    # Instantiate new struct
     new{T}(data)
   end #constructor 2 CPro
 end #struct CPro

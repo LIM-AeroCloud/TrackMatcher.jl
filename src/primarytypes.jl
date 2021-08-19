@@ -401,7 +401,7 @@ struct FlightData{T} <: FlightTrack{T}
       Vector{<:Union{Missing,<:T}}]
     bounds = (:lat => (-90, 90), :lon => (-180, 180), :alt => (0,Inf),
       :heading => (0, 360), :speed => (0, Inf))
-    click(data, standardnames, standardtypes, bounds,
+    checkcols!(data, standardnames, standardtypes, bounds,
       metadata.source, metadata.dbID)
     new{T}(data,metadata)
   end #constructor 1 FlightData
