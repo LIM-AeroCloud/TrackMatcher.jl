@@ -94,14 +94,14 @@ function find_intersections(
       # from the flex data in the flight metadata, which coincides with the flighttracks
       # For each flight segment between flex points, one interpolated flight-track exists
       tmf = interpolate_time(track.data[track.metadata.flex[n].range,:], Xf[i])
-      tms = interpolate_time(sat, st.timeindex, Xs[i])
+      tms, obsindex = interpolate_time(sat, st.timeindex, Xs[i])
       dt = Dates.canonicalize(Dates.CompoundPeriod(tms-tmf))
       # Skip intersections that exceed allowed time difference
       abs(tmf - tms) < Dates.Minute(maxtimediff) || continue
       # Add intersection and nearby measurements
       counter = track isa FlightTrack ?
         add_intersections!(ms, Xdata, tracked, accuracy, track, sat, Xf[i], Xs[i],
-          counter, id, dx, dt, tmf, tms, primspan, secspan, altmin, trackID,
+          obsindex, counter, id, dx, dt, tmf, tms, primspan, secspan, altmin, trackID,
           Xradius, expdist, lidarprofile, lidarrange, savedir, savesecondsattype) :
         add_intersections!(ms, Xdata, tracked, accuracy, sat, Xf[i], Xs[i],
           counter, id, dx, dt, tmf, tms, secspan, altmin, trackID,
@@ -126,7 +126,8 @@ of the `primtrack` and within the spatial bounding box of `primtrack`.
 function findoverlap(
   primtrack::PrimaryTrack,
   sectrack::SatSet,
-  maxtimediff::Int
+  maxtimediff::Int,
+  atol::Real=0.1
 )
   # Select granules within flight time frame ± tolerance
   t1 = findlast(primtrack.metadata.date.start .≥ sectrack.metadata.granules.tstart)
@@ -139,17 +140,14 @@ function findoverlap(
     end
   dt = t1 < t2 ? (t1:t2) : (t2:t1)
   # Filter granules without an overlapping area
-  inarea = [!(granule.elonmin > primtrack.metadata.area.elonmax ||
-    granule.elonmax < primtrack.metadata.area.elonmin ||
-    granule.wlonmin > primtrack.metadata.area.wlonmax ||
-    granule.wlonmax < primtrack.metadata.area.wlonmin)
+  inarea = [!(granule.elonmin - atol > primtrack.metadata.area.elonmax ||
+    granule.elonmax + atol < primtrack.metadata.area.elonmin ||
+    granule.wlonmin - atol > primtrack.metadata.area.wlonmax ||
+    granule.wlonmax + atol < primtrack.metadata.area.wlonmin)
     for granule in df.eachrow(sectrack.metadata.granules[t1:t2,:])]
   segments = [granule.data for granule in sectrack.granules[dt][inarea]]
-  if size(segments, 1) ≤ 1
-    return DataFrame[]
-  end
   # filter granules for segments within a bounding box of the flight track
-  filter(!isempty, filter.(withinbounds(primtrack.metadata.area), segments)), dt
+  filter(df -> size(df, 1) > 1, filter.(withinbounds(primtrack.metadata.area, atol), segments)), dt
 end #function findoverlap
 
 

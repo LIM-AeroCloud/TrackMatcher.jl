@@ -451,21 +451,34 @@ end #function lonextrema
 
 
 
-function withinbounds(area::NamedTuple, track::DataFrame)
-  (area.latmin .≤ track.lat .≤ area.latmax) .&
-    ((area.elonmin .≤ track.lon .≤ area.elonmax) .|
-    (area.wlonmin .≤ track.lon .≤ area.wlonmax))
+"""
+    withinbounds(area::NamedTuple, track, atol::Real=0.1) -> Vector{Bool}
+
+Compares the coordinate pairs in columns `lat` and `lon` of the `DataFrame` `track`
+to the `area` bounds `latmin`, `latmax`, `elonmin`, `elonmax`, `wlonmin`, and `wlonmax`
+of the given `area`. Coordinates are allowed to exceed the `area` by `atol` degrees.
+"""
+function withinbounds(area::NamedTuple, track, atol::Real=0.1)
+  if isnan(area.elonmin) || isnan(area.elonmax)
+    (area.latmin - atol .≤ track.lat .≤ area.latmax + atol) .&
+    (area.wlonmin - atol .≤ track.lon .≤ area.wlonmax + atol)
+  elseif isnan(area.wlonmin) || isnan(area.wlonmax)
+    (area.latmin - atol .≤ track.lat .≤ area.latmax + atol) .&
+    (area.elonmin - atol .≤ track.lon .≤ area.elonmax + atol)
+  else
+    (area.latmin - atol .≤ track.lat .≤ area.latmax + atol) .&
+    ((area.elonmin - atol .≤ track.lon .≤ area.elonmax + atol) .|
+    (area.wlonmin - atol .≤ track.lon .≤ area.wlonmax + atol))
+  end
 end #function withinbounds
 
 
 """
-    withinbounds(area::NamedTuple) -> function (track) -> Vector{Bool}
-Generates a function that takes one argument `track` with fields `lat` and `lon` and
-compares the coordinate pairs in vectors `lat` and `lon` to the `area` bounds
-`latmin`, `latmax`, `elonmin`, `elonmax`, `wlonmin`, and `wlonmax`.
+    withinbounds(area::NamedTuple, atol::Real=0.1) -> function (track) -> Vector{Bool}
+
+Generates a function that takes a `DataFrame` `track` with columns `lat` and `lon`
+and compares the coordinate pairs in columns `lat` and `lon` to the boundaries
+`latmin`, `latmax`, `elonmin`, `elonmax`, `wlonmin`, and `wlonmax` of the given
+`area`. Coordinates are allowed to exceed the `area` by `atol` degrees.
 """
-function withinbounds(area::NamedTuple)
-  track -> (area.latmin .≤ track.lat .≤ area.latmax) .&
-    ((area.elonmin .≤ track.lon .≤ area.elonmax) .|
-    (area.wlonmin .≤ track.lon .≤ area.wlonmax))
-end #function withinbounds
+withinbounds(area::NamedTuple, atol::Real=0.1) = track -> withinbounds(area, track, atol)

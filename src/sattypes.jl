@@ -436,7 +436,7 @@ struct CLay{T} <: ObservationSet{T}
     Ttop = Vector{Vector{Vector{T}}}(undef,length(files))
     Htropo = Vector{Vector{T}}(undef, length(files))
     night = Vector{BitVector}(undef, length(files))
-    averaging = Vector{Vector{Vector{Int}}}(undef,length(files))
+    averaging = Vector{Vector{Int}}(undef,length(files))
     # Loop over files
     for (i, file) in enumerate(files)
       # Send file name to MATLAB
@@ -486,7 +486,7 @@ struct CLay{T} <: ObservationSet{T}
       LTT = data["LTT"][timeindex[i],:]
       Htropo[i] = 1000data["Htropo"][timeindex[i]]
       night[i] = Bool.(data["daynight"][timeindex[i]])
-      horav = data["average"][timeindex[i]]
+      averaging[i] = data["average"][timeindex[i]]
 
       # Loop over data and convert to TrackMatcher format
       Lt = Vector{Vector{T}}(undef,length(utc[i]))
@@ -495,13 +495,12 @@ struct CLay{T} <: ObservationSet{T}
       optdepth = Vector{Vector{T}}(undef,length(utc[i]))
       icewater = Vector{Vector{Union{Missing,T}}}(undef,length(utc[i]))
       toptemp = Vector{Vector{T}}(undef,length(utc[i]))
-      average = Vector{Vector{Int}}(undef,length(utc[i]))
       for n = 1:length(utc[i])
         l = findall((Lbase[n,:] .> 0) .& (Ltop[n,:] .> 0) .& (Lbase[n,:] .< lidarrange[1]) .&
           (Ltop[n,:] .> lidarrange[2]) .& (Ltop[n,:] .> altmin))
-        Lt[n], Lb[n], atm[n], optdepth[n], toptemp[n], icewater[n], average[n] =
+        Lt[n], Lb[n], atm[n], optdepth[n], toptemp[n], icewater[n] =
           if isempty(l)
-            T[], T[], Symbol[], T[], T[], T[], Int[]
+            T[], T[], Symbol[], T[], T[], T[]
           else
             l = findall((Lbase[n,:] .> 0) .& (Ltop[n,:] .> 0) .& (Lbase[n,:] .< lidarrange[1]) .&
               (Ltop[n,:] .> lidarrange[2]))
@@ -509,12 +508,11 @@ struct CLay{T} <: ObservationSet{T}
             [feature_classification(classification(FCF[n,m])...) for m in l],
             [FOD[n,m] for m in l],
             [LTT[n,m] for m in l],
-            [IWPath[n,m] == -9999 ? missing : IWPath[n,m] for m in l],
-            [horav[n,m] for m in l]
+            [IWPath[n,m] == -9999 ? missing : IWPath[n,m] for m in l]
           end
       end # loop over time steps in current file
-      LayTop[i], LayBase[i], Atmosph[i], OD[i], IWP[i], Ttop[i], averaging[i] =
-        Lt, Lb, atm, optdepth, icewater, toptemp, average
+      LayTop[i], LayBase[i], Atmosph[i], OD[i], IWP[i], Ttop[i] =
+        Lt, Lb, atm, optdepth, icewater, toptemp
     end #loop over files
 
     # Construct and standardise data

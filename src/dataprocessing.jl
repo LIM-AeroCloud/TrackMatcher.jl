@@ -139,6 +139,7 @@ function add_intersections!(
   sat::SatSet,
   Xf::Tuple{T,T},
   Xs::Tuple{T,T},
+  obsindex::NamedTuple{(:file,:time),Tuple{Int,Int}},
   counter::Int,
   id::String,
   dx::T,
@@ -159,7 +160,7 @@ function add_intersections!(
   # Extract the DataFrame rows of the sat/flight data near the intersection
   Xflight, ift = get_flightdata(track, Xf, primspan, saveobs)
   alt = ift == 0 ? NaN : Xflight.data.alt[ift]
-  cpro, clay, atmos, ist = get_satdata(ms, sat, fileindex, timeindex, secspan, alt, altmin,
+  cpro, clay, atmos, ist = get_satdata(ms, sat, obsindex, secspan, tms, alt, altmin,
     trackID, lidarprofile, lidarrange, saveobs, savesecondsattype, T)
   Xsat = contains(string(sat.metadata.type), "CPro") ? cpro.data : clay.data
   # Calculate accuracies (unless data is not saved, i.e. savedir = false)
@@ -284,12 +285,11 @@ The `sat` data may be smaller than the `dataspan` at the edges of the `sat` `Dat
 """
 function find_timespan(
   sat::SatSet,
-  fileindex::Int,
-  timeindex::Int,
+  obsindex::NamedTuple{(:file,:time),Tuple{Int,Int}},
   dataspan::Int=15
 )
   # Initialise
-  irow, ifile, ispan = timeindex, fileindex, dataspan
+  irow, ifile, ispan = obsindex.time, obsindex.file, dataspan
   nstart, nstop, nfile = Int[], Int[], Int[ifile]
   # Find file and time indices in granules prior to the intersection
   while irow - ispan < 0
@@ -303,7 +303,7 @@ function find_timespan(
     pushfirst!(nfile, ifile)
   end
   # Reset row and file indices and dataspan
-  irow, ifile, ispan = timeindex, fileindex, dataspan
+  irow, ifile, ispan = obsindex.time, obsindex.file, dataspan
   # Process granule with intersection
   isempty(nstart) ? push!(nstart, irow - ispan) : push!(nstart, 1)
   len = size(sat.granules[ifile].data, 1)
@@ -435,9 +435,9 @@ as defined by `Float`.
 function get_satdata(
   ms::mat.MSession,
   sat::SatSet,
-  fileindex::Int,
-  timeindex::Int,
+  obsindex::NamedTuple{(:file,:time),Tuple{Int,Int}},
   timespan::Int,
+  tms::DateTime,
   flightalt::Real,
   altmin::Real,
   flightid::Union{Int,String},
@@ -448,7 +448,7 @@ function get_satdata(
   Float::DataType=Float32
 )
   # Retrieve DataFrame at Intersection ± maxtimediff time steps
-  obsindex = find_timespan(sat, fileindex, timeindex, timespan)
+  obsindex = find_timespan(sat, obsindex, timespan)
   primfiles = sat.metadata.granules.file[obsindex.file]
   secfiles = if contains(string(sat.metadata.type), "CPro") && savesecondtype
     replace.(primfiles, "CPro" => "CLay")
@@ -479,12 +479,12 @@ function get_satdata(
   end
 
   # Get meteorological conditions at the intersection
-  if contains(string(sat.metadata.type), "CPro")
-    ts = findfirst(sat.granules[fileindex].data.time[timeindex] .== cpro.data.time)
-    atmos = atmosphericinfo(cpro, lidarprofile.fine, ts, flightalt, flightid)
+  ts = !isempty(cpro.data) ?
+    argmin(abs.(cpro.data.time .- tms)) : argmin(abs.(clay.data.time .- tms))
+  atmos = if contains(string(sat.metadata.type), "CPro")
+    atmosphericinfo(cpro, lidarprofile.fine, ts, flightalt, flightid)
   else
-    ts = findfirst(sat.granules[fileindex].data.time[timeindex] .== clay.data.time)
-    atmos = atmosphericinfo(clay, flightalt, ts)
+    atmosphericinfo(clay, flightalt, ts)
   end
   # Return observations
   return cpro, clay, atmos, ts
@@ -540,8 +540,11 @@ function interpolate_time(
   dt = data.time[index[2]] - data.time[index[1]]
   # Get interpolated time
   ti = round(data.time[index[1]] + Dates.Millisecond(round(dx/d*dt.value)), Dates.Second)
+  # Find file and row index of closest point to intersection
+  i0 = fileindex[1] - 1 + findfirst(sat.metadata.granules.tstart[fileindex] .≤ ti .≤ sat.metadata.granules.tstop[fileindex])
+  t0 = index[1] - sum([size(s.data, 1) for s in sat.granules[fileindex[1]:i0-1]], init=0)
   # Return interpolated time and indices of closest point
-  return ti
+  return ti, (file = i0, time = t0)
 end #function interpolate_time
 
 

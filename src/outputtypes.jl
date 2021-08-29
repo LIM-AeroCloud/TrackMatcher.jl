@@ -275,6 +275,7 @@ struct XData{T} <: Intersection{T}
     stepwidth::Real=0.01,
     Xradius::Real=20_000,
     expdist::Real=Inf,
+    atol::Real=0.1,
     savedir::Union{String,Bool}="abs",
     remarks=nothing
   ) where T
@@ -301,7 +302,7 @@ struct XData{T} <: Intersection{T}
       ID = track isa FlightTrack ? trackdata[i].metadata.dbID : trackdata[i].metadata.ID
       try
         # Find sat tracks in the vicinity of flight tracks, where intersections are possible
-        overlap, isat = findoverlap(track, sat, maxtimediff)
+        overlap, isat = findoverlap(track, sat, maxtimediff, atol)
         if isempty(overlap)
           pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
             (:featured, length(Xdata.id[.!ismissing.(Xdata.atmos_state) .&
