@@ -228,9 +228,10 @@ function add_intersections!(
   Xdata::DataFrame,
   tracked::DataFrame,
   accuracy::DataFrame,
-  sat::SatData,
+  sat::SatSet,
   Xf::Tuple{T,T},
   Xs::Tuple{T,T},
+  obsindex::NamedTuple{(:file,:time),Tuple{Int,Int}},
   counter::Int,
   id::String,
   dx::T,
@@ -250,7 +251,7 @@ function add_intersections!(
   NA = T(NaN) # set precision of NaNs according to Float
   # Don't save additional cloud data near intersections at the moment
   Xcloud, ift = FlightTrack{T}(), 0
-  cpro, clay, atmos, ist = get_satdata(ms, sat, Xs, secspan, NA, altmin,
+  cpro, clay, atmos, ist = get_satdata(ms, sat, obsindex, secspan, tms, NA, altmin,
     trackID, lidarprofile, lidarrange, saveobs, savesecondsattype, T)
   Xsat = contains(string(sat.metadata.type), "CPro") ? cpro.data : clay.data
   # Calculate accuracies

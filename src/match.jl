@@ -104,7 +104,7 @@ function find_intersections(
           obsindex, counter, id, dx, dt, tmf, tms, primspan, secspan, altmin, trackID,
           Xradius, expdist, lidarprofile, lidarrange, savedir, savesecondsattype) :
         add_intersections!(ms, Xdata, tracked, accuracy, sat, Xf[i], Xs[i],
-          counter, id, dx, dt, tmf, tms, secspan, altmin, trackID,
+          obsindex, counter, id, dx, dt, tmf, tms, secspan, altmin, trackID,
           Xradius, expdist, lidarprofile, lidarrange, savedir, savesecondsattype)
     end #loop over intersections of current flight
   end #loop over flight and sat tracks
@@ -136,7 +136,7 @@ function findoverlap(
       @warn string("no sufficient satellite data for time index ",
         "$(track.data.time[1] - Dates.Minute(maxtimediff))...",
         "$(track.data.time[end] + Dates.Minute(maxtimediff))")
-      return DataFrame[]
+      return DataFrame[], 0:-1
     end
   dt = t1 < t2 ? (t1:t2) : (t2:t1)
   # Filter granules without an overlapping area

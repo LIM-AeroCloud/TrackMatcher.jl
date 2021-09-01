@@ -714,7 +714,7 @@ struct CloudData{T} <: PrimaryTrack{T}
     standardnames = ["time", "lat", "lon"]
     standardtypes = [Union{DateTime,Vector{DateTime}}, Vector{T}, Vector{T}]
     bounds = (:lat => (-90, 90), :lon => (-180, 180))
-    click(data, standardnames, standardtypes, bounds, "CloudTrack", metadata.ID)
+    checkcols!(data, standardnames, standardtypes, bounds, "CloudTrack", metadata.ID)
     new{T}(data,metadata)
   end #constructor 1 CloudTrack
 end #struct CloudTrack
@@ -795,6 +795,7 @@ struct CloudSet{T} <: PrimarySet{T}
   function CloudSet{T}(
     folders::String...;
     savedir::Union{String,Bool}="abs",
+    structname::String="cloud",
     remarks=nothing
   ) where T
     # Return empty CloudSet, if no folders are passed to constructor
@@ -812,7 +813,7 @@ struct CloudSet{T} <: PrimarySet{T}
     files = convertdir.(files, savedir)
 
     # Load cloud tracks from mat files into TrackMatcher in Julia format
-    tracks = loadCloudTracks(files...; Float=T)
+    tracks = loadCloudTracks(files...; structname, Float=T)
     # Calculate load time
     tend = Dates.now()
     tc = tz.ZonedDateTime(tend, tz.localzone())

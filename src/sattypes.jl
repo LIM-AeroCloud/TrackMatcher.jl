@@ -229,7 +229,7 @@ struct SatSet{T} <: SecondarySet{T}
   metadata::SecondaryMetadata{T}
 
   """ Unmodified constructor for `SatData` with basic checks for correct `data`"""
-  function SatSet{T}(granules::Vector{SatData}, metadata::SecondaryMetadata{T}) where T
+  function SatSet{T}(granules::Vector{SatData{T}}, metadata::SecondaryMetadata{T}) where T
     # Ensure floats of correct precision
     convertFloats!.(granules, T)
     # Check for correct column names and data types
