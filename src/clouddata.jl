@@ -8,6 +8,7 @@ Set the floating point precision to `Float` (default: `Float32`).
 """
 function loadCloudTracks(
   files::String...;
+  structname::String="cloud",
   Float::DataType=Float32
 )
   # Initialise
@@ -15,7 +16,7 @@ function loadCloudTracks(
   # Loop over all mat files
   @pm.showprogress 1 "load cloud tracks..." for (i, file) in enumerate(files)
     # Read data from mat files
-    t, lonlat = readMAT(file)
+    t, lonlat = readMAT(file, structname)
     # Store data in Julia format as Vector of CloudTrack structs
     storeMAT!(tracks, t, lonlat, i, file; Float)
   end #loop over files
@@ -29,11 +30,11 @@ end #function loadCloudTracks
 
 Read cloud track data from a mat `file`.
 """
-function readMAT(file::String)
+function readMAT(file::String, structname::String="cloud")
   # Send file name to MATLAB
   data = MAT.matread(file)
-  t = vec(data["cloud"]["timestamp"])
-  lonlat = vec(data["cloud"]["centrLonLat"])
+  t = vec(data[structname]["timestamp"])
+  lonlat = vec(data[structname]["centrLonLat"])
   return t, lonlat
 end
 

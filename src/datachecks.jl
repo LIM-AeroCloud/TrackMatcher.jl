@@ -415,8 +415,8 @@ next larger value.
 
 Vector `arr` consists of distances between coinciding coordinate pairs of different tracks.
 """
-function closest_points(arr::Vector{T}) where T<:AbstractFloat
-  m1 = argmin(arr)
+function closest_points(arr::Vector{T})::Tuple{Int,Int} where T<:Real
+  m1 = argmin(abs.(arr))
   m2 = if m1 == 1
     2
   elseif m1 == length(arr)
@@ -428,3 +428,57 @@ function closest_points(arr::Vector{T}) where T<:AbstractFloat
   end
   return m1, m2
 end #function closest_points
+
+
+"""
+    lonextrema(lon::Vector{T}, rel::Function) where T
+
+Find extrema in `lon`gitude values for eastern and western hemisphere by defining
+`rel` as `>` or `<` 0 filtering for the respective longitude values.
+"""
+function lonextrema(lon::Vector{T}, rel::Function) where T
+  # Return minimum or NaN for non-existing track data in current hemisphere
+  try minimum(filter(rel(0), lon))
+  catch
+    T(NaN)
+  end,
+  # Return maximum or NaN for non-existing track data in current hemisphere
+  try maximum(filter(rel(0), lon))
+  catch
+    T(NaN)
+  end
+end #function lonextrema
+
+
+
+"""
+    withinbounds(area::NamedTuple, track, atol::Real=0.1) -> Vector{Bool}
+
+Compares the coordinate pairs in columns `lat` and `lon` of the `DataFrame` `track`
+to the `area` bounds `latmin`, `latmax`, `elonmin`, `elonmax`, `wlonmin`, and `wlonmax`
+of the given `area`. Coordinates are allowed to exceed the `area` by `atol` degrees.
+"""
+function withinbounds(area::NamedTuple, track, atol::Real=0.1)
+  if isnan(area.elonmin) || isnan(area.elonmax)
+    (area.latmin - atol .≤ track.lat .≤ area.latmax + atol) .&
+    (area.wlonmin - atol .≤ track.lon .≤ area.wlonmax + atol)
+  elseif isnan(area.wlonmin) || isnan(area.wlonmax)
+    (area.latmin - atol .≤ track.lat .≤ area.latmax + atol) .&
+    (area.elonmin - atol .≤ track.lon .≤ area.elonmax + atol)
+  else
+    (area.latmin - atol .≤ track.lat .≤ area.latmax + atol) .&
+    ((area.elonmin - atol .≤ track.lon .≤ area.elonmax + atol) .|
+    (area.wlonmin - atol .≤ track.lon .≤ area.wlonmax + atol))
+  end
+end #function withinbounds
+
+
+"""
+    withinbounds(area::NamedTuple, atol::Real=0.1) -> function (track) -> Vector{Bool}
+
+Generates a function that takes a `DataFrame` `track` with columns `lat` and `lon`
+and compares the coordinate pairs in columns `lat` and `lon` to the boundaries
+`latmin`, `latmax`, `elonmin`, `elonmax`, `wlonmin`, and `wlonmax` of the given
+`area`. Coordinates are allowed to exceed the `area` by `atol` degrees.
+"""
+withinbounds(area::NamedTuple, atol::Real=0.1) = track -> withinbounds(area, track, atol)

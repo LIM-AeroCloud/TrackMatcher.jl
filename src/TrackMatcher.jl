@@ -11,7 +11,7 @@ tracks and room for further applications in geosciences.
 DataSet──Data
 ├─MeasuredSet──MeasuredData
 │ ├─PrimarySet
-│ │ ├─SetMetadata
+│ │ ├─PrimaryMetadata
 │ │ ├─FlightSet
 │ │ ├─CloudSet
 │ │ └─PrimaryTrack
@@ -19,9 +19,11 @@ DataSet──Data
 │ │   │ └─FlightMetadata
 │ │   └─CloudTrack──CloudData
 │ │     └─CloudMetadata
-│ ├─SecondaryTrack
+│ ├─SecondarySet
+│ │ ├─SecondaryMetadata
+│ │ ├─SatSet
+│ │ └─SecondaryTrack
 │ │   └─SatTrack──SatData
-│ │     └─SatMetadata
 │ └─ObservationSet
 │   ├─CPro
 │   ├─CLay
@@ -60,7 +62,7 @@ DataSet──Data
 - alias constructors for `FlightSet` and `CloudSet`
 
 
-### SetMetadata
+### PrimaryMetadata
 
 - Metadata of all primary data sets
 
@@ -221,23 +223,24 @@ zonedict["_CEST_"] = tz.tz"+0200"
 ## Define type tree of abstract types
 abstract type DataSet{T<:AbstractFloat} end
 abstract type MeasuredSet{T} <: DataSet{T} end
-abstract type ComputedSet{T} <: DataSet{T} end
 abstract type PrimarySet{T} <: MeasuredSet{T} end
-abstract type ObservationSet{T} <: MeasuredSet{T} end
-abstract type SecondaryTrack{T} <: MeasuredSet{T} end
 abstract type PrimaryTrack{T} <: PrimarySet{T} end
 abstract type FlightTrack{T} <: PrimaryTrack{T} end
 abstract type CloudTrack{T} <: PrimaryTrack{T} end
+abstract type SecondarySet{T} <: MeasuredSet{T} end
+abstract type SecondaryTrack{T} <: SecondarySet{T} end
 abstract type SatTrack{T} <: SecondaryTrack{T} end
+abstract type ObservationSet{T} <: MeasuredSet{T} end
+abstract type ComputedSet{T} <: DataSet{T} end
 abstract type Intersection{T} <: ComputedSet{T} end
 
 
 ## Export types and constructors
-export DataSet, Data, MeasuredSet, ComputedSet, PrimarySet, ObservationSet,
-       FlightSet, CloudSet, PrimaryTrack, SecondaryTrack,
-       FlightTrack, CloudTrack, FlightData, CloudData,
-       SatTrack, SatData, CLay, CPro, Intersection, XData, #APro, ALay,
-       FlightMetadata, CloudMetadata, SatMetadata, SetMetadata, XMetadata
+export DataSet, Data, MeasuredSet, ComputedSet, PrimarySet, SecondarySet, ObservationSet,
+       FlightSet, CloudSet, SatSet, PrimaryTrack, SecondaryTrack,
+       FlightTrack, CloudTrack, SatTrack, FlightData, CloudData, SatData,
+       CLay, CPro, Intersection, XData, #APro, ALay,
+       FlightMetadata, CloudMetadata, PrimaryMetadata, SecondaryMetadata, XMetadata
 
 
 ## Import functions from Julia include files

@@ -266,7 +266,7 @@ struct XData{T} <: Intersection{T}
   """ Modified constructor with some automated calculations of the flight intersection data. """
   function XData{T}(
     tracks::PrimarySet,
-    sat::SatData,
+    sat::SatSet,
     savesecondsattype::Bool=false;
     maxtimediff::Int=30,
     primspan::Int=0,
@@ -275,6 +275,7 @@ struct XData{T} <: Intersection{T}
     stepwidth::Real=0.01,
     Xradius::Real=20_000,
     expdist::Real=Inf,
+    atol::Real=0.1,
     savedir::Union{String,Bool}="abs",
     remarks=nothing
   ) where T
@@ -301,7 +302,7 @@ struct XData{T} <: Intersection{T}
       ID = track isa FlightTrack ? trackdata[i].metadata.dbID : trackdata[i].metadata.ID
       try
         # Find sat tracks in the vicinity of flight tracks, where intersections are possible
-        overlap = findoverlap(track, sat, maxtimediff, ID)
+        overlap, isat = findoverlap(track, sat, maxtimediff, atol)
         if isempty(overlap)
           pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
             (:featured, length(Xdata.id[.!ismissing.(Xdata.atmos_state) .&
@@ -310,7 +311,7 @@ struct XData{T} <: Intersection{T}
         end
         # Interpolate trajectories with PCHIP method
         primtracks = interpolate_trackdata(track)
-        sectracks = interpolate_satdata(sat, overlap, trackdata[i].metadata.useLON)
+        sectracks = interpolate_satdata(overlap, isat, trackdata[i].metadata.useLON)
         # Calculate intersections and store data and metadata in DataFrames
         currdata, currtrack, curraccuracy = find_intersections(ms, track,
           primtracks, tracks.metadata.altmin, sat, sectracks, dataset, ID, maxtimediff,
@@ -370,13 +371,13 @@ and sat data are promoted to the higher precision.
 """
 function XData(
   tracks::PrimarySet{T1},
-  sat::SatData{T2},
+  sat::SatSet{T2},
   savesecondsattype::Bool=false;
   kwargs...
 ) where {T1, T2}
   T = promote_type(T1, T2)
   tracks isa PrimarySet{T} || (tracks = PrimarySet{T}(tracks))
-  sat isa SatData{T} || (sat = SatData{T}(sat))
+  sat isa SatSet{T} || (sat = SatSet{T}(sat))
   XData{T}(tracks, sat, savesecondsattype; kwargs...)
 end
 

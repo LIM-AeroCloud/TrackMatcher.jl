@@ -12,9 +12,8 @@ Immutable struct to hold metadata for `SatData` with fields
 - `loadtime::Dates.CompoundPeriod`
 - `remarks`
 
-## files
-Dictionary with indices of `fileindex` column in `SatData.data` pointing to the
-full file names.
+## granules
+DataFrame with `filename`s, `start` and `stop` time.
 
 ## type
 Symbol indicating, whether profile or layer data is stored.
@@ -56,46 +55,24 @@ Or hand over the individual fields to the unmodified constructor:
       remarks=nothing
     ) where T
 """
-struct SatMetadata{T} <: SatTrack{T}
-  files::Dict{Int,String}
+struct SecondaryMetadata{T} <: SecondarySet{T}
+  granules::DataFrame
   type::Symbol
   date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
   created::Union{DateTime,ZonedDateTime}
   loadtime::Dates.CompoundPeriod
   remarks
-
-  function SatMetadata{T}(
-    files::Dict{Int,String},
-    type::Symbol,
-    date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
-    created::Union{DateTime,ZonedDateTime},
-    loadtime::Dates.CompoundPeriod,
-    remarks=nothing
-  ) where T
-    new{T}(files, type, date, created, loadtime, remarks)
-  end #constructor 1 SatMetadata
-
-  function SatMetadata{T}(
-    files::Vector{String},
-    date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
-    loadtime::Dates.CompoundPeriod=Dates.canonicalize(Dates.CompoundPeriod());
-    remarks=nothing
-  ) where T
-    # Find type of satellite data based on first 50 files (~2 days)
-    type = occursin("CLay", files[1]) ≥
-      count(occursin.("CPro", files[1:min(length(files), 50)])) ? :CLay : :CPro
-    # Create a new instance of SatMetadata
-    new(Dict(enumerate(files)), type, date, tz.now(tz.localzone()), loadtime, remarks)
-  end #constructor 2 SatMetadata
-end #struct SatMetadata
+end #struct SecondaryMetadata
 
 """
     SatMetadata{T}() where T
 
 External constructor for empty `SatMetadata` with floating point precision `T`.
 """
-SatMetadata{T}() where T = SatMetadata{T}(
-  Dict{Int,String}(), :undef, (start=Dates.now(), stop=Dates.now()),
+SecondaryMetadata{T}() where T = SecondaryMetadata{T}(
+  DataFrame(file = String[], tstart = DateTime[], tstop = DateTime[],
+      latmin = T[], latmax = T[], elonmin = T[], elonmax = T[], wlonmin = T[],
+      wlonmax = T[]), :undef, (start=Dates.now(), stop=Dates.now()),
   Dates.now(), Dates.CompoundPeriod(), nothing
 )
 
@@ -104,69 +81,38 @@ SatMetadata{T}() where T = SatMetadata{T}(
 
 Default SatMetadata constructor for single floating point precision.
 """
-SatMetadata(args...) = SatMetadata{Float32}(args...)
+SecondaryMetadata(args...) = SecondaryMetadata{Float32}(args...)
 
 """
     SatMetadata{T}(meta::SatMetadata) where T
 
 External SatMetadata constructor for floating point conversions.
 """
-SatMetadata{T}(meta::SatMetadata) where T = SatMetadata{T}(meta.files, meta.type,
-  meta.date, meta.created, meta.loadtime, meta.remarks)
+SecondaryMetadata{T}(meta::SecondaryMetadata) where T = SecondaryMetadata{T}(
+  DataFrame(file = meta.granules.file,
+    tstart = meta.granules.tstart, tstop = meta.granules.tstop,
+    elonmin = T.(meta.granules.elonmin), elonmax = T.(meta.granules.elonmax),
+    wlonmin = T.(meta.granules.wlonmin), wlonmax = T.(meta.granules.wlonmax)),
+  meta.type, meta.date, meta.created, meta.loadtime, meta.remarks
+)
 
 
 ## Define structs related to track data
 
-"""
-# struct SatData
-
-Satellite data with fields
-- `data::DataFrame`
-- `metadata::SatMetadata`
-
-The `DataFrame` of `data` has columns for the satellite time and position and indices
-for data files with additional information:
-`
-- `time::Vector{DateTime}`                        (time stamp of measurement)
-- `lat::Vector{<:Union{Missing,T}}`   (latitude)
-- `lon::Vector{<:Union{Missing,T}}`   (longitude)
-- `fileindex::Vector{Int}`                        (index for filenames in `SatMetadata`)
-
-
-# Instantiation
-
-    function SatData{T}(
-      folders::String...;
-      type::Symbol=:undef,
-      remarks=nothing
-    ) where T -> struct SatData
-
-Construct `SatData{T}` from any number of absolute or relative folder paths given as string.
-SatData searches for hdf files in all folders recursively and determines the data type
-(`CLay` or `CPro`) from the file names of the first 50 files unless the type is specified
-with a Symbol `:CLay` or `:CPro` by the keyword argument `type`. Only one type of satellite
-data can be stored in `SatData`. If `{T}` is omitted, it is set to `Float32`.
-
-Alternatively, use handover all fields to the unmodified constructor, where basic
-data validity checks will be performed:
-
-    SatData{T}(data::DataFrame, metadata::SatMetadata) where T
-"""
 struct SatData{T} <: SatTrack{T}
   data::DataFrame
-  metadata::SatMetadata{T}
 
   """ Unmodified constructor for `SatData` with basic checks for correct `data`"""
-  function SatData{T}(data::DataFrame, metadata::SatMetadata) where T
+  function SatData{T}(data::DataFrame) where T
     # Ensure floats of correct precision
     convertFloats!(data, T)
     # Check for correct column names and data types
-    standardnames = ["time", "lat", "lon", "fileindex"]
-    standardtypes = [Vector{DateTime}, Vector{T}, Vector{T}, Vector{Int}]
+    standardnames = ["time", "lat", "lon"]
+    standardtypes = [Vector{DateTime}, Vector{T}, Vector{T}]
     bounds = (:time => (DateTime(2006), Dates.now()), :lat => (-90,90),
-      :lon => (-180,180), :fileindex => (1, Inf))
+      :lon => (-180,180))
     checkcols!(data, standardnames, standardtypes, bounds, "CLay")
-    new{T}(data, metadata)
+    new{T}(data)
   end #constructor 1 SatData
 
   """
@@ -175,85 +121,26 @@ struct SatData{T} <: SatTrack{T}
   `type` is determined from the first 50 files in the database unless directly
   specified `type`. Any `remarks` can be added to the metadata.
   """
-  function SatData{T}(
-    folders::String...;
-    type::Symbol=:undef,
-    savedir::Union{String,Bool}="abs",
-    remarks=nothing
-  ) where T
-    tstart = Dates.now()
-    # Scan folders for HDF4 files
-    files = String[]
-    for folder in folders
-      try findfiles!(files, folder, ".hdf")
-      catch
-        @warn "read error; data skipped" folder
-      end
+  function SatData{T}(ms::mat.MSession, file::String) where T
+    # Send file name to MATLAB
+    mat.put_variable(ms, :file, file)
+    # Read hdf file with MATLAB
+    mat.eval_string(ms,
+    """
+    clear t longitude latitude
+    try
+      t = hdfread(file, 'Profile_UTC_Time');
+      longitude = hdfread(file, 'Longitude');
+      latitude = hdfread(file, 'Latitude');
     end
-    files = convertdir.(files, savedir)
-    # If type of satellite data is not defined, find it based on first 50 file names (~2 days)
-    type = type == :CLay || type == :CPro ? string(type) :
-      count(occursin.("CLay", files[1:min(length(files), 50)])) ≥
-      count(occursin.("CPro", files[1:min(length(files), 50)])) ? "CLay" : "CPro"
-    # Select files of type based on file name
-    satfiles = files[occursin.(type, basename.(files))]
-    wrongtype = length(files) - length(satfiles)
-    wrongtype > 0 &&
-      @warn "$wrongtype files with wrong satellite type detected; data skipped"
-    # Create empty struct, if no data files were found
-    isempty(satfiles) && return SatData{T}()
-    # Start MATLAB session
-    ms = mat.MSession()
-    # Initialise arrays
-    utc = Vector{Vector{DateTime}}(undef, length(satfiles))
-    lat = Vector{Vector{T}}(undef, length(satfiles))
-    lon = Vector{Vector{T}}(undef, length(satfiles))
-    fileindex = Vector{Vector{Int}}(undef, length(satfiles))
-    # Loop over files
-    prog = pm.Progress(length(satfiles), "load sat data...")
-    for (i, file) in enumerate(satfiles)
-      # Find files with cloud layer data
-      utc[i], lat[i], lon[i], fileindex[i] = try
-        # Extract time
-        mat.put_variable(ms, :file, file)
-        mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-        t = mat.jarray(mat.get_mvariable(ms, :t))[:,2]
-        # Extract lat/lon
-        mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-        longitude = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2]
-        mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-        latitude = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2]
-        # Save time converted to UTC and lat/lon
-        convertUTC.(t), latitude, longitude, [i for index in t]
-      catch
-        # Skip data on failure and warn
-        @warn "read error in CALIPSO granule; data skipped"  granule = splitext(basename(file))[1]
-        DateTime[], T[], T[], Int[]
-      end
-      # Monitor progress for progress bar
-      pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
-    end #loop over files
-    pm.finish!(prog)
-
-    # Close MATLAB session
-    mat.close(ms)
-    # Calculate time span of satellite data
-    sattime = [utc...;]
-    # Find data range
-    tmin = minimum(sattime)
-    tmax = maximum(sattime)
-    # Save computing times
-    tend = Dates.now()
-    loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
-
-    # Instantiate new struct
-    @info string("SatData data loaded in ",
-      "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
-      "\n▪ data ($(length(sattime)) data rows)\n  – time\n  – lat\n  – lon",
-      "\n  – fileindex\n▪ metadata")
-    satdata = DataFrame(time=sattime, lat=[lat...;],
-      lon=[lon...;], fileindex=[fileindex...;])
-    SatData{T}(satdata, SatMetadata{T}(satfiles, (start=tmin, stop=tmax), loadtime, remarks=remarks))
+    data = struct('time', t(:, 2), 'lat', latitude(:, 2), 'lon', longitude(:, 2));
+    """)
+    # Retrieve data from MATLAB
+    data = mat.jdict(mat.get_mvariable(ms, :data))
+    # Convert time to UTC DateTime
+    utc = convertUTC.(data["time"])
+    # instantiate new struct
+    new{T}(DataFrame(time = utc, lat = data["lat"], lon = data["lon"]))
   end #constructor 2 SatData
 end #struct SatData
 
@@ -264,8 +151,7 @@ end #struct SatData
 External constructor for empty `SatData` with floating point precision `T`.
 """
 SatData{T}() where T = SatData{T}(
-  DataFrame(time = DateTime[], lat = T[], lon=T[], fileindex=Int[]),
-  SatMetadata{T}()
+  DataFrame(time = DateTime[], lat = T[], lon=T[])
 )
 
 """
@@ -284,9 +170,8 @@ SatData{T}(sat::SatData) where T = SatData{T}(
   DataFrame(
     time = sat.data.time,
     lat = T.(sat.data.lat),
-    lon = T.(sat.data.lon),
-    fileindex = sat.data.fileindex
-  ), SatMetadata{T}(sat.metadata)
+    lon = T.(sat.data.lon)
+  )
 )
 
 """
@@ -302,6 +187,166 @@ SatTrack{T}(args...; kwargs...) where T = SatData{T}(args...; kwargs...)
 Alias constructor for default `Float32` `SatData`.
 """
 SatTrack(args...; kwargs...) = SatData{Float32}(args...; kwargs...)
+
+
+"""
+# struct SatSet
+
+Satellite data with fields
+- `data::DataFrame`
+- `metadata::SatMetadata`
+
+The `DataFrame` of `data` has columns for the satellite time and position and indices
+for data files with additional information:
+`
+- `time::Vector{DateTime}`                        (time stamp of measurement)
+- `lat::Vector{<:Union{Missing,T}}`   (latitude)
+- `lon::Vector{<:Union{Missing,T}}`   (longitude)
+- `fileindex::Vector{Int}`                        (index for filenames in `SatMetadata`)
+
+
+# Instantiation
+
+    function SaSet{T}(
+      folders::String...;
+      type::Symbol=:undef,
+      remarks=nothing
+    ) where T -> struct SatData
+
+Construct `SatSet{T}` from any number of absolute or relative folder paths given as string.
+SatData searches for hdf files in all folders recursively and determines the data type
+(`CLay` or `CPro`) from the file names of the first 50 files unless the type is specified
+with a Symbol `:CLay` or `:CPro` by the keyword argument `type`. Only one type of satellite
+data can be stored in `SatData`. If `{T}` is omitted, it is set to `Float32`.
+
+Alternatively, use handover all fields to the unmodified constructor, where basic
+data validity checks will be performed:
+
+    SatData{T}(data::DataFrame, metadata::SatMetadata) where T
+"""
+struct SatSet{T} <: SecondarySet{T}
+  granules::Vector{SatData{T}}
+  metadata::SecondaryMetadata{T}
+
+  """ Unmodified constructor for `SatData` with basic checks for correct `data`"""
+  function SatSet{T}(granules::Vector{SatData{T}}, metadata::SecondaryMetadata{T}) where T
+    # Ensure floats of correct precision
+    convertFloats!.(granules, T)
+    # Check for correct column names and data types
+    standardnames = ["time", "lat", "lon"]
+    new{T}(granules, metadata)
+  end #constructor 1 SatData
+
+  """
+  Modified constructor creating the database from mat files in the given `folders`
+  or any subfolder using the floating point precision given by `Float`. The sat data
+  `type` is determined from the first 50 files in the database unless directly
+  specified `type`. Any `remarks` can be added to the metadata.
+  """
+  function SatSet{T}(
+    folders::String...;
+    type::Symbol=:undef,
+    savedir::Union{String,Bool}="abs",
+    remarks=nothing
+  ) where T
+    tstart = Dates.now()
+    # Scan folders for HDF4 files
+    files = String[]
+    for folder in folders
+      try findfiles!(files, folder, ".hdf")
+      catch
+        @warn "read error; data skipped" folder
+      end
+    end
+    # Apply format for saved file paths
+    files = convertdir.(files, savedir)
+    # If type of satellite data is not defined, find it based on first 50 file names (~2 days)
+    sattype = type == :CLay || type == :CPro ? string(type) :
+      count(occursin.("CLay", files[1:min(length(files), 50)])) ≥
+      count(occursin.("CPro", files[1:min(length(files), 50)])) ? "CLay" : "CPro"
+    type == :undef && (type = Symbol(type, sattype))
+    # Select files of type based on file name
+    satfiles = files[occursin.(sattype, basename.(files))]
+    wrongtype = length(files) - length(satfiles)
+    wrongtype > 0 &&
+      @warn "$wrongtype files with wrong satellite type detected; data skipped"
+    # Create empty struct, if no data files were found
+    isempty(satfiles) && return SatSet{T}()
+    # Start MATLAB session
+    ms = mat.MSession()
+    # Initialise array of granules
+    granules = SatData[]
+    metadata = DataFrame(file = String[], tstart = DateTime[], tstop = DateTime[],
+      latmin = T[], latmax = T[], elonmin = T[], elonmax = T[], wlonmin = T[],
+      wlonmax = T[])
+    # Loop over files
+    prog = pm.Progress(length(satfiles), "load sat data...")
+    for file in satfiles
+      # Find files with cloud layer data
+      try
+        granule = SatData(ms, file)
+        elonmin, elonmax = lonextrema(granule.data.lon, ≥)
+        wlonmin, wlonmax = lonextrema(granule.data.lon, <)
+        push!(metadata, (file=file,
+          tstart = granule.data.time[1], tstop = granule.data.time[end],
+          latmin = minimum(granule.data.lat), latmax = maximum(granule.data.lat),
+          elonmin, elonmax, wlonmin, wlonmax)
+        )
+        push!(granules, granule)
+      catch
+        # Skip data on failure and warn
+        @warn "read error in CALIPSO granule; data skipped"  granule = splitext(basename(file))[1]
+      end
+      # Monitor progress for progress bar
+      pm.next!(prog, showvalues = [(:date,Dates.Date(splitdir(dirname(file))[2], "y_m_d"))])
+    end #loop over files
+    pm.finish!(prog)
+
+    # Close MATLAB session
+    mat.close(ms)
+    # Save computing times.
+    tend = Dates.now()
+    tc = tz.ZonedDateTime(tend, tz.localzone())
+    loadtime = Dates.canonicalize(Dates.CompoundPeriod(tend - tstart))
+    tmin = minimum(granule.data.time[1] for granule in granules)
+    tmax = maximum(granule.data.time[end] for granule in granules)
+
+    # Instantiate new struct
+    @info string("SatSet loaded in ",
+      "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
+      "\n▪ granules ($(sum(size(granule.data, 1) for granule in granules)) data rows)\n  – time\n  – lat\n  – lon",
+      "\n▪ metadata")
+    new{T}(granules, SecondaryMetadata{T}(metadata, type, (start=tmin, stop=tmax),
+      tc, loadtime, remarks))
+  end #constructor 2 SatData
+end #struct SatSet
+
+
+"""
+    SatSet{T}() where T
+
+External constructor for empty `SatSet` with floating point precision `T`.
+"""
+SatSet{T}() where T = SatSet{T}(
+  SatData{T}[],
+  SecondaryMetadata{T}()
+)
+
+"""
+    SatSet(args...; kwargs...)
+
+Default `Float32` constructor for `SatSet`.
+"""
+SatSet(args...; kwargs...) = SatSet{Float32}(args...; kwargs...)
+
+"""
+    SatSet{T}(sat::SatSet) where T
+
+External constructor for floating point precision conversions.
+"""
+SatSet{T}(sat::SatSet) where T = SatSet{T}(
+  SatData{T}.(sat), SecondaryMetadata{T}(sat.metadata)
+)
 
 
 ## ObservationSet
@@ -370,13 +415,13 @@ struct CLay{T} <: ObservationSet{T}
   function CLay{T}(
     ms::mat.MSession,
     files::Vector{String},
-    timespan::NamedTuple{(:min,:max), Tuple{DateTime,DateTime}},
+    timeindex::Vector{UnitRange{Int}},
     lidarrange::Tuple{Real,Real}=(15_000,-Inf),
     altmin::Real=5000,
     saveobs::Union{String,Bool}="abs"
   ) where T
     # Return default empty struct if files are empty
-    (isempty(files) || saveobs === false || isempty(saveobs)) && return CLay{T}()
+    (isempty(files) || saveobs === false || isempty(saveobs)) && CLay()
     # Initialise arrays
     # essential data
     utc = Vector{Vector{DateTime}}(undef, length(files))
@@ -391,43 +436,58 @@ struct CLay{T} <: ObservationSet{T}
     Ttop = Vector{Vector{Vector{T}}}(undef,length(files))
     Htropo = Vector{Vector{T}}(undef, length(files))
     night = Vector{BitVector}(undef, length(files))
-    averaging = Vector{Vector{Vector{Int}}}(undef,length(files))
+    averaging = Vector{Vector{Int}}(undef,length(files))
     # Loop over files
     for (i, file) in enumerate(files)
-      ## Retrieve cloud layer data; assumes faulty files are filtered by SatData
-      # Extract time
+      # Send file name to MATLAB
       mat.put_variable(ms, :file, file)
-      mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-      utc[i] = convertUTC.(mat.jarray(mat.get_mvariable(ms, :t))[:,2])
-      timeindex = findall(timespan.min .≤ utc[i] .≤ timespan.max)
-      utc[i] = utc[i][timeindex]
-      # Extract lat/lon
-      mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-      lon[i] = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2][timeindex]
-      mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-      lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2][timeindex]
-      # Save time converted to UTC and lat/lon
-      # utc[i], lon[i], lat[i] = convertUTC.(t), longitude, latitude
+      # Read hdf file with MATLAB
+      mat.eval_string(ms,
+        """
+        clear t longitude latitude basealt topalt ...
+          FCF FOD IWPath LTT Htropo daynight average
+        try
+          t = hdfread(file, 'Profile_UTC_Time');
+          t = t(:, 2);
+          longitude = hdfread(file, 'Longitude');
+          longitude = longitude(:, 2);
+          latitude = hdfread(file, 'Latitude');
+          latitude = latitude(:, 2);
+          basealt = hdfread(file, 'Layer_Base_Altitude');
+          topalt = hdfread(file, 'Layer_Top_Altitude');
+          FCF = hdfread(file, 'Feature_Classification_Flags');
+          FOD = hdfread(file, 'Feature_Optical_Depth_532');
+          IWPath = hdfread(file, 'Ice_Water_Path');
+          LTT = hdfread(file, 'Layer_Top_Temperature');
+          Htropo = hdfread(file, 'Tropopause_Height');
+          daynight = hdfread(file, 'Day_Night_Flag');
+          average = hdfread(file, 'Horizontal_Averaging');
+        end
 
-      ## Extract layer top/base, layer features and optical depth from hdf files
-      mat.eval_string(ms, "clear basealt\ntry\nbasealt = hdfread(file, 'Layer_Base_Altitude');\nend")
-      Lbase = 1000mat.jarray(mat.get_mvariable(ms, :basealt))[timeindex,:]
-      mat.eval_string(ms, "clear topalt\ntry\ntopalt = hdfread(file, 'Layer_Top_Altitude');\nend")
-      Ltop = 1000mat.jarray(mat.get_mvariable(ms, :topalt))[timeindex,:]
-      mat.eval_string(ms, "clear FCF\ntry\nFCF = hdfread(file, 'Feature_Classification_Flags');\nend")
-      FCF = mat.jarray(mat.get_mvariable(ms, :FCF))[timeindex,:]
-      mat.eval_string(ms, "clear FOD\ntry\nFOD = hdfread(file, 'Feature_Optical_Depth_532');\nend")
-      FOD = mat.jarray(mat.get_mvariable(ms, :FOD))[timeindex,:]
-      mat.eval_string(ms, "clear IWPath\ntry\nIWPath = hdfread(file, 'Ice_Water_Path');\nend")
-      IWPath = mat.jarray(mat.get_mvariable(ms, :IWPath))[timeindex,:]
-      mat.eval_string(ms, "clear LTT\ntry\nLTT = hdfread(file, 'Layer_Top_Temperature');\nend")
-      LTT = mat.jarray(mat.get_mvariable(ms, :LTT))[timeindex,:]
-      mat.eval_string(ms, "clear Htropo\ntry\nHtropo = hdfread(file, 'Tropopause_Height');\nend")
-      Htropo[i] = 1000vec(mat.jarray(mat.get_mvariable(ms, :Htropo)))[timeindex]
-      mat.eval_string(ms, "clear daynight\ntry\ndaynight = hdfread(file, 'Day_Night_Flag');\nend")
-      night[i] = Bool.(vec(mat.jarray(mat.get_mvariable(ms, :daynight))))[timeindex]
-      mat.eval_string(ms, "clear average\ntry\naverage = hdfread(file, 'Horizontal_Averaging');\nend")
-      horav = mat.jarray(mat.get_mvariable(ms, :average))[timeindex,:]
+        data = struct('time', t, 'lat', latitude, 'lon', longitude, ...
+          'LB', basealt, 'LT', topalt, 'FCF', FCF, 'FOD', FOD, 'IWP', IWPath, ...
+          'LTT', LTT, 'Htropo', Htropo, 'daynight', daynight, 'average', average);
+        """
+      )
+
+      # Get data from MATLAB
+      data = mat.jdict(mat.get_mvariable(ms, :data))
+      # Convert time to UTC DateTime
+      utc[i] = convertUTC.(data["time"])
+      utc[i] = utc[i][timeindex[i]]
+      # Extract lat/lon
+      lat[i], lon[i] = data["lat"][timeindex[i]], data["lon"][timeindex[i]]
+
+      ## Extract non-essential information from satellite files
+      Ltop, Lbase = 1000data["LT"][timeindex[i],:], 1000data["LB"][timeindex[i],:]
+      FCF = data["FCF"][timeindex[i],:]
+      FOD = data["FOD"][timeindex[i],:]
+      IWPath = data["IWP"][timeindex[i],:]
+      LTT = data["LTT"][timeindex[i],:]
+      Htropo[i] = 1000data["Htropo"][timeindex[i]]
+      night[i] = Bool.(data["daynight"][timeindex[i]])
+      averaging[i] = data["average"][timeindex[i]]
+
       # Loop over data and convert to TrackMatcher format
       Lt = Vector{Vector{T}}(undef,length(utc[i]))
       Lb = Vector{Vector{T}}(undef,length(utc[i]))
@@ -435,13 +495,12 @@ struct CLay{T} <: ObservationSet{T}
       optdepth = Vector{Vector{T}}(undef,length(utc[i]))
       icewater = Vector{Vector{Union{Missing,T}}}(undef,length(utc[i]))
       toptemp = Vector{Vector{T}}(undef,length(utc[i]))
-      average = Vector{Vector{Int}}(undef,length(utc[i]))
       for n = 1:length(utc[i])
         l = findall((Lbase[n,:] .> 0) .& (Ltop[n,:] .> 0) .& (Lbase[n,:] .< lidarrange[1]) .&
           (Ltop[n,:] .> lidarrange[2]) .& (Ltop[n,:] .> altmin))
-        Lt[n], Lb[n], atm[n], optdepth[n], toptemp[n], icewater[n], average[n] =
+        Lt[n], Lb[n], atm[n], optdepth[n], toptemp[n], icewater[n] =
           if isempty(l)
-            T[], T[], Symbol[], T[], T[], T[], Int[]
+            T[], T[], Symbol[], T[], T[], T[]
           else
             l = findall((Lbase[n,:] .> 0) .& (Ltop[n,:] .> 0) .& (Lbase[n,:] .< lidarrange[1]) .&
               (Ltop[n,:] .> lidarrange[2]))
@@ -449,12 +508,11 @@ struct CLay{T} <: ObservationSet{T}
             [feature_classification(classification(FCF[n,m])...) for m in l],
             [FOD[n,m] for m in l],
             [LTT[n,m] for m in l],
-            [IWPath[n,m] == -9999 ? missing : IWPath[n,m] for m in l],
-            [horav[n,m] for m in l]
+            [IWPath[n,m] == -9999 ? missing : IWPath[n,m] for m in l]
           end
       end # loop over time steps in current file
-      LayTop[i], LayBase[i], Atmosph[i], OD[i], IWP[i], Ttop[i], averaging[i] =
-        Lt, Lb, atm, optdepth, icewater, toptemp, average
+      LayTop[i], LayBase[i], Atmosph[i], OD[i], IWP[i], Ttop[i] =
+        Lt, Lb, atm, optdepth, icewater, toptemp
     end #loop over files
 
     # Construct and standardise data
@@ -547,7 +605,7 @@ struct CPro{T} <: ObservationSet{T}
       :temp => (-120,60), :pressure => (1,1086), :rH => (0,1.5), :IWC => (0,0.54),
       :deltap => (0,1), :CADscore => (-101,106))
     checkcols!(data, standardnames, standardtypes, bounds, "CPro")
-    new(data)
+    new{T}(data)
   end #constructor 1 CPro
 
   """
@@ -557,7 +615,7 @@ struct CPro{T} <: ObservationSet{T}
   function CPro{T}(
     ms::mat.MSession,
     files::Vector{String},
-    timespan::NamedTuple{(:min,:max), Tuple{DateTime,DateTime}},
+    timeindex::Vector{UnitRange{Int}},
     lidarprofile::NamedTuple,
     saveobs::Union{String,Bool}="abs"
   ) where T
@@ -582,35 +640,53 @@ struct CPro{T} <: ObservationSet{T}
     # Loop over files with cloud profile data
     for (i, file) in enumerate(files)
       ## Retrieve cloud profile data; assumes faulty files are filtered by SatData
-      # Extract time
       mat.put_variable(ms, :file, file)
-      mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-      utc[i] = convertUTC.(mat.jarray(mat.get_mvariable(ms, :t))[:,2])
-      timeindex = findall(timespan.min .≤ utc[i] .≤ timespan.max)
-      utc[i] = utc[i][timeindex]
-      # Extract lat/lon
-      mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-      lon[i] = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2][timeindex]
-      mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-      lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2][timeindex]
-      fcf[i] = get_lidarcolumn(UInt16, ms, "Atmospheric_Volume_Description", lidarprofile,
-        coarse=false)[timeindex]
+      mat.eval_string(ms,
+        """
+        clear t longitude latitude
+        try
+          t = hdfread(file, 'Profile_UTC_Time');
+          t = t(:, 2);
+          longitude = hdfread(file, 'Longitude');
+          longitude = longitude(:, 2);
+          latitude = hdfread(file, 'Latitude');
+          latitude = latitude(:, 2);
+          FCF = hdfread(file, 'Atmospheric_Volume_Description');
+          EC532 = hdfread(file, 'Extinction_Coefficient_532');
+          Htropo = hdfread(file, 'Tropopause_Height');
+          temp = hdfread(file, 'Temperature');
+          pres = hdfread(file, 'Pressure');
+          rH = hdfread(file, 'Relative_Humidity');
+          IWC = hdfread(file, 'Ice_Water_Content_Profile');
+          deltap = hdfread(file, 'Particulate_Depolarization_Ratio_Profile_532');
+          CAD = hdfread(file, 'CAD_Score');
+          daynight = hdfread(file, 'Day_Night_Flag');
+        end
+
+        data = struct('time', t, 'lat', latitude, 'lon', longitude, ...
+          'FCF', FCF, 'EC532', EC532, 'Htropo', Htropo, 'temp', temp, 'pres', pres, ...
+          'rH', rH, 'IWC', IWC, 'deltap', deltap, 'CAD', CAD, 'daynight', daynight);
+        """
+      )
+      # Get data from MATLAB
+      data = mat.jdict(mat.get_mvariable(ms, :data))
+      # Convert time to UTC DateTime
+      utc[i] = convertUTC.(data["time"])
+      utc[i] = utc[i][timeindex[i]]
+      # Extract essential data
+      lat[i], lon[i] = data["lat"][timeindex[i]], data["lon"][timeindex[i]]
+      fcf[i] = get_lidarcolumn(UInt16, data["FCF"], lidarprofile, coarse=false)[timeindex[i]]
       # Extract non-essential data
-      ec532[i] = get_lidarcolumn(T, ms, "Extinction_Coefficient_532", lidarprofile,
-        missingvalues = -9999)[timeindex]
-      mat.eval_string(ms, "clear Htropo\ntry\nHtropo = hdfread(file, 'Tropopause_Height');\nend")
-      Htropo[i] = 1000vec(mat.jarray(mat.get_mvariable(ms, :Htropo)))[timeindex]
-      temp[i] = get_lidarcolumn(T, ms, "Temperature", lidarprofile, missingvalues = -9999)[timeindex]
-      pres[i] = get_lidarcolumn(T, ms, "Pressure", lidarprofile, missingvalues = -9999)[timeindex]
-      rH[i] = get_lidarcolumn(T, ms, "Relative_Humidity", lidarprofile, missingvalues = -9999)[timeindex]
-      iwc[i] = get_lidarcolumn(T, ms, "Ice_Water_Content_Profile", lidarprofile,
-        missingvalues = -9999)[timeindex]
-      deltap[i] = get_lidarcolumn(T, ms, "Particulate_Depalarization_Ratio_Profile_532",
-        lidarprofile, missingvalues = -9999)[timeindex]
-      cad[i] = get_lidarcolumn(Int8, ms, "CAD_Score", lidarprofile, coarse=false,
-        missingvalues = -127)[timeindex]
-      mat.eval_string(ms, "clear daynight\ntry\ndaynight = hdfread(file, 'Day_Night_Flag');\nend")
-      night[i] = Bool.(vec(mat.jarray(mat.get_mvariable(ms, :daynight))))[timeindex]
+      ec532[i] = get_lidarcolumn(T, data["EC532"], lidarprofile, missingvalues = -9999)[timeindex[i]]
+      Htropo[i] = 1000data["Htropo"][timeindex[i]]
+      temp[i] = get_lidarcolumn(T, data["temp"], lidarprofile, missingvalues = -9999)[timeindex[i]]
+      pres[i] = get_lidarcolumn(T, data["pres"], lidarprofile, missingvalues = -9999)[timeindex[i]]
+      rH[i] = get_lidarcolumn(T, data["rH"], lidarprofile, missingvalues = -9999)[timeindex[i]]
+      iwc[i] = get_lidarcolumn(T, data["IWC"], lidarprofile, missingvalues = -9999)[timeindex[i]]
+      deltap[i] = get_lidarcolumn(T, data["deltap"], lidarprofile, missingvalues = -9999)[timeindex[i]]
+      cad[i] = get_lidarcolumn(Int8, data["CAD"], lidarprofile, coarse=false,
+        missingvalues = -127)[timeindex[i]]
+      night[i] = Bool.(data["daynight"])[timeindex[i]]
     end #loop over files
 
     # Rearrange time vector and get time range
@@ -632,7 +708,7 @@ struct CPro{T} <: ObservationSet{T}
       temp=[temp...;], pressure = [pres...;], rH = [rH...;],
       IWC = [iwc...;], deltap = [deltap...;],
       CADscore = [cad...;], night = [night...;])
-    # Save time, lat/lon arrays, and feature classification flags (FCF) in CPro struct
+    # Instantiate new struct
     new{T}(data)
   end #constructor 2 CPro
 end #struct CPro

@@ -60,15 +60,13 @@ argument and are replaced by `missing` in `vec`.
 """
 function get_lidarcolumn(
   T::DataType,
-  ms::mat.MSession,
-  variable::String,
+  var::Array{Tv},
   lidarprofile::NamedTuple;
   coarse::Bool = true,
   missingvalues = missing
-)
-  # Read variable from hdf file with MATLAB
-	mat.eval_string(ms, "try\nvar = hdfread(file, '$variable');\nend")
-	var = mat.jarray(mat.get_mvariable(ms, :var))
+) where Tv
+  # Convert var to type t
+  Tv ≠ T && (var = T.(var))
   # Initialise vector to store all row vectors and loop over matrix
   row = Vector{Vector{Union{Missing,T}}}(undef, size(var, 1))
 	for i = 1:size(var, 1)
