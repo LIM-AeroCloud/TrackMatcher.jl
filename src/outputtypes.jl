@@ -303,6 +303,7 @@ struct XData{T} <: Intersection{T}
       try
         # Find sat tracks in the vicinity of flight tracks, where intersections are possible
         overlap, isat = findoverlap(track, sat, maxtimediff, atol)
+        isempty(isat) && continue
         if isempty(overlap)
           pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
             (:featured, length(Xdata.id[.!ismissing.(Xdata.atmos_state) .&
