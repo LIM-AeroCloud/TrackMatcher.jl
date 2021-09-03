@@ -439,7 +439,7 @@ function get_satdata(
   obsindex::NamedTuple{(:file,:time),Tuple{Int,Int}},
   timespan::Int,
   tms::DateTime,
-  flightalt::Real,
+  flightalt::Union{Missing,Real},
   altmin::Real,
   flightid::Union{Int,String},
   lidarprofile::NamedTuple,

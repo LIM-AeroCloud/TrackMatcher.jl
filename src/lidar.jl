@@ -247,9 +247,10 @@ function atmosphericinfo(
   sat::CPro,
   hlevels::Vector{<:AbstractFloat},
 	isat::Int,
-  flightalt::Real,
+  flightalt::Union{Missing,Real},
 	flightid::Union{Int,String}
 )::Union{Missing,Symbol}
+  ismissing(flightalt) && return missing
   i = argmin(abs.(hlevels .- flightalt))
   if abs(hlevels[i] - flightalt) > 60
     println(); @warn string("insufficient altitudes for lidar data saved; ",
@@ -279,9 +280,10 @@ feature classification at flight `alt`itude.
 """
 function atmosphericinfo(
   sat::CLay,
-  alt::AbstractFloat,
+  alt::Union{Missing,Real},
   isat::Int
 )::Union{Missing,Symbol}
+  ismissing(alt) && return missing
   top, base = sat.data[isat, [:layer_top, :layer_base]]
   feature = try
     for i = 1:length(top)
