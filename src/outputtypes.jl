@@ -241,7 +241,7 @@ struct XData{T} <: Intersection{T}
     tracked.CLay = CLay{T}.(tracked.CLay)
     # Check data
     standardnames = ["id", "lat", "lon", "alt", "tdiff", "tflight", "tsat", "atmos_state"]
-    standardtypes = [Vector{String}, Vector{<:T}, Vector{<:T}, Vector{<:T},
+    standardtypes = [Vector{String}, Vector{<:T}, Vector{<:T}, Vector{<:Union{Missing,T}},
       Vector{Dates.CompoundPeriod}, Vector{DateTime}, Vector{DateTime},
       Vector{<:Union{Missing,Symbol}}]
     bounds = (:lat => (-90,90), :lon => (-180,180), :alt => (0, Inf))
@@ -281,7 +281,7 @@ struct XData{T} <: Intersection{T}
   ) where T
     # Initialise DataFrames with Intersection data and monitor start time
     tstart = Dates.now()
-    Xdata = DataFrame(id=String[], lat=T[], lon=T[], alt=T[],
+    Xdata = DataFrame(id=String[], lat=T[], lon=T[], alt=Union{Missing,T}[],
       tdiff=Dates.CompoundPeriod[], tflight = DateTime[],
       tsat = DateTime[], atmos_state = Union{Missing,Symbol}[])
     tracked = DataFrame(id=String[], flight=FlightData{T}[], CPro=CPro{T}[], CLay=CLay{T}[])

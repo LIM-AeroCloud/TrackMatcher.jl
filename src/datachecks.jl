@@ -53,6 +53,7 @@ function remdup!(data::DataFrame, useLON::Bool)
     while j ≤ iEnd && isapprox(data[i, x], data[j, x], atol = eps(data[j, x]))
       if isapprox(data[j-1, y], data[j, y], atol = eps(data[j, y]))
         # Delete datarow, if x and y are identical
+        data[j, x] = data[j-1, x]
         delete!(data, j-1)
         # Decrease the counter for the end of the arrays
         iEnd -= 1

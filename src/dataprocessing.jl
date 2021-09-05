@@ -26,7 +26,7 @@ Base.abs(dt::Dates.CompoundPeriod) = dt > Dates.CompoundPeriod(Dates.Millisecond
       ftmeas::Dates.CompoundPeriod,
       sxmeas::T,
       stmeas::Dates.CompoundPeriod,
-      alt::Real
+      alt::Union{Missing,Real}
     ) where T
 
 Append DataFrames `Xdata`, `track`, and `accuracy` by data `Xf`, `id`,
@@ -55,7 +55,7 @@ function addX!(
   ftmeas::Dates.CompoundPeriod,
   sxmeas::T,
   stmeas::Dates.CompoundPeriod,
-  alt::Real
+  alt::Union{Missing,Real}
 ) where T
 
   # Loop over previously found intersections
