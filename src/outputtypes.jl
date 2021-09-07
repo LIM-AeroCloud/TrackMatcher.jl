@@ -119,7 +119,7 @@ XMetadata{T}(meta::XMetadata) where T = XMetadata{T}(
 
 Intersection-related data with fields
 - `data::DataFrame`
-- `tracked::DataFrame`
+- `observations::DataFrame`
 - `accuracy::DataFrame`
 - `metadata::XMetadata`
 
@@ -127,25 +127,25 @@ Intersection-related data with fields
 ## data
 
 Data related to spatial and temporal coordinates of intersections between satellite
-and flight tracks and the meteorological conditions at the intersections.
+and primary (flight or cloud) tracks and the meteorological conditions at the intersections.
 
 `DataFrame` columns are:
 - `id::Vector{String}`: unique intersection identifier
 - `lat::Vector{<:AbstractFloat}`: latitude of intersection
 - `lon::Vector{<:AbstractFloat}`: longitude of intersection
 - `tdiff::Vector{Dates.CompoundPeriod}`: time difference between flight and satellite overpass
-- `tflight::Vector{DateTime}`: time of aircraft at intersection
-- `tsat::Vector{DateTime}`: time of satellite at intersection
+- `tprim::Vector{DateTime}`: time of aircraft at intersection
+- `tsec::Vector{DateTime}`: time of satellite at intersection
 - `atmos_state::Vector{<:Union{Missing,Symbol}}`: atmospheric conditions at intersection
 
 
-## tracked
+## observations
 
 Original track data in the vicinity of the intersection.
 
 `DataFrame` columns are:
 - `id: Vector{String}`: unique intersection identifier
-- `flight::Vector{FlightData}`: `FlightData` in the vicinity of the intersection
+- `primary::Vector{<:PrimaryTrack}`: `PrimaryData` in the vicinity of the intersection
 - `CPro::Vector{CPro}`: `CPro` CALIOP profile data in the vicinity of the intersection
 - `CLay::Vector{CLay}`: `CLay` CALIOP layer data in the vicinity of the intersection
 
@@ -157,13 +157,13 @@ Measures about the accuracy of the intersection calculations and the quality of 
 `DataFrame` columns are:
 - `id: Vector{String}`: unique intersection identifier
 - `intersection::Vector{<:AbstractFloat}`: accuracy of the intersection calculation in meters
-- `flightcoord::Vector{<:AbstractFloat}`: distance of nearest tracked flight data
+- `primdist::Vector{<:AbstractFloat}`: distance of nearest tracked primary data
   to calculated intersection in meters
-- `satcoord::Vector{<:AbstractFloat}`: distance of nearest tracked sat data
+- `secdist::Vector{<:AbstractFloat}`: distance of nearest tracked sat data
   to calculated intersection in meters
-- `flighttime::Vector{Dates.CompoundPeriod}`: time difference between measurement
+- `primtime::Vector{Dates.CompoundPeriod}`: time difference between measurement
   of nearest tracked flight data and calculated time of aircraft at intersection
-- `sattime::Vector{Dates.CompoundPeriod}`: time difference between measurement
+- `sectime::Vector{Dates.CompoundPeriod}`: time difference between measurement
   of nearest tracked sat data and calculated time of satellite at intersection
 
 
@@ -193,10 +193,10 @@ data saved to the struct:
 - `maxtimediff::Int=30`: maximum time difference allowed between aircraft passage
   and satellite overpass at intersection
 - `primspan::Int=0`: Number of additional data points of original track data
-  saved in the vicinity of the intersection and stored in `Intersection.tracked.flight`
+  saved in the vicinity of the intersection and stored in `Intersection.observations.primary`
 - `secspan::Int=15`: Number of additional data points of original track data
-  saved in the vicinity of the intersection and stored in `Intersection.tracked.CPro`
-  and `Intersection.tracked.CLay`
+  saved in the vicinity of the intersection and stored in `Intersection.observations.CPro`
+  and `Intersection.observations.CLay`
 - `lidarrange::Tuple{Real,Real}=(15,-Inf)`: lidar measurements saved for column heights
   between `(max, min)` (set to `Inf`/`-Inf` to store all values up to top/bottom)
 - `stepwidth::Real=1000`: step width of interpolation in flight and sat tracks
@@ -214,14 +214,14 @@ and types of each columns are checked and attempted to correct, together with th
 
     function XData{T}(
       data::DataFrame,
-      tracked::DataFrame,
+      observations::DataFrame,
       accuracy::DataFrame,
       metadata::XMetadata
     ) -> struct Intersection
 """
 struct XData{T} <: Intersection{T}
   data::DataFrame
-  tracked::DataFrame
+  observations::DataFrame
   accuracy::DataFrame
   metadata::XMetadata
 
@@ -229,37 +229,37 @@ struct XData{T} <: Intersection{T}
   """ Unmodified constructor for `Intersection` """
   function XData{T}(
     data::DataFrame,
-    tracked::DataFrame,
+    observations::DataFrame,
     accuracy::DataFrame,
     metadata::XMetadata{T}
   ) where T
     # Ensure floats of correct precision
     convertFloats!(data, T)
     convertFloats!(accuracy, T)
-    tracked.flight = FlightData{T}.(tracked.flight)
-    tracked.CPro = CPro{T}.(tracked.CPro)
-    tracked.CLay = CLay{T}.(tracked.CLay)
+    observations.flight = FlightData{T}.(observations.flight)
+    observations.CPro = CPro{T}.(observations.CPro)
+    observations.CLay = CLay{T}.(observations.CLay)
     # Check data
-    standardnames = ["id", "lat", "lon", "alt", "tdiff", "tflight", "tsat", "atmos_state"]
+    standardnames = ["id", "lat", "lon", "alt", "tdiff", "tprim", "tsec", "atmos_state"]
     standardtypes = [Vector{String}, Vector{<:T}, Vector{<:T}, Vector{<:Union{Missing,T}},
       Vector{Dates.CompoundPeriod}, Vector{DateTime}, Vector{DateTime},
       Vector{<:Union{Missing,Symbol}}]
     bounds = (:lat => (-90,90), :lon => (-180,180), :alt => (0, Inf))
     checkcols!(data, standardnames, standardtypes, bounds, "Intersection.data")
-    # Check tracked (measured data)
-    standardnames = ["id", "flight", "CPro", "CLay"]
-    standardtypes = [Vector{String}, Vector{FlightData{T}}, Vector{CPro{T}}, Vector{CLay{T}}]
+    # Check observations
+    standardnames = ["id", "primary", "CPro", "CLay"]
+    standardtypes = [Vector{String}, Vector{<:PrimaryTrack{T}}, Vector{CPro{T}}, Vector{CLay{T}}]
     bounds = ()
-    checkcols!(tracked, standardnames, standardtypes, bounds, "Intersection.tracked",
+    checkcols!(observations, standardnames, standardtypes, bounds, "Intersection.observations",
       essentialcols = [1])
     # Check accuracy
-    standardnames = ["id", "intersection", "flightcoord", "satcoord", "flighttime", "sattime"]
+    standardnames = ["id", "intersection", "primdist", "secdist", "primtime", "sectime"]
     standardtypes = [Vector{String}, Vector{<:T}, Vector{<:T}, Vector{<:T},
       Vector{Dates.CompoundPeriod}, Vector{Dates.CompoundPeriod}]
     bounds = ()
     checkcols!(accuracy, standardnames, standardtypes, bounds, "Intersection.accuracy",
       essentialcols = [1])
-    new{T}(data, tracked, accuracy, metadata)
+    new{T}(data, observations, accuracy, metadata)
   end #constructor 1 XData
 
 
@@ -282,11 +282,11 @@ struct XData{T} <: Intersection{T}
     # Initialise DataFrames with Intersection data and monitor start time
     tstart = Dates.now()
     Xdata = DataFrame(id=String[], lat=T[], lon=T[], alt=Union{Missing,T}[],
-      tdiff=Dates.CompoundPeriod[], tflight = DateTime[],
-      tsat = DateTime[], atmos_state = Union{Missing,Symbol}[])
-    tracked = DataFrame(id=String[], flight=FlightData{T}[], CPro=CPro{T}[], CLay=CLay{T}[])
-    accuracy = DataFrame(id=String[], intersection=T[], flightcoord=T[],
-      satcoord=T[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
+      tdiff=Dates.CompoundPeriod[], tprim = DateTime[],
+      tsec = DateTime[], atmos_state = Union{Missing,Symbol}[])
+    observations = DataFrame(id=String[], primary=PrimaryTrack{T}[], CPro=CPro{T}[], CLay=CLay{T}[])
+    accuracy = DataFrame(id=String[], intersection=T[], primdist=T[],
+      secdist=T[], primtime=Dates.CompoundPeriod[], sectime=Dates.CompoundPeriod[])
     # Combine all flight datasets and find intersections
     trackdata = tracks isa FlightSet ?
       [[getfield(tracks, f) for f in fieldnames(FlightSet)[1:end-1]]...;] : tracks.tracks
@@ -314,11 +314,11 @@ struct XData{T} <: Intersection{T}
         primtracks = interpolate_trackdata(track)
         sectracks = interpolate_satdata(overlap, isat, trackdata[i].metadata.useLON)
         # Calculate intersections and store data and metadata in DataFrames
-        currdata, currtrack, curraccuracy = find_intersections(ms, track,
+        currdata, currobs, curraccuracy = find_intersections(ms, track,
           primtracks, tracks.metadata.altmin, sat, sectracks, dataset, ID, maxtimediff,
           stepwidth, Xradius, lidarprofile, lidarrange, primspan, secspan,
           expdist, savedir, savesecondsattype, T)
-        append!(Xdata, currdata); append!(tracked, currtrack)
+        append!(Xdata, currdata); append!(observations, currobs)
         append!(accuracy, curraccuracy)
       catch err
         @debug begin
@@ -337,6 +337,8 @@ struct XData{T} <: Intersection{T}
     pm.finish!(prog)
     # Close MATLAB session after looping over all data
     mat.close(ms)
+    # Convert primary observations to correct type
+    observations.primary = [observations.primary...;]
     # Calculate load time
     tend = Dates.now()
     tc = tz.ZonedDateTime(tend, tz.localzone())
@@ -344,8 +346,8 @@ struct XData{T} <: Intersection{T}
     # Return Intersections after completion
     @info string("Intersection data ($(length(Xdata[!,1])) matches) loaded in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
-      "\n▪ data\n▪ tracked\n▪ accuracy\n▪ metadata")
-    new{T}(Xdata, tracked, accuracy, XMetadata{T}(maxtimediff, stepwidth, Xradius,
+      "\n▪ data\n▪ observations\n▪ accuracy\n▪ metadata")
+    new{T}(Xdata, observations, accuracy, XMetadata{T}(maxtimediff, stepwidth, Xradius,
       expdist, lidarrange, lidarprofile, sat.metadata.type, sat.metadata.date,
       tracks.metadata.altmin, tracks.metadata.date, tc, loadtime, remarks))
   end #constructor 2 XData
@@ -357,7 +359,7 @@ end #struct XData
 
 External constructor for conversion of floating point precision.
 """
-XData{T}(X::XData) where T = XData{T}(X.data, X.tracked, X.accuracy, XMetadata{T}(X.metadata))
+XData{T}(X::XData) where T = XData{T}(X.data, X.observations, X.accuracy, XMetadata{T}(X.metadata))
 
 """
     function XData(

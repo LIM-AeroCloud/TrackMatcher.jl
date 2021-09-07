@@ -24,11 +24,11 @@
 
 Using the interpolated flight or cloud `primtracks` and satellite `sectracks`,
 add new spatial and temporal coordinates of all intersections of the current primary
-track with satellite secondary track to `Xdata`, if the overpass of the aircraft/cloud
+track with the satellite secondary track to `Xdata`, if the overpass of the aircraft/cloud
 and the satellite at the intersection is within `maxtimediff` minutes and above
 `altmin` in meters.
 Additionally, save the measured flight/cloud `track` and `sat` track data near the intersection
-(±`primspan`/±`secspan` datapoints of the intersection) in a `tracked` DataFrame
+(±`primspan`/±`secspan` datapoints of the intersection) in a `observations` DataFrame
 and information about the `accuracy` in another DataFrame.
 MATLAB session `ms` is used to retrieve `CPro` and `CLay` satellite data.
 
@@ -72,11 +72,11 @@ function find_intersections(
 )
   # Initialise DataFrames for current flight
   Xdata = DataFrame(id=String[], lat=Float[], lon=Float[],
-    alt=Union{Missing,Float}[], tdiff=Dates.CompoundPeriod[], tflight = DateTime[],
-    tsat = DateTime[], atmos_state = Union{Missing,Symbol}[])
-  tracked = DataFrame(id=String[], flight=FlightTrack[], CPro=CPro[], CLay=CLay[])
-  accuracy = DataFrame(id=String[], intersection=Float[], flightcoord=Float[],
-    satcoord=Float[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
+    alt=Union{Missing,Float}[], tdiff=Dates.CompoundPeriod[], tprim = DateTime[],
+    tsec = DateTime[], atmos_state = Union{Missing,Symbol}[])
+  observations = DataFrame(id=String[], primary=PrimaryTrack[], CPro=CPro[], CLay=CLay[])
+  accuracy = DataFrame(id=String[], intersection=Float[], primdist=Float[],
+    secdist=Float[], primtime=Dates.CompoundPeriod[], sectime=Dates.CompoundPeriod[])
   counter = 1 # for intersections within the same flight used in the id
 
   # Loop over sat and flight tracks
@@ -84,32 +84,32 @@ function find_intersections(
     # Continue only for sufficient overlap between flight/sat data
     pt.min < st.max && pt.max > st.min || continue
     # Find intersection coordinates
-    Xf, Xs = findXcoords(pt, st, stepwidth, track.metadata.useLON, Float)
-    for i = 1:length(Xf)
+    Xp, Xs = findXcoords(pt, st, stepwidth, track.metadata.useLON, Float)
+    for i = 1:length(Xp)
       id = string(dataset,-,trackID,-,counter)
       # Get precision of Intersection
-      dx = dist.haversine(Xf[i], Xs[i], earthradius(Xf[i][1]))
+      dx = dist.haversine(Xp[i], Xs[i], earthradius(Xp[i][1]))
       # Determine time difference between aircraf/satellite at intersection
       # Use only the current flight segment for the time interpolation
       # from the flex data in the flight metadata, which coincides with the flighttracks
       # For each flight segment between flex points, one interpolated flight-track exists
-      tmf = interpolate_time(track.data[track.metadata.flex[n].range,:], Xf[i])
+      tmf = interpolate_time(track.data[track.metadata.flex[n].range,:], Xp[i])
       tms, obsindex = interpolate_time(sat, st.timeindex, Xs[i])
       dt = Dates.canonicalize(Dates.CompoundPeriod(tms-tmf))
       # Skip intersections that exceed allowed time difference
       abs(tmf - tms) < Dates.Minute(maxtimediff) || continue
       # Add intersection and nearby measurements
       counter = track isa FlightTrack ?
-        add_intersections!(ms, Xdata, tracked, accuracy, track, sat, Xf[i], Xs[i],
+        add_intersections!(ms, Xdata, observations, accuracy, track, sat, Xp[i], Xs[i],
           obsindex, counter, id, dx, dt, tmf, tms, primspan, secspan, altmin, trackID,
           Xradius, expdist, lidarprofile, lidarrange, savedir, savesecondsattype) :
-        add_intersections!(ms, Xdata, tracked, accuracy, sat, Xf[i], Xs[i],
+        add_intersections!(ms, Xdata, observations, accuracy, sat, Xp[i], Xs[i],
           obsindex, counter, id, dx, dt, tmf, tms, secspan, altmin, trackID,
           Xradius, expdist, lidarprofile, lidarrange, savedir, savesecondsattype)
     end #loop over intersections of current flight
   end #loop over flight and sat tracks
   # Return intersection data of current flight
-  return Xdata, tracked, accuracy
+  return Xdata, observations, accuracy
 end #function find_intersections
 
 
@@ -221,18 +221,18 @@ end #function interpolate_satdata
 
 """
     function findXcoords(
-      flight::NamedTuple,
+      track::NamedTuple,
       sat::NamedTuple,
       stepwidth::Real,
       useLON::Bool,
       Float::DataType=Float32
-    ) -> Xf::, Xs::Tuple{Float,Float}[]
+    ) -> Xp::, Xs::Tuple{Float,Float}[]
 
-From the interpolated `flight` and `satellite` tracks (PCHIP polynomial), construct
-a function `flight - sat` using the PCHIP method on interpolated data points constructed
+From the interpolated primary `track` and `sat` track (PCHIP polynomial), construct
+a function `track - sat` using the PCHIP method on interpolated data points constructed
 from both PCHIP polynomials in the common track range with the defined `stepwidth`.
 X data is defined by the flag `useLON` (true for longitude as x data) depending on
-the prevailing flight direction.
+the prevailing primary track direction.
 
 Find all intersections between both tracks by finding all roots in the defined
 function using the `IntervalRootFinding` package.
@@ -240,16 +240,16 @@ function using the `IntervalRootFinding` package.
 Floating point numbers are of the precision set by `Float`, by default `Float32`.
 """
 function findXcoords(
-  flight::NamedTuple,
+  track::NamedTuple,
   sat::NamedTuple,
   stepwidth::Real,
   useLON::Bool,
   Float::DataType=Float32
 )
   # Define common interpolated x and y data
-  xstart, xend = max(flight.min, sat.min), min(flight.max, sat.max)
+  xstart, xend = max(track.min, sat.min), min(track.max, sat.max)
   xdata = xstart < xend ? collect(Float, xstart:stepwidth:xend) : collect(Float, xend:stepwidth:xstart)
-  ydata = flight.track(xdata) .- sat.track(xdata)
+  ydata = track.track(xdata) .- sat.track(xdata)
 
   length(xdata) > 1 || return Tuple{Float,Float}[], Tuple{Float,Float}[]
 
@@ -257,22 +257,22 @@ function findXcoords(
   xdata, ydata = Float64.(xdata), Float64.(ydata)
   # Define function to find minimum distance between both tracks
   coorddist(x) = interpolate(pchip(xdata, ydata), x)
-  # Find minimum distance by solving flight track - sat track = 0
+  # Find minimum distance by solving primary track - sat track = 0
   rts = root.roots(coorddist, xdata[1] .. xdata[end], root.Krawczyk)
   X = Float.(root.mid.(root.interval.(rts)))
 
   # Return Vector with coordinate pairs
-  Xf, Xs = Tuple{Float,Float}[], Tuple{Float,Float}[]
+  Xp, Xs = Tuple{Float,Float}[], Tuple{Float,Float}[]
   for x in X
     isnan(x) && continue
     if useLON
-      push!(Xf, (flight.track(x), x))
+      push!(Xp, (track.track(x), x))
       push!(Xs, (sat.track(x), x))
     else
-      push!(Xf, (x, flight.track(x)))
+      push!(Xp, (x, track.track(x)))
       push!(Xs, (x, sat.track(x)))
     end
   end
 
-  return Xf, Xs
+  return Xp, Xs
 end #function findXcoords
