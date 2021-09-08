@@ -290,6 +290,8 @@ struct XData{T} <: Intersection{T}
     # Combine all flight datasets and find intersections
     trackdata = tracks isa FlightSet ?
       [[getfield(tracks, f) for f in fieldnames(FlightSet)[1:end-1]]...;] : tracks.tracks
+    # Define abbreviations for sources
+    abbrv = Dict("VOLPE" => "V", "FlightAware" => "FA", "web" => "WD")
     # Get lidar altitude levels
     lidarprofile = get_lidarheights(lidarrange, T)
     # New MATLAB session
@@ -298,12 +300,11 @@ struct XData{T} <: Intersection{T}
     prog = pm.Progress(length(trackdata), "find intersections...")
     for (i, track) in enumerate(trackdata)
       # Get dataset source and ID
-      dataset = track isa FlightTrack ? trackdata[i].metadata.source : "CloudTrack"
+      dataset = track isa FlightTrack ? abbrv[trackdata[i].metadata.source] : "CT"
       ID = track isa FlightTrack ? trackdata[i].metadata.dbID : trackdata[i].metadata.ID
       try
         # Find sat tracks in the vicinity of flight tracks, where intersections are possible
         overlap, isat = findoverlap(track, sat, maxtimediff, atol)
-        isempty(isat) && continue
         if isempty(overlap)
           pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
             (:featured, length(Xdata.id[.!ismissing.(Xdata.atmos_state) .&

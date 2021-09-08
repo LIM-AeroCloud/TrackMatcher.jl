@@ -86,7 +86,6 @@ function find_intersections(
     # Find intersection coordinates
     Xp, Xs = findXcoords(pt, st, stepwidth, track.metadata.useLON, Float)
     for i = 1:length(Xp)
-      id = string(dataset,-,trackID,-,counter)
       # Get precision of Intersection
       dx = dist.haversine(Xp[i], Xs[i], earthradius(Xp[i][1]))
       # Determine time difference between aircraf/satellite at intersection
@@ -99,6 +98,7 @@ function find_intersections(
       # Skip intersections that exceed allowed time difference
       abs(tmf - tms) < Dates.Minute(maxtimediff) || continue
       # Add intersection and nearby measurements
+      id = string(dataset,-,trackID,-,counter)
       counter = track isa FlightTrack ?
         add_intersections!(ms, Xdata, observations, accuracy, track, sat, Xp[i], Xs[i],
           obsindex, counter, id, dx, dt, tmf, tms, primspan, secspan, altmin, trackID,
