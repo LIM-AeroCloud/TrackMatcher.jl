@@ -1,7 +1,7 @@
 ### Routines related to loading FlightTrack
 
 """
-    loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5_000)
+    loadVOLPE(files::String...; Float::DataType=Float32, altmin::Real=5_000)
       -> Vector{FlightTrack}
 
 From a list of `files`, return a `Vector{FlightTrack}` that can
@@ -12,7 +12,7 @@ altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
 Floating point numbers in `FlightTrack` are of the precision set by `Float`,
 by default `Float32`.
 """
-function loadInventory(
+function loadVOLPE(
   files::String...;
   Float::DataType=Float32,
   altmin::Real=5_000
@@ -79,11 +79,11 @@ function loadInventory(
   pm.finish!(prog)
 
   return inventory
-end #function loadInventory
+end #function loadVOLPE
 
 
 """
-    loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_000)
+    loadFA(files::String...; Float::DataType=Float32, altmin::Real=5_000)
       -> Vector{FlightTrack}
 
 From a list of `files`, return a `Vector{FlightTrack}` that can
@@ -94,7 +94,7 @@ altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
 Floating point numbers in `FlightTrack` are of the precision set by `Float`,
 by default `Float32`.
 """
-function loadArchive(
+function loadFA(
   files::String...;
   Float::DataType=Float32,
   altmin::Real=5_000
@@ -161,11 +161,11 @@ function loadArchive(
   pm.finish!(prog)
 
   return archive
-end #function loadArchive
+end #function loadFA
 
 
 """
-    loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=5_000, delim::Union{Nothing,Char,String}=nothing)
+    loadWD(files::String...; Float::DataType=Float32, altmin::Real=5_000, delim::Union{Nothing,Char,String}=nothing)
       -> Vector{FlightTrack}
 
 From a list of `files`, return a `Vector{FlightTrack}` that can
@@ -179,7 +179,7 @@ altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
 Floating point numbers in `FlightTrack` are of the precision set by `Float`,
 by default `Float32`.
 """
-function loadOnlineData(
+function loadWD(
   files::String...;
   Float::DataType=Float32,
   altmin::Real=5_000,
@@ -269,14 +269,14 @@ function loadOnlineData(
 
     # Save data as FlightTrack
     isempty(flex) || push!(archive, FlightTrack{Float}(flight, replace(filename, "_" => "/"),
-      flightID, missing, (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
+      flightID, missing, (orig=orig, dest=dest), flex, useLON, "web", file))
     # Monitor progress for progress bar
     pm.next!(prog)
   end #loop over files
   pm.finish!(prog)
 
   return archive
-end #function loadOnlineData
+end #function loadWD
 
 
 """

@@ -19,7 +19,7 @@ Immutable struct holding metadata for an individual `FlightTrack` of the `Flight
 By default, `Float32` is used for `T`.
 
 ## dbID
-Database ID – integer counter for `inventory`,
+Database ID – integer counter for `volpe`,
 String with information about `FlightID`, `route`, and/or scheduled arrival for
 FlightAware data.
 
@@ -486,9 +486,9 @@ FlightTrack{T}(args...; kwargs...) where T = FlightData{T}(args...; kwargs...)
 # struct FlightSet
 
 Database for aircraft data of different database types with fields:
-- `inventory::Vector{FlightTrack}`
-- `archive::Vector{FlightTrack}`
-- `onlineData::Vector{FlightTrack}`
+- `volpe::Vector{FlightTrack}`
+- `flightaware::Vector{FlightTrack}`
+- `webdata::Vector{FlightTrack}`
 - `metadata`: `DBMetatadata` with information about
   - `altmin::Real`: Minimum altitude threshold for which flight data is considered
   - `date`: date range of the dataset
@@ -496,13 +496,13 @@ Database for aircraft data of different database types with fields:
   - `loadtime`
   - `remarks` (any additional data or comments)
 
-## inventory
+## volpe
 Flight data from csv files.
 
-## archive
+## flightaware
 Commercial flight data by FlightAware from a csv file.
 
-## onlineData
+## webdata
 Online data from the FlightAware website copied to whitespace-separated files.
 
 ## metadata
@@ -512,7 +512,7 @@ Immutable struct `PrimaryMetadata`.
 # Instantiation
 
 Instantiate by passing a `String` or `Vector{String}` with any of the keyword
-arguments `inventory`, `archive` or `onlineData` to the modified constructor of
+arguments `volpe`, `flightaware` or `webdata` to the modified constructor of
 `FlightSet`. Optionally add a minimum altitude threshold for the flight data
 (default = `15000`) and any remarks (comments or additional data). Define the
 delimiter in the input files of the online data with the keyword `odelim`.
@@ -520,9 +520,9 @@ Use any character or string as delimiter. By default (`odelim=nothing`),
 auto-detection is used.
 
     function FlightSet{T}(;
-      inventory::Union{String,Vector{String}}=String[],
-      archive::Union{String,Vector{String}}=String[],
-      onlineData::Union{String,Vector{String}}=String[],
+      volpe::Union{String,Vector{String}}=String[],
+      flightaware::Union{String,Vector{String}}=String[],
+      webdata::Union{String,Vector{String}}=String[],
       altmin::Real=5000,
       remarks=nothing, odelim::Union{Nothing,Char,String}=nothing) where T
 
@@ -531,30 +531,30 @@ Floating point precision is set by `{T}`. If omitted, `Float32` is used.
 Alternatively, instantiate directly with the fields of `FlightSet`, where the correct
 database type is checked, and wrong datasets are removed in every field.
 
-    FlightSet{T}(inventory::Vector{FlightData{T}}, archive::Vector{FlightData{T}},
-        onlineData::Vector{FlightData{T}}, metadata::PrimaryMetadata{T}) where T
+    FlightSet{T}(volpe::Vector{FlightData{T}}, flightaware::Vector{FlightData{T}},
+        webdata::Vector{FlightData{T}}, metadata::PrimaryMetadata{T}) where T
 """
 struct FlightSet{T} <: PrimarySet{T}
-  inventory::Vector{FlightData{T}}
-  archive::Vector{FlightData{T}}
-  onlineData::Vector{FlightData{T}}
+  volpe::Vector{FlightData{T}}
+  flightaware::Vector{FlightData{T}}
+  webdata::Vector{FlightData{T}}
   metadata::PrimaryMetadata{T}
 
   """
   Unmodified constructor for `FlightSet` with basic checks for correct dataset type
   in each dataset field.
   """
-  function FlightSet{T}(inventory::Vector{FlightData{T}}, archive::Vector{FlightData{T}},
-    onlineData::Vector{FlightData{T}}, metadata::PrimaryMetadata{T}) where T
+  function FlightSet{T}(volpe::Vector{FlightData{T}}, flightaware::Vector{FlightData{T}},
+    webdata::Vector{FlightData{T}}, metadata::PrimaryMetadata{T}) where T
 
     # Check for correct dataset type in each vector and for correct floating point precision
-    inventory = checkDBtype(inventory, "VOLPE")
-    archive = checkDBtype(archive, "FlightAware")
-    onlineData = checkDBtype(onlineData, "flightaware.com")
+    volpe = checkDBtype(volpe, "VOLPE")
+    flightaware = checkDBtype(flightaware, "FlightAware")
+    webdata = checkDBtype(webdata, "flightaware.com")
 
 
     # Instantiate new struct
-    new{T}(inventory, archive, onlineData, metadata)
+    new{T}(volpe, flightaware, webdata, metadata)
   end #constructor 1 FlightSet
 
   """
@@ -562,54 +562,54 @@ struct FlightSet{T} <: PrimarySet{T}
   database type and the respective folder path for that database.
   """
   function FlightSet{T}(;
-    inventory::Union{String,Vector{String}}=String[],
-    archive::Union{String,Vector{String}}=String[],
-    onlineData::Union{String,Vector{String}}=String[],
+    volpe::Union{String,Vector{String}}=String[],
+    flightaware::Union{String,Vector{String}}=String[],
+    webdata::Union{String,Vector{String}}=String[],
     altmin::Real=5000,
     odelim::Union{Nothing,Char,String}=nothing,
     savedir::Union{String,Bool}="abs",
     remarks=nothing) where T
 
     # Return empty FlightSet, if no folders are passed to constructor
-    all(isempty.([inventory, archive, onlineData])) &&
+    all(isempty.([volpe, flightaware, webdata])) &&
       return FlightSet{T}(FlightData{T}[], FlightData{T}[], FlightData{T}[], PrimaryMetadata{T}())
     # Save time of database creation
     tstart = Dates.now()
 
     ## Load databases for each type
-    # VOLPE AEDT inventory
-    inventory isa Vector || (inventory = [inventory])
+    # VOLPE AEDT dataset
+    volpe isa Vector || (volpe = [volpe])
     files = String[]
-    for dir in inventory
+    for dir in volpe
       findfiles!(files, dir, ".csv")
     end
     files = convertdir.(files, savedir)
-    inventory = loadInventory(files...; Float=T, altmin)
-    # FlightAware commercial archive
-    archive isa Vector || (archive = [archive])
+    volpe = loadVOLPE(files...; Float=T, altmin)
+    # FlightAware commercial dataset
+    flightaware isa Vector || (flightaware = [flightaware])
     files = String[]
-    for dir in archive
+    for dir in flightaware
       findfiles!(files, dir, ".csv")
     end
     files = convertdir.(files, savedir)
-    archive = loadArchive(files...; Float=T, altmin)
+    flightaware = loadFA(files...; Float=T, altmin)
     # FlightAware web content
-    onlineData isa Vector || (onlineData = [onlineData])
+    webdata isa Vector || (webdata = [webdata])
     files = String[]
-    for dir in onlineData
+    for dir in webdata
       findfiles!(files, dir, ".tsv", ".txt", ".dat")
     end
     files = convertdir.(files, savedir)
-    onlineData = loadOnlineData(files...; Float=T, altmin, delim=odelim)
-    tmin, tmax = if isempty([inventory; archive; onlineData])
+    webdata = loadWD(files...; Float=T, altmin, delim=odelim)
+    tmin, tmax = if isempty([volpe; flightaware; webdata])
       tstart, tstart
     else
-      minimum([[f.metadata.date.start for f in inventory];
-        [f.metadata.date.start for f in archive];
-        [f.metadata.date.start for f in onlineData]]),
-      maximum([[f.metadata.date.stop for f in inventory];
-        [f.metadata.date.stop for f in archive];
-        [f.metadata.date.stop for f in onlineData]])
+      minimum([[f.metadata.date.start for f in volpe];
+        [f.metadata.date.start for f in flightaware];
+        [f.metadata.date.start for f in webdata]]),
+      maximum([[f.metadata.date.stop for f in volpe];
+        [f.metadata.date.stop for f in flightaware];
+        [f.metadata.date.stop for f in webdata]])
     end
 
     # wrap up and calculate load time
@@ -619,11 +619,11 @@ struct FlightSet{T} <: PrimarySet{T}
 
     @info string("FlightSet loaded in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
-      "\n▪ inventory ($(length(inventory)) entries)\n▪ archive ($(length(archive)) entries)\n",
-      "▪ onlineData ($(length(onlineData)) entries)\n▪ metadata")
+      "\n▪ volpe ($(length(volpe)) entries)\n▪ flightaware ($(length(flightaware)) entries)\n",
+      "▪ webdata ($(length(webdata)) entries)\n▪ metadata")
 
     # Instantiate
-    new{T}(inventory, archive, onlineData,
+    new{T}(volpe, flightaware, webdata,
       PrimaryMetadata{T}(altmin, (start=tmin, stop=tmax), tc, loadtime, remarks))
   end # constructor 2 FlightSet
 end #struct FlightSet
@@ -645,28 +645,28 @@ FlightSet(args...; kwargs...) = FlightSet{Float32}(args...; kwargs...)
 External `FlightSet` constructor for floating point conversions.
 """
 FlightSet{T}(flights::FlightSet) where T = FlightSet{T}(
-  FlightData{T}.(flights.inventory),
-  FlightData{T}.(flights.archive),
-  FlightData{T}.(flights.onlineData),
+  FlightData{T}.(flights.volpe),
+  FlightData{T}.(flights.flightaware),
+  FlightData{T}.(flights.webdata),
   PrimaryMetadata{T}(flights.metadata)
 )
 
 """
     PrimarySet{T}(
-      inventory::Vector{FlightData{T}},
-      archive::Vector{FlightData{T}},
-      onlineData::Vector{FlightData{T}},
+      volpe::Vector{FlightData{T}},
+      flightaware::Vector{FlightData{T}},
+      webdata::Vector{FlightData{T}},
       metadata::PrimaryMetadata{T}
 ) where T
 
 Alias constructor for `FlightSet{T}` instantiation with unmodified constructor.
 """
 PrimarySet{T}(
-  inventory::Vector{FlightData{T}},
-  archive::Vector{FlightData{T}},
-  onlineData::Vector{FlightData{T}},
+  volpe::Vector{FlightData{T}},
+  flightaware::Vector{FlightData{T}},
+  webdata::Vector{FlightData{T}},
   metadata::PrimaryMetadata{T}
-) where T = FlightSet{T}(inventory, archive, onlineData, metadata)
+) where T = FlightSet{T}(volpe, flightaware, webdata, metadata)
 
 """
     PrimarySet{T}(; kwargs...) where T
