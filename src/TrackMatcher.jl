@@ -11,7 +11,7 @@ tracks and room for further applications in geosciences.
 DataSet──Data
 ├─MeasuredSet──MeasuredData
 │ ├─PrimarySet
-│ │ ├─SetMetadata
+│ │ ├─PrimaryMetadata
 │ │ ├─FlightSet
 │ │ ├─CloudSet
 │ │ └─PrimaryTrack
@@ -19,9 +19,11 @@ DataSet──Data
 │ │   │ └─FlightMetadata
 │ │   └─CloudTrack──CloudData
 │ │     └─CloudMetadata
-│ ├─SecondaryTrack
+│ ├─SecondarySet
+│ │ ├─SecondaryMetadata
+│ │ ├─SatSet
+│ │ └─SecondaryTrack
 │ │   └─SatTrack──SatData
-│ │     └─SatMetadata
 │ └─ObservationSet
 │   ├─CPro
 │   ├─CLay
@@ -60,7 +62,7 @@ DataSet──Data
 - alias constructors for `FlightSet` and `CloudSet`
 
 
-### SetMetadata
+### PrimaryMetadata
 
 - Metadata of all primary data sets
 
@@ -194,6 +196,7 @@ import Dates
 import TimeZones as tz
 import Distances as dist
 import MATLAB as mat
+import MAT
 import IntervalRootFinding as root
 import Statistics as stats
 import ProgressMeter as pm
@@ -207,9 +210,7 @@ import Dates: DateTime, Date, Time
 import TimeZones.ZonedDateTime
 
 # Define Logger with log level
-logger = try logg.SimpleLogger(logfile, logg.Info)
-catch; logg.ConsoleLogger(stdout, logg.Info)
-end
+logger = logg.ConsoleLogger(stdout, logg.Info)
 logg.global_logger(logger)
 
 
@@ -222,28 +223,30 @@ zonedict["_CEST_"] = tz.tz"+0200"
 ## Define type tree of abstract types
 abstract type DataSet{T<:AbstractFloat} end
 abstract type MeasuredSet{T} <: DataSet{T} end
-abstract type ComputedSet{T} <: DataSet{T} end
 abstract type PrimarySet{T} <: MeasuredSet{T} end
-abstract type ObservationSet{T} <: MeasuredSet{T} end
-abstract type SecondaryTrack{T} <: MeasuredSet{T} end
 abstract type PrimaryTrack{T} <: PrimarySet{T} end
 abstract type FlightTrack{T} <: PrimaryTrack{T} end
 abstract type CloudTrack{T} <: PrimaryTrack{T} end
+abstract type SecondarySet{T} <: MeasuredSet{T} end
+abstract type SecondaryTrack{T} <: SecondarySet{T} end
 abstract type SatTrack{T} <: SecondaryTrack{T} end
+abstract type ObservationSet{T} <: MeasuredSet{T} end
+abstract type ComputedSet{T} <: DataSet{T} end
 abstract type Intersection{T} <: ComputedSet{T} end
 
 
 ## Export types and constructors
-export DataSet, Data, MeasuredSet, ComputedSet, PrimarySet, ObservationSet,
-       FlightSet, CloudSet, PrimaryTrack, SecondaryTrack,
-       FlightTrack, CloudTrack, FlightData, CloudData,
-       SatTrack, SatData, CLay, CPro, Intersection, XData, #APro, ALay,
-       FlightMetadata, SatMetadata, SetMetadata, XMetadata
+export DataSet, Data, MeasuredSet, ComputedSet, PrimarySet, SecondarySet, ObservationSet,
+       FlightSet, CloudSet, SatSet, PrimaryTrack, SecondaryTrack,
+       FlightTrack, CloudTrack, SatTrack, FlightData, CloudData, SatData,
+       CLay, CPro, Intersection, XData, #APro, ALay,
+       FlightMetadata, CloudMetadata, PrimaryMetadata, SecondaryMetadata, XMetadata
 
 
 ## Import functions from Julia include files
-include("inputtypes.jl")      # structs of concrete types at the end of the type tree
-include("outputtypes.jl")     # structs of abstract types with constructors for concrete types
+include("primarytypes.jl")    # concrete types/constructors for primary data/datasets
+include("sattypes.jl")        # concrete types/constructors for secondary sat track data and observations
+include("outputtypes.jl")   # concrete types/constructors for intersections and combined datasets
 include("datachecks.jl")      # helper functions for data checks
 include("dataprocessing.jl")  # helper functions for data processing
 include("conversions.jl")     # helper functions for time/unit conversions

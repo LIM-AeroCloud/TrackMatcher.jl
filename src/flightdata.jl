@@ -1,7 +1,7 @@
 ### Routines related to loading FlightTrack
 
 """
-    loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5_000)
+    loadVOLPE(files::String...; Float::DataType=Float32, altmin::Real=5_000)
       -> Vector{FlightTrack}
 
 From a list of `files`, return a `Vector{FlightTrack}` that can
@@ -12,7 +12,11 @@ altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
 Floating point numbers in `FlightTrack` are of the precision set by `Float`,
 by default `Float32`.
 """
-function loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5_000)
+function loadVOLPE(
+  files::String...;
+  Float::DataType=Float32,
+  altmin::Real=5_000
+)
 
   # Initialise inventory file array and start MATLAB for PCHIP fitting
   inventory = FlightData{Float}[]
@@ -75,11 +79,11 @@ function loadInventory(files::String...; Float::DataType=Float32, altmin::Real=5
   pm.finish!(prog)
 
   return inventory
-end #function loadInventory
+end #function loadVOLPE
 
 
 """
-    loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_000)
+    loadFA(files::String...; Float::DataType=Float32, altmin::Real=5_000)
       -> Vector{FlightTrack}
 
 From a list of `files`, return a `Vector{FlightTrack}` that can
@@ -90,7 +94,11 @@ altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
 Floating point numbers in `FlightTrack` are of the precision set by `Float`,
 by default `Float32`.
 """
-function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_000)
+function loadFA(
+  files::String...;
+  Float::DataType=Float32,
+  altmin::Real=5_000
+)
   # Initialise archive file array
   archive = FlightData{Float}[]
   # Loop over database files
@@ -128,8 +136,8 @@ function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_0
         flex, useLON = preptrack!(track)
         # Save the FlightTrack in the archive vector
         isempty(flex) || push!(archive, FlightTrack{Float}(track, FID, flights.flightID[n],
-          flights.type[n], (orig=flights.orig[n],
-          dest=flights.dest[n]), flex, useLON, "FlightAware", file))
+          flights.type[n], (orig=flights.orig[n], dest=flights.dest[n]), flex, useLON,
+          "FlightAware", file))
 
         # Reset temporary data arrays
         track = DataFrame(time = DateTime[], lat = Float[]; lon = Float[],
@@ -153,11 +161,11 @@ function loadArchive(files::String...; Float::DataType=Float32, altmin::Real=5_0
   pm.finish!(prog)
 
   return archive
-end #function loadArchive
+end #function loadFA
 
 
 """
-    loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=5_000, delim::Union{Nothing,Char,String}=nothing)
+    loadWD(files::String...; Float::DataType=Float32, altmin::Real=5_000, delim::Union{Nothing,Char,String}=nothing)
       -> Vector{FlightTrack}
 
 From a list of `files`, return a `Vector{FlightTrack}` that can
@@ -171,8 +179,12 @@ altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
 Floating point numbers in `FlightTrack` are of the precision set by `Float`,
 by default `Float32`.
 """
-function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=5_000,
-  delim::Union{Nothing,Char,String}=nothing)
+function loadWD(
+  files::String...;
+  Float::DataType=Float32,
+  altmin::Real=5_000,
+  delim::Union{Nothing,Char,String}=nothing
+)
   # Initialise inventory file array
   archive = FlightData{Float}[]
   # Loop over files with online data
@@ -257,14 +269,14 @@ function loadOnlineData(files::String...; Float::DataType=Float32, altmin::Real=
 
     # Save data as FlightTrack
     isempty(flex) || push!(archive, FlightTrack{Float}(flight, replace(filename, "_" => "/"),
-      flightID, missing, (orig=orig, dest=dest), flex, useLON, "flightaware.com", file))
+      flightID, missing, (orig=orig, dest=dest), flex, useLON, "web", file))
     # Monitor progress for progress bar
     pm.next!(prog)
   end #loop over files
   pm.finish!(prog)
 
   return archive
-end #function loadOnlineData
+end #function loadWD
 
 
 """

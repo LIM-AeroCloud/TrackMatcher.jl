@@ -119,7 +119,7 @@ XMetadata{T}(meta::XMetadata) where T = XMetadata{T}(
 
 Intersection-related data with fields
 - `data::DataFrame`
-- `tracked::DataFrame`
+- `observations::DataFrame`
 - `accuracy::DataFrame`
 - `metadata::XMetadata`
 
@@ -127,25 +127,25 @@ Intersection-related data with fields
 ## data
 
 Data related to spatial and temporal coordinates of intersections between satellite
-and flight tracks and the meteorological conditions at the intersections.
+and primary (flight or cloud) tracks and the meteorological conditions at the intersections.
 
 `DataFrame` columns are:
 - `id::Vector{String}`: unique intersection identifier
 - `lat::Vector{<:AbstractFloat}`: latitude of intersection
 - `lon::Vector{<:AbstractFloat}`: longitude of intersection
 - `tdiff::Vector{Dates.CompoundPeriod}`: time difference between flight and satellite overpass
-- `tflight::Vector{DateTime}`: time of aircraft at intersection
-- `tsat::Vector{DateTime}`: time of satellite at intersection
+- `tprim::Vector{DateTime}`: time of aircraft at intersection
+- `tsec::Vector{DateTime}`: time of satellite at intersection
 - `atmos_state::Vector{<:Union{Missing,Symbol}}`: atmospheric conditions at intersection
 
 
-## tracked
+## observations
 
 Original track data in the vicinity of the intersection.
 
 `DataFrame` columns are:
 - `id: Vector{String}`: unique intersection identifier
-- `flight::Vector{FlightData}`: `FlightData` in the vicinity of the intersection
+- `primary::Vector{<:PrimaryTrack}`: `PrimaryData` in the vicinity of the intersection
 - `CPro::Vector{CPro}`: `CPro` CALIOP profile data in the vicinity of the intersection
 - `CLay::Vector{CLay}`: `CLay` CALIOP layer data in the vicinity of the intersection
 
@@ -157,13 +157,13 @@ Measures about the accuracy of the intersection calculations and the quality of 
 `DataFrame` columns are:
 - `id: Vector{String}`: unique intersection identifier
 - `intersection::Vector{<:AbstractFloat}`: accuracy of the intersection calculation in meters
-- `flightcoord::Vector{<:AbstractFloat}`: distance of nearest tracked flight data
+- `primdist::Vector{<:AbstractFloat}`: distance of nearest tracked primary data
   to calculated intersection in meters
-- `satcoord::Vector{<:AbstractFloat}`: distance of nearest tracked sat data
+- `secdist::Vector{<:AbstractFloat}`: distance of nearest tracked sat data
   to calculated intersection in meters
-- `flighttime::Vector{Dates.CompoundPeriod}`: time difference between measurement
+- `primtime::Vector{Dates.CompoundPeriod}`: time difference between measurement
   of nearest tracked flight data and calculated time of aircraft at intersection
-- `sattime::Vector{Dates.CompoundPeriod}`: time difference between measurement
+- `sectime::Vector{Dates.CompoundPeriod}`: time difference between measurement
   of nearest tracked sat data and calculated time of satellite at intersection
 
 
@@ -193,10 +193,10 @@ data saved to the struct:
 - `maxtimediff::Int=30`: maximum time difference allowed between aircraft passage
   and satellite overpass at intersection
 - `primspan::Int=0`: Number of additional data points of original track data
-  saved in the vicinity of the intersection and stored in `Intersection.tracked.flight`
+  saved in the vicinity of the intersection and stored in `Intersection.observations.primary`
 - `secspan::Int=15`: Number of additional data points of original track data
-  saved in the vicinity of the intersection and stored in `Intersection.tracked.CPro`
-  and `Intersection.tracked.CLay`
+  saved in the vicinity of the intersection and stored in `Intersection.observations.CPro`
+  and `Intersection.observations.CLay`
 - `lidarrange::Tuple{Real,Real}=(15,-Inf)`: lidar measurements saved for column heights
   between `(max, min)` (set to `Inf`/`-Inf` to store all values up to top/bottom)
 - `stepwidth::Real=1000`: step width of interpolation in flight and sat tracks
@@ -214,14 +214,14 @@ and types of each columns are checked and attempted to correct, together with th
 
     function XData{T}(
       data::DataFrame,
-      tracked::DataFrame,
+      observations::DataFrame,
       accuracy::DataFrame,
       metadata::XMetadata
     ) -> struct Intersection
 """
 struct XData{T} <: Intersection{T}
   data::DataFrame
-  tracked::DataFrame
+  observations::DataFrame
   accuracy::DataFrame
   metadata::XMetadata
 
@@ -229,44 +229,44 @@ struct XData{T} <: Intersection{T}
   """ Unmodified constructor for `Intersection` """
   function XData{T}(
     data::DataFrame,
-    tracked::DataFrame,
+    observations::DataFrame,
     accuracy::DataFrame,
     metadata::XMetadata{T}
   ) where T
     # Ensure floats of correct precision
     convertFloats!(data, T)
     convertFloats!(accuracy, T)
-    tracked.flight = FlightData{T}.(tracked.flight)
-    tracked.CPro = CPro{T}.(tracked.CPro)
-    tracked.CLay = CLay{T}.(tracked.CLay)
+    observations.flight = FlightData{T}.(observations.flight)
+    observations.CPro = CPro{T}.(observations.CPro)
+    observations.CLay = CLay{T}.(observations.CLay)
     # Check data
-    standardnames = ["id", "lat", "lon", "alt", "tdiff", "tflight", "tsat", "atmos_state"]
-    standardtypes = [Vector{String}, Vector{<:T}, Vector{<:T}, Vector{<:T},
+    standardnames = ["id", "lat", "lon", "alt", "tdiff", "tprim", "tsec", "atmos_state"]
+    standardtypes = [Vector{String}, Vector{<:T}, Vector{<:T}, Vector{<:Union{Missing,T}},
       Vector{Dates.CompoundPeriod}, Vector{DateTime}, Vector{DateTime},
       Vector{<:Union{Missing,Symbol}}]
     bounds = (:lat => (-90,90), :lon => (-180,180), :alt => (0, Inf))
     checkcols!(data, standardnames, standardtypes, bounds, "Intersection.data")
-    # Check tracked (measured data)
-    standardnames = ["id", "flight", "CPro", "CLay"]
-    standardtypes = [Vector{String}, Vector{FlightData{T}}, Vector{CPro{T}}, Vector{CLay{T}}]
+    # Check observations
+    standardnames = ["id", "primary", "CPro", "CLay"]
+    standardtypes = [Vector{String}, Vector{<:PrimaryTrack{T}}, Vector{CPro{T}}, Vector{CLay{T}}]
     bounds = ()
-    checkcols!(tracked, standardnames, standardtypes, bounds, "Intersection.tracked",
+    checkcols!(observations, standardnames, standardtypes, bounds, "Intersection.observations",
       essentialcols = [1])
     # Check accuracy
-    standardnames = ["id", "intersection", "flightcoord", "satcoord", "flighttime", "sattime"]
+    standardnames = ["id", "intersection", "primdist", "secdist", "primtime", "sectime"]
     standardtypes = [Vector{String}, Vector{<:T}, Vector{<:T}, Vector{<:T},
       Vector{Dates.CompoundPeriod}, Vector{Dates.CompoundPeriod}]
     bounds = ()
     checkcols!(accuracy, standardnames, standardtypes, bounds, "Intersection.accuracy",
       essentialcols = [1])
-    new{T}(data, tracked, accuracy, metadata)
+    new{T}(data, observations, accuracy, metadata)
   end #constructor 1 XData
 
 
   """ Modified constructor with some automated calculations of the flight intersection data. """
   function XData{T}(
     tracks::PrimarySet,
-    sat::SatData,
+    sat::SatSet,
     savesecondsattype::Bool=false;
     maxtimediff::Int=30,
     primspan::Int=0,
@@ -275,19 +275,23 @@ struct XData{T} <: Intersection{T}
     stepwidth::Real=0.01,
     Xradius::Real=20_000,
     expdist::Real=Inf,
+    atol::Real=0.1,
+    savedir::Union{String,Bool}="abs",
     remarks=nothing
   ) where T
     # Initialise DataFrames with Intersection data and monitor start time
     tstart = Dates.now()
-    Xdata = DataFrame(id=String[], lat=T[], lon=T[], alt=T[],
-      tdiff=Dates.CompoundPeriod[], tflight = DateTime[],
-      tsat = DateTime[], atmos_state = Union{Missing,Symbol}[])
-    tracked = DataFrame(id=String[], flight=FlightData{T}[], CPro=CPro{T}[], CLay=CLay{T}[])
-    accuracy = DataFrame(id=String[], intersection=T[], flightcoord=T[],
-      satcoord=T[], flighttime=Dates.CompoundPeriod[], sattime=Dates.CompoundPeriod[])
+    Xdata = DataFrame(id=String[], lat=T[], lon=T[], alt=Union{Missing,T}[],
+      tdiff=Dates.CompoundPeriod[], tprim = DateTime[],
+      tsec = DateTime[], atmos_state = Union{Missing,Symbol}[])
+    observations = DataFrame(id=String[], primary=PrimaryTrack{T}[], CPro=CPro{T}[], CLay=CLay{T}[])
+    accuracy = DataFrame(id=String[], intersection=T[], primdist=T[],
+      secdist=T[], primtime=Dates.CompoundPeriod[], sectime=Dates.CompoundPeriod[])
     # Combine all flight datasets and find intersections
     trackdata = tracks isa FlightSet ?
       [[getfield(tracks, f) for f in fieldnames(FlightSet)[1:end-1]]...;] : tracks.tracks
+    # Define abbreviations for sources
+    abbrv = Dict("VOLPE" => "V", "FlightAware" => "FA", "web" => "WD")
     # Get lidar altitude levels
     lidarprofile = get_lidarheights(lidarrange, T)
     # New MATLAB session
@@ -296,11 +300,11 @@ struct XData{T} <: Intersection{T}
     prog = pm.Progress(length(trackdata), "find intersections...")
     for (i, track) in enumerate(trackdata)
       # Get dataset source and ID
-      dataset = track isa FlightTrack ? trackdata[i].metadata.source : "CloudTrack"
+      dataset = track isa FlightTrack ? abbrv[trackdata[i].metadata.source] : "CT"
       ID = track isa FlightTrack ? trackdata[i].metadata.dbID : trackdata[i].metadata.ID
       try
         # Find sat tracks in the vicinity of flight tracks, where intersections are possible
-        overlap = findoverlap(track, sat, maxtimediff, ID)
+        overlap, isat = findoverlap(track, sat, maxtimediff, atol)
         if isempty(overlap)
           pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
             (:featured, length(Xdata.id[.!ismissing.(Xdata.atmos_state) .&
@@ -309,13 +313,13 @@ struct XData{T} <: Intersection{T}
         end
         # Interpolate trajectories with PCHIP method
         primtracks = interpolate_trackdata(track)
-        sectracks = interpolate_satdata(sat, overlap, trackdata[i].metadata.useLON)
+        sectracks = interpolate_satdata(overlap, isat, trackdata[i].metadata.useLON)
         # Calculate intersections and store data and metadata in DataFrames
-        currdata, currtrack, curraccuracy = find_intersections(ms, track,
+        currdata, currobs, curraccuracy = find_intersections(ms, track,
           primtracks, tracks.metadata.altmin, sat, sectracks, dataset, ID, maxtimediff,
           stepwidth, Xradius, lidarprofile, lidarrange, primspan, secspan,
-          expdist, savesecondsattype, T)
-        append!(Xdata, currdata); append!(tracked, currtrack)
+          expdist, savedir, savesecondsattype, T)
+        append!(Xdata, currdata); append!(observations, currobs)
         append!(accuracy, curraccuracy)
       catch err
         @debug begin
@@ -334,6 +338,8 @@ struct XData{T} <: Intersection{T}
     pm.finish!(prog)
     # Close MATLAB session after looping over all data
     mat.close(ms)
+    # Convert primary observations to correct type
+    observations.primary = [observations.primary...;]
     # Calculate load time
     tend = Dates.now()
     tc = tz.ZonedDateTime(tend, tz.localzone())
@@ -341,8 +347,8 @@ struct XData{T} <: Intersection{T}
     # Return Intersections after completion
     @info string("Intersection data ($(length(Xdata[!,1])) matches) loaded in ",
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
-      "\n▪ data\n▪ tracked\n▪ accuracy\n▪ metadata")
-    new{T}(Xdata, tracked, accuracy, XMetadata{T}(maxtimediff, stepwidth, Xradius,
+      "\n▪ data\n▪ observations\n▪ accuracy\n▪ metadata")
+    new{T}(Xdata, observations, accuracy, XMetadata{T}(maxtimediff, stepwidth, Xradius,
       expdist, lidarrange, lidarprofile, sat.metadata.type, sat.metadata.date,
       tracks.metadata.altmin, tracks.metadata.date, tc, loadtime, remarks))
   end #constructor 2 XData
@@ -354,7 +360,7 @@ end #struct XData
 
 External constructor for conversion of floating point precision.
 """
-XData{T}(X::XData) where T = XData{T}(X.data, X.tracked, X.accuracy, XMetadata{T}(X.metadata))
+XData{T}(X::XData) where T = XData{T}(X.data, X.observations, X.accuracy, XMetadata{T}(X.metadata))
 
 """
     function XData(
@@ -369,13 +375,13 @@ and sat data are promoted to the higher precision.
 """
 function XData(
   tracks::PrimarySet{T1},
-  sat::SatData{T2},
+  sat::SatSet{T2},
   savesecondsattype::Bool=false;
   kwargs...
 ) where {T1, T2}
   T = promote_type(T1, T2)
   tracks isa PrimarySet{T} || (tracks = PrimarySet{T}(tracks))
-  sat isa SatData{T} || (sat = SatData{T}(sat))
+  sat isa SatSet{T} || (sat = SatSet{T}(sat))
   XData{T}(tracks, sat, savesecondsattype; kwargs...)
 end
 
@@ -395,368 +401,123 @@ Alias constructor for `XData{T}`.
 Intersection{T}(args...; kwargs...) where T = XData{T}(args...; kwargs...)
 
 
-
-## ObservationSet
-
-"""
-# struct CLay
-
-CALIOP cloud layer `data` stored in a `DataFrame` with columns:
-- `time::Vector{DateTime}` (time index)
-- `lat::Vector{AbstractFloat}` (latitude position of current time index)
-- `lon::Vector{AbstractFloat}` (longitude position of current time index)
-- `layer::Vector{NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}}`
-  (layer top/base heights in meters)
-- `atmos_state::Vector{Vector{Symbol}}` (symbols describing the atmospheric conditions at the intersection)
-- `OD::Vector{<:Vector{<:AbstractFloat}}` (layer optical depth)
-- `IWP::Vector{<:Vector{<:Union{Missing,<:AbstractFloat}}}` (layer ice water path)
-- `Ttop::Vector{<:Vector{<:AbstractFloat}}` (layer top temperature)
-- `Htropo::Vector{<:AbstractFloat}` (tropopause height at current time index)
-- `night::BitVector` (flag for nights (`true`))
-- `averaging::Vector{<:Vector{Int}}` (horizontal averaging in km)
-
-# Instantiation
-
-    function CLay{T}(
-      ms::mat.MSession,
-      files::Vector{String},
-      timespan::NamedTuple{(:min,:max), Tuple{DateTime,DateTime}},
-      lidarrange::Tuple{Real,Real}=(15_000,-Inf),
-      altmin::Real=5000
-    ) where T
-
-Construct `CLay` from a list of file names (including directories) and a running
-MATLAB session `ms` and save data, if layers are within the bounds
-of `lidarrange` and above flight `altmin` threshold and time is within `timesapn`.
-If `T<:AbstractFloat` is not set, `Float32` will be used as default precision.
-
-Or construct `CLay` by directly handing over the `DataFrame` where the names, order,
-and types of each columns are checked and attempted to correct:
-
-    CLay{T}(data::DataFrame) where T -> struct CLay
-"""
-struct CLay{T} <: ObservationSet{T}
-  data::DataFrame
-
-  """ Unmodified constructor for `CLay` """
-  function CLay{T}(data::DataFrame) where T
-    # Ensure floats of correct precision
-    convertFloats!(data, T)
-    # Column checks and warnings
-    standardnames = ["time", "lat", "lon", "layer_top", "layer_base", "atmos_state",
-      "OD", "IWP", "Ttop", "Htropo", "night", "averaging"]
-    standardtypes = [Vector{DateTime}, Vector{T}, Vector{T},
-      Vector{<:Vector{<:T}}, Vector{<:Vector{<:T}},
-      Vector{<:Vector{Symbol}}, Vector{<:Vector{<:T}},
-      Vector{<:Vector{<:Union{Missing,<:T}}}, Vector{<:Vector{<:T}},
-      Vector{<:T}, BitVector, Vector{<:Vector{<:Int}}]
-    bounds = (:lat => (-90,90), :lon => (-180,180))
-    checkcols!(data, standardnames, standardtypes, bounds, "CLay")
-    new{T}(data)
-  end #constructor 1 CLay
-
-  """
-  Modified constructor of `CLay` reading data from hdf `files` using MATLAB session `ms`
-  in the `lidarrange` (top to bottom), if data is above `altmin`.
-  """
-  function CLay{T}(
-    ms::mat.MSession,
-    files::Vector{String},
-    timespan::NamedTuple{(:min,:max), Tuple{DateTime,DateTime}},
-    lidarrange::Tuple{Real,Real}=(15_000,-Inf),
-    altmin::Real=5000
-  ) where T
-    # Return default empty struct if files are empty
-    isempty(files) && return CLay{T}()
-    # Initialise arrays
-    # essential data
-    utc = Vector{Vector{DateTime}}(undef, length(files))
-    lat = Vector{Vector{T}}(undef, length(files))
-    lon = Vector{Vector{T}}(undef, length(files))
-    # non-essential data
-    LayTop = Vector{Vector{Vector{T}}}(undef, length(files))
-    LayBase = Vector{Vector{Vector{T}}}(undef, length(files))
-    Atmosph = Vector{Vector{Vector{Symbol}}}(undef,length(files))
-    OD = Vector{Vector{Vector{T}}}(undef,length(files))
-    IWP = Vector{Vector{Vector{Union{Missing,T}}}}(undef,length(files))
-    Ttop = Vector{Vector{Vector{T}}}(undef,length(files))
-    Htropo = Vector{Vector{T}}(undef, length(files))
-    night = Vector{BitVector}(undef, length(files))
-    averaging = Vector{Vector{Vector{Int}}}(undef,length(files))
-    # Loop over files
-    for (i, file) in enumerate(files)
-      ## Retrieve cloud layer data; assumes faulty files are filtered by SatData
-      # Extract time
-      mat.put_variable(ms, :file, file)
-      mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-      utc[i] = convertUTC.(mat.jarray(mat.get_mvariable(ms, :t))[:,2])
-      timeindex = findall(timespan.min .≤ utc[i] .≤ timespan.max)
-      utc[i] = utc[i][timeindex]
-      # Extract lat/lon
-      mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-      lon[i] = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2][timeindex]
-      mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-      lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2][timeindex]
-      # Save time converted to UTC and lat/lon
-      # utc[i], lon[i], lat[i] = convertUTC.(t), longitude, latitude
-
-      ## Extract layer top/base, layer features and optical depth from hdf files
-      mat.eval_string(ms, "clear basealt\ntry\nbasealt = hdfread(file, 'Layer_Base_Altitude');\nend")
-      Lbase = 1000mat.jarray(mat.get_mvariable(ms, :basealt))[timeindex,:]
-      mat.eval_string(ms, "clear topalt\ntry\ntopalt = hdfread(file, 'Layer_Top_Altitude');\nend")
-      Ltop = 1000mat.jarray(mat.get_mvariable(ms, :topalt))[timeindex,:]
-      mat.eval_string(ms, "clear FCF\ntry\nFCF = hdfread(file, 'Feature_Classification_Flags');\nend")
-      FCF = mat.jarray(mat.get_mvariable(ms, :FCF))[timeindex,:]
-      mat.eval_string(ms, "clear FOD\ntry\nFOD = hdfread(file, 'Feature_Optical_Depth_532');\nend")
-      FOD = mat.jarray(mat.get_mvariable(ms, :FOD))[timeindex,:]
-      mat.eval_string(ms, "clear IWPath\ntry\nIWPath = hdfread(file, 'Ice_Water_Path');\nend")
-      IWPath = mat.jarray(mat.get_mvariable(ms, :IWPath))[timeindex,:]
-      mat.eval_string(ms, "clear LTT\ntry\nLTT = hdfread(file, 'Layer_Top_Temperature');\nend")
-      LTT = mat.jarray(mat.get_mvariable(ms, :LTT))[timeindex,:]
-      mat.eval_string(ms, "clear Htropo\ntry\nHtropo = hdfread(file, 'Tropopause_Height');\nend")
-      Htropo[i] = 1000vec(mat.jarray(mat.get_mvariable(ms, :Htropo)))[timeindex]
-      mat.eval_string(ms, "clear daynight\ntry\ndaynight = hdfread(file, 'Day_Night_Flag');\nend")
-      night[i] = Bool.(vec(mat.jarray(mat.get_mvariable(ms, :daynight))))[timeindex]
-      mat.eval_string(ms, "clear average\ntry\naverage = hdfread(file, 'Horizontal_Averaging');\nend")
-      horav = mat.jarray(mat.get_mvariable(ms, :average))[timeindex,:]
-      # Loop over data and convert to TrackMatcher format
-      Lt = Vector{Vector{T}}(undef,length(utc[i]))
-      Lb = Vector{Vector{T}}(undef,length(utc[i]))
-      atm = Vector{Vector{Symbol}}(undef,length(utc[i]))
-      optdepth = Vector{Vector{T}}(undef,length(utc[i]))
-      icewater = Vector{Vector{Union{Missing,T}}}(undef,length(utc[i]))
-      toptemp = Vector{Vector{T}}(undef,length(utc[i]))
-      average = Vector{Vector{Int}}(undef,length(utc[i]))
-      for n = 1:length(utc[i])
-        l = findall((Lbase[n,:] .> 0) .& (Ltop[n,:] .> 0) .& (Lbase[n,:] .< lidarrange[1]) .&
-          (Ltop[n,:] .> lidarrange[2]) .& (Ltop[n,:] .> altmin))
-        Lt[n], Lb[n], atm[n], optdepth[n], toptemp[n], icewater[n], average[n] =
-          if isempty(l)
-            T[], T[], Symbol[], T[], T[], T[], Int[]
-          else
-            l = findall((Lbase[n,:] .> 0) .& (Ltop[n,:] .> 0) .& (Lbase[n,:] .< lidarrange[1]) .&
-              (Ltop[n,:] .> lidarrange[2]))
-            [Ltop[n, m] for m in l] , [Lbase[n, m] for m in l],
-            [feature_classification(classification(FCF[n,m])...) for m in l],
-            [FOD[n,m] for m in l],
-            [LTT[n,m] for m in l],
-            [IWPath[n,m] == -9999 ? missing : IWPath[n,m] for m in l],
-            [horav[n,m] for m in l]
-          end
-      end # loop over time steps in current file
-      LayTop[i], LayBase[i], Atmosph[i], OD[i], IWP[i], Ttop[i], averaging[i] =
-        Lt, Lb, atm, optdepth, icewater, toptemp, average
-    end #loop over files
-
-    # Construct and standardise data
-    data = DataFrame(time=[utc...;], lat=[lat...;], lon=[lon...;],
-      layer_top=[LayTop...;], layer_base=[LayBase...;], atmos_state=[Atmosph...;],
-      OD=[OD...;], IWP=[IWP...;], Ttop=[Ttop...;], Htropo = [Htropo...;],
-      night = [night...;], averaging = [averaging...;])
-    # Save time, lat/lon arrays in CLay struct
-    new{T}(data)
-  end #constructor 2 CLay
-end #struct CLay
-
-
-"""
-    CLay{T}() where T
-
-External constructor for empty `CLay` struct.
-"""
-function CLay{T}() where T
-  data = DataFrame(time = DateTime[], lat = T[], lon = T[],
-  layer_top = Vector{T}[], layer_base = Vector{T}[],
-  atmos_state = Vector{Symbol}[], OD = Vector{T}[], IWP = Vector{T}[],
-  Ttop = Vector{T}[], Htropo = T[], night = BitVector(), averaging = Vector{Int}[])
-  CLay{T}(data)
-end
-
-"""
-    CLay{T}(clay::CLay) where T
-
-External `CLay` constructor for conversion of floating point precision.
-"""
-function CLay{T}(clay::CLay) where T
-  convertFloats!(clay.data, T)
-  CLay{T}(clay.data)
-end
-
-""" Default CLay constructor for Float32 """
-CLay(args...; kwargs...) = CLay{Float32}(args...; kwargs...)
-
-
-"""
-# struct CPro
-
-CALIOP cloud profile `data` stored in a `DataFrame` with columns:
-- `time::Vector{DateTime}` (current time index)
-- `lat::Vector{AbstractFloat}` (latitude coordinate for current time index)
-- `lon::Vector{AbstractFloat}` (lonitude coordinate for current time index)
-- `atmos_state::Vector{<:Vector{<:Union{Missing,Symbol}}}`
-  (symbols describing the atmospheric conditions for every height level at current time index)
-- `EC532::Vector{<:Vector{<:Union{Missing,AbstractFloat}}}`
-  (extinction coefficient at 532nm at every height level in current time index)
-
-# Instantiation
-
-    function CPro{T}(
-      ms::mat.MSession,
-      files::Vector{String},
-      timespan::NamedTuple{(:min,:max), Tuple{DateTime,DateTime}},
-      lidarprofile::NamedTuple
-    ) where T -> struct CPro
-
-Construct `CPro` from a list of file names (including directories) and a running
-MATLAB session `ms`. CPro data is only stored in the vicinity of intersections for
-the designated `timespan`. Column data is stored height-resolved as defined by the
-`lidarprofile`. If `T<:AbstractFloat` is not set, `Float32` will be used as
-default precision.
-
-Or construct `CPro` by directly handing over the `DataFrame` where the names, order,
-and types of each columns are checked and attempted to correct:
-
-    CPro{T}(data::DataFrame) where T -> struct CPro
-"""
-struct CPro{T} <: ObservationSet{T}
-  data::DataFrame
-
-  """ unmodified constructor """
-  function CPro{T}(data::DataFrame) where T
-    # Ensure floats of correct precision
-    convertFloats!(data, T)
-    # Column checks and warnings
-    standardnames = ["time", "lat", "lon", "atmos_state", "EC532", "Htropo", "temp",
-      "pressure", "rH", "IWC", "deltap", "CADscore", "night"]
-    standardtypes = [Vector{DateTime}, Vector{<:T}, Vector{<:T},
-      Vector{<:Vector{<:Union{Missing,Symbol}}}, Vector{<:Vector{<:Union{Missing,<:T}}},
-      Vector{<:T}, Vector{<:Vector{<:Union{Missing,<:T}}},
-      Vector{<:Vector{<:Union{Missing,<:T}}}, Vector{<:Vector{<:Union{Missing,<:T}}},
-      Vector{<:Vector{<:Union{Missing,<:T}}}, Vector{<:Vector{<:Union{Missing,<:T}}},
-      Vector{<:Vector{<:Union{Missing,Int8}}}, BitVector]
-    bounds = (:lat => (-90,90), :lon => (-180,180), :Htropo => (4000,22_000),
-      :temp => (-120,60), :pressure => (1,1086), :rH => (0,1.5), :IWC => (0,0.54),
-      :deltap => (0,1), :CADscore => (-101,106))
-    checkcols!(data, standardnames, standardtypes, bounds, "CPro")
-    new(data)
-  end #constructor 1 CPro
-
-  """
-  Modified constructor of `CPro` reading data from hdf `files` for all given `sattime` indices
-  using MATLAB session `ms` and `lidarprofile` data, if data is above `altmin`.
-  """
-  function CPro{T}(
-    ms::mat.MSession,
-    files::Vector{String},
-    timespan::NamedTuple{(:min,:max), Tuple{DateTime,DateTime}},
-    lidarprofile::NamedTuple
-  ) where T
-    # Return default empty struct if files are empty
-    isempty(files) && return CPro{T}()
-    # Initialise arrays
-    # essential data
-    utc = Vector{Vector{DateTime}}(undef, length(files))
-    lat = Vector{Vector{T}}(undef, length(files))
-    lon = Vector{Vector{T}}(undef, length(files))
-    fcf = Vector{Vector{Vector{<:Union{Missing,UInt16}}}}(undef, length(files))
-    # non-essential data
-    ec532 = Vector{Vector{Vector{<:Union{Missing,T}}}}(undef, length(files))
-    Htropo = Vector{Vector{T}}(undef, length(files))
-    temp = Vector{Vector{Vector{<:Union{Missing,T}}}}(undef, length(files))
-    pres = Vector{Vector{Vector{<:Union{Missing,T}}}}(undef, length(files))
-    rH = Vector{Vector{Vector{<:Union{Missing,T}}}}(undef, length(files))
-    iwc = Vector{Vector{Vector{<:Union{Missing,T}}}}(undef, length(files))
-    deltap = Vector{Vector{Vector{<:Union{Missing,T}}}}(undef, length(files))
-    cad = Vector{Vector{Vector{<:Union{Missing,Int8}}}}(undef, length(files))
-    night = Vector{BitVector}(undef, length(files))
-    # Loop over files with cloud profile data
-    for (i, file) in enumerate(files)
-      ## Retrieve cloud profile data; assumes faulty files are filtered by SatData
-      # Extract time
-      mat.put_variable(ms, :file, file)
-      mat.eval_string(ms, "clear t\ntry\nt = hdfread(file, 'Profile_UTC_Time');\nend")
-      utc[i] = convertUTC.(mat.jarray(mat.get_mvariable(ms, :t))[:,2])
-      timeindex = findall(timespan.min .≤ utc[i] .≤ timespan.max)
-      utc[i] = utc[i][timeindex]
-      # Extract lat/lon
-      mat.eval_string(ms, "clear longitude\ntry\nlongitude = hdfread(file, 'Longitude');\nend")
-      lon[i] = mat.jarray(mat.get_mvariable(ms, :longitude))[:,2][timeindex]
-      mat.eval_string(ms, "clear latitude\ntry\nlatitude = hdfread(file, 'Latitude');\nend")
-      lat[i] = mat.jarray(mat.get_mvariable(ms, :latitude))[:,2][timeindex]
-      fcf[i] = get_lidarcolumn(UInt16, ms, "Atmospheric_Volume_Description", lidarprofile,
-        coarse=false)[timeindex]
-      # Extract non-essential data
-      ec532[i] = get_lidarcolumn(T, ms, "Extinction_Coefficient_532", lidarprofile,
-        missingvalues = -9999)[timeindex]
-      mat.eval_string(ms, "clear Htropo\ntry\nHtropo = hdfread(file, 'Tropopause_Height');\nend")
-      Htropo[i] = 1000vec(mat.jarray(mat.get_mvariable(ms, :Htropo)))[timeindex]
-      temp[i] = get_lidarcolumn(T, ms, "Temperature", lidarprofile, missingvalues = -9999)[timeindex]
-      pres[i] = get_lidarcolumn(T, ms, "Pressure", lidarprofile, missingvalues = -9999)[timeindex]
-      rH[i] = get_lidarcolumn(T, ms, "Relative_Humidity", lidarprofile, missingvalues = -9999)[timeindex]
-      iwc[i] = get_lidarcolumn(T, ms, "Ice_Water_Content_Profile", lidarprofile,
-        missingvalues = -9999)[timeindex]
-      deltap[i] = get_lidarcolumn(T, ms, "Particulate_Depalarization_Ratio_Profile_532",
-        lidarprofile, missingvalues = -9999)[timeindex]
-      cad[i] = get_lidarcolumn(Int8, ms, "CAD_Score", lidarprofile, coarse=false,
-        missingvalues = -127)[timeindex]
-      mat.eval_string(ms, "clear daynight\ntry\ndaynight = hdfread(file, 'Day_Night_Flag');\nend")
-      night[i] = Bool.(vec(mat.jarray(mat.get_mvariable(ms, :daynight))))[timeindex]
-    end #loop over files
-
-    # Rearrange time vector and get time range
-    utc = [utc...;]
-    # Rearrange FCF vector and convert to symbols
-    fcf = [fcf...;]
-    avd =  Vector{Vector{Union{Missing,Symbol}}}(undef, length(fcf))
-    for i = 1:length(fcf)
-      vect = Vector{Union{Missing,Symbol}}(undef, length(fcf[i]))
-      for j = 1:length(fcf[i])
-        vect[j] = ismissing(fcf[i][j]) ? missing :
-          feature_classification(classification(fcf[i][j])...)
-      end
-      avd[i] = vect
-    end
-    # Construct and standardise data
-    data = DataFrame(time=utc, lat=[lat...;], lon=[lon...;],
-      atmos_state=avd, EC532=[ec532...;], Htropo = [Htropo...;],
-      temp=[temp...;], pressure = [pres...;], rH = [rH...;],
-      IWC = [iwc...;], deltap = [deltap...;],
-      CADscore = [cad...;], night = [night...;])
-    # Save time, lat/lon arrays, and feature classification flags (FCF) in CPro struct
-    new{T}(data)
-  end #constructor 2 CPro
-end #struct CPro
-
-
-"""
-    CPro{T}() where T
-
-External constructor for empty `CPro` struct.
-"""
-CPro{T}() where T = CPro{T}(DataFrame(time = DateTime[], lat = T[], lon = T[],
-  atmos_state = Vector{Symbol}[], EC532 = Vector{T}[], Htropo = T[], temp = Vector{T}[],
-  pressure = Vector{T}[], rH = Vector{T}[], IWC = Vector{T}[],
-  deltap = Vector{T}[], CADscore = Vector{Int8}[], night = BitVector()))
-
-"""
-    CPro{T}(cpro::CPro) where T
-
-External `CPro` constructor for conversion of floating point precision.
-"""
-function CPro{T}(cpro::CPro) where T
-  convertFloats!(cpro.data, T)
-  CPro{T}(cpro.data)
-end
-
-"""
-    CPro(args...; kwargs...)
-
-Default CPro constructor for Float32.
-"""
-CPro(args...; kwargs...) = CPro{Float32}(args...; kwargs...)
-
-
 ## Overall combined data for one-step data loading and intersection calculation
+
+"""
+# struct MeasuredData
+
+Store all relevant primary and secondary track data depending on the primary source to fields:
+
+- `flight::Union{Nothing,FlightSet{T}}`
+- `cloud::Union{Nothing,CloudSet{T}}`
+- `sat::Union{Nothing,SatData{T}}`
+
+# Instantiate
+
+Construct `Data` from the individual fields or use a modified constructor to load
+all necessary data from the file names given in a vector of pairs with the following
+`String` keywords for the different databases:
+- `"inventory"`: VOLPE AEDT database
+- `"archive"`: FlightAware commercial data
+- `"onlineData"`: FlightAware web content
+- `"cloudtracks"`: cloud track data
+- `"sat"`: CALIPSO satellite track data
+
+Furthermore, the keyword arguments for `FlightSet`, `CloudSet`, and `SatData`are passed on.
+
+- `sattype::Symbol=:unde`,
+- `altmin::Real=5000`
+- `odelim::Union{Nothing,Char,String}=nothing`
+- `remarks::Vector{<:Pair{String,<:Any}}=Pair{String,Any}[]`
+
+For remarks, a vector of pairs is used again to differentiate
+between the different datasets:
+
+- `"flights"`: flight data (all sources within `FlightSet`)
+- `"clouds"`: cloud track data
+- `"sat"`: CALIPSO satellite data
+- `"Xflight"`: calculated intersections using flight data as primary source
+- `"Xcloud"`: calculated intersections using cloud data as primary source
+"""
+struct MeasuredData{T} <: MeasuredSet{T}
+  flight::Union{Nothing,FlightSet{T}}
+  cloud::Union{Nothing,CloudSet{T}}
+  sat::Union{Nothing,SatData{T}}
+
+  """ unmodified constructor for `MeasuredData` """
+  function MeasuredData{T}(
+    flight::Union{Nothing,FlightSet{T}},
+    cloud::Union{Nothing,CloudSet{T}},
+    sat::Union{Nothing,SatData{T}},
+  ) where T
+    new{T}(flight, cloud, sat)
+  end # unmodified constructor for MeasuredData
+
+  """ modified constructor for `MeasuredData` """
+  function MeasuredData{T}(
+    folders::Vector{<:Pair{String,<:Any}};
+    sattype::Symbol=:undef,
+    altmin::Real=5000,
+    odelim::Union{Nothing,Char,String}=nothing,
+    savedir::Union{String,Bool}="abs",
+    remarks::Vector{<:Pair{String,<:Any}}=Pair{String,Any}[]
+  ) where T
+    # Process function arguments that need to be distributed to several structs
+    folders = init_dict(folders, String[])
+    remarks = init_dict(remarks, nothing)
+
+    # Load data
+    flights = FlightSet{T}(;
+      inventory = folders["inventory"],
+      archive = folders["archive"],
+      onlineData = folders["onlineData"],
+      altmin, odelim, savedir, remarks=remarks["flights"]
+    )
+    @debug trim_vec!.([flights.inventory, flights.archive, flights.onlineData], 300)
+    clouds = CloudSet{T}(folders["cloudtracks"]...; savedir, remarks = remarks["clouds"])
+    sat = SatTrack{T}(
+      folders["sat"]...;
+      type = sattype,
+      savedir,
+      remarks = remarks["sat"]
+    )
+
+    # Instantiate
+    new{T}(flights, clouds, sat)
+  end # modified constructor for MeasuredData
+end #struct MeasuredData
+
+"""
+    MeasuredData(args...; kwargs...)
+
+Default `MeasuredData` constructor for single floating point precision.
+"""
+MeasuredData(args...; kwargs...) = MeasuredData{Float32}(args...; kwargs...)
+
+"""
+    MeasuredData{T}(data::MeasuredData) where T
+
+Constructor for floating point conversions.
+"""
+MeasuredData{T}(data::MeasuredData) where T = MeasuredData{T}(
+  FlightSet{T}(data.flight),
+  CloudSet{T}(data.cloud),
+  SatData{T}(data.sat)
+)
+
+"""
+    MeasuredSet{T}(args...; kwargs...) where T
+
+Alias constructor for `MeasuredData` of type `T`.
+"""
+MeasuredSet{T}(args...; kwargs...) where T = MeasuredData{T}(args...; kwargs...)
+
+"""
+    MeasuredSet(args...; kwargs...)
+
+Alias default constructor for `MeasuredData` of type `Float32`.
+"""
+MeasuredSet(args...; kwargs...) = MeasuredSet{Float32}(args...; kwargs...)
 
 
 """
@@ -765,10 +526,8 @@ CPro(args...; kwargs...) = CPro{Float32}(args...; kwargs...)
 Store all relevant primary and secondary track data and calculated intersections
 depending on the primary source to fields:
 
-- `flight::Union{Nothing,FlightSet{T}}`
-- `cloud::Union{Nothing,CloudSet{T}}`
-- `sat::Union{Nothing,SatData{T}}`
-- `intersection::Union{Nothing,NamedTuple{(:flight,:cloud), Tuple{XData{T},XData{T}}}}`
+- `trackdata::MeasuredData{T}`
+- `intersection::NamedTuple{(:flight,:cloud), Tuple{XData{T},XData{T}}}`
 
 # Instantiate
 
@@ -807,19 +566,15 @@ between the different datasets:
 - `"Xcloud"`: calculated intersections using cloud data as primary source
 """
 struct Data{T} <: DataSet{T}
-  flight::Union{Nothing,FlightSet{T}}
-  cloud::Union{Nothing,CloudSet{T}}
-  sat::Union{Nothing,SatData{T}}
-  intersection::Union{Nothing,NamedTuple{(:flight,:cloud), Tuple{XData{T},XData{T}}}}
+  trackdata::MeasuredData{T}
+  intersection::NamedTuple{(:flight,:cloud), Tuple{XData{T},XData{T}}}
 
   """ unmodified constructor for `Data` """
   function Data{T}(
-    flight::Union{Nothing,FlightSet{T}},
-    cloud::Union{Nothing,CloudSet{T}},
-    sat::Union{Nothing,SatData{T}},
-    intersection::Union{Nothing,NamedTuple{(:flight,:cloud), Tuple{XData{T},XData{T}}}}
+    trackdata::MeasuredData{T},
+    intersection::NamedTuple{(:flight,:cloud), Tuple{XData{T},XData{T}}}
   ) where T
-    new{T}(flight, cloud, sat, intersection)
+    new{T}(trackdata, intersection)
   end # unmodified constructor for Data
 
   """ modified constructor for `Data` """
@@ -829,6 +584,7 @@ struct Data{T} <: DataSet{T}
     sattype::Symbol=:undef,
     altmin::Real=5000,
     odelim::Union{Nothing,Char,String}=nothing,
+    savedir::Union{String,Bool}="abs",
     maxtimediff::Int=30,
     primspan::Int=0,
     secspan::Int=15,
@@ -838,42 +594,31 @@ struct Data{T} <: DataSet{T}
     expdist::Real=Inf,
     remarks::Vector{<:Pair{String,<:Any}}=Pair{String,Any}[]
   ) where T
+
+    # Load data
+    tracks = MeasuredSet{T}(folders; sattype, altmin, odelim, savedir, remarks)
+
     # Process function arguments that need to be distributed to several structs
     folders = init_dict(folders, String[])
     remarks = init_dict(remarks, nothing)
 
-    # Load data
-    flights = FlightSet{T}(;
-      inventory = folders["inventory"],
-      archive = folders["archive"],
-      onlineData = folders["onlineData"],
-      altmin, odelim, remarks=remarks["flights"]
-    )
-    @debug trim_vec!.([flights.inventory, flights.archive, flights.onlineData], 300)
-    clouds = CloudSet{T}(folders["cloudtracks"]...; remarks = remarks["clouds"])
-    sat = SatTrack{T}(
-      folders["sat"]...;
-      type = sattype,
-      remarks = remarks["sat"]
-    )
-
     # Calculate Intersections
     intersections = (
     flight=Intersection{T}(
-      flights, sat, savesecondsattype;
+      tracks.flight, tracks.sat, savesecondsattype;
       maxtimediff, primspan, secspan, lidarrange,
-      stepwidth, Xradius, expdist,
+      stepwidth, Xradius, expdist, savedir,
       remarks = remarks["Xflight"]
     ),
     cloud = Intersection{T}(
-      clouds, sat, savesecondsattype;
+      tracks.cloud, tracks.sat, savesecondsattype;
       maxtimediff, primspan, secspan, lidarrange,
-      stepwidth, Xradius, expdist,
+      stepwidth, Xradius, expdist, savedir,
       remarks = remarks["Xcloud"]
     ))
 
     # Instantiate
-    new{T}(flights, clouds, sat, intersections)
+    new{T}(tracks, intersections)
   end # modified constructor for Data
 end #struct Data
 
@@ -896,7 +641,6 @@ Data{T}(data::Data) where T = Data{T}(
   (flight = Intersection{T}(data.intersection.flight),
     cloud = Intersection{T}(data.intersection.cloud))
 )
-
 
 """
     DataSet{T}(args...; kwargs...) where T

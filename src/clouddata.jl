@@ -6,46 +6,35 @@
 Load cloud track data from mat `files` and store in Julia format as `CloudTrack` structs.
 Set the floating point precision to `Float` (default: `Float32`).
 """
-function loadCloudTracks(files::String...; Float::DataType=Float32)
-  # Open MATLAB session
-  ms = mat.MSession(0)
+function loadCloudTracks(
+  files::String...;
+  structname::String="cloud",
+  Float::DataType=Float32
+)
   # Initialise
   tracks = CloudData[]
   # Loop over all mat files
-  for (i, file) in enumerate(files)
+  @pm.showprogress 1 "load cloud tracks..." for (i, file) in enumerate(files)
     # Read data from mat files
-    t, lonlat = readMAT(ms, file)
+    t, lonlat = readMAT(file, structname)
     # Store data in Julia format as Vector of CloudTrack structs
-    storeMAT!(tracks, t, lonlat, i, file; Float=Float)
+    storeMAT!(tracks, t, lonlat, i, file; Float)
   end #loop over files
-  mat.close(ms)
 
   return tracks
 end #function loadCloudTracks
 
 
 """
-    readMAT(ms::mat.MSession, file::String)
+    readMAT(file::String)
 
-Use MATLAB session `ms` to read cloud track data from a mat `file`.
+Read cloud track data from a mat `file`.
 """
-function readMAT(ms::mat.MSession, file::String)
+function readMAT(file::String, structname::String="cloud")
   # Send file name to MATLAB
-  mat.put_variable(ms, :file, file)
-  # Load Data from mat file using MATLAB
-  mat.eval_string(ms, "data = load('-mat', file)")
-  mat.eval_string(ms,
-  """
-  t = cell(length(data.cloud), 1)
-  coords = cell(length(data.cloud), 1)
-  for i = 1:length(data.cloud)
-    t{i} = data.cloud(i).timestamp
-    coords{i} = data.cloud(i).centrLonLat
-  end
-  """)
-  # Load data from MATLAB into TrackMatcher/Julia
-  t = mat.jarray(mat.get_mvariable(ms, :t))
-  lonlat = mat.jarray(mat.get_mvariable(ms, :coords))
+  data = MAT.matread(file)
+  t = vec(data[structname]["timestamp"])
+  lonlat = vec(data[structname]["centrLonLat"])
   return t, lonlat
 end
 

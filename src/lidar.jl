@@ -60,15 +60,13 @@ argument and are replaced by `missing` in `vec`.
 """
 function get_lidarcolumn(
   T::DataType,
-  ms::mat.MSession,
-  variable::String,
+  var::Array{Tv},
   lidarprofile::NamedTuple;
   coarse::Bool = true,
   missingvalues = missing
-)
-  # Read variable from hdf file with MATLAB
-	mat.eval_string(ms, "try\nvar = hdfread(file, '$variable');\nend")
-	var = mat.jarray(mat.get_mvariable(ms, :var))
+) where Tv
+  # Convert var to type t
+  Tv ≠ T && (var = T.(var))
   # Initialise vector to store all row vectors and loop over matrix
   row = Vector{Vector{Union{Missing,T}}}(undef, size(var, 1))
 	for i = 1:size(var, 1)
@@ -249,9 +247,10 @@ function atmosphericinfo(
   sat::CPro,
   hlevels::Vector{<:AbstractFloat},
 	isat::Int,
-  flightalt::Real,
+  flightalt::Union{Missing,Real},
 	flightid::Union{Int,String}
 )::Union{Missing,Symbol}
+  ismissing(flightalt) && return missing
   i = argmin(abs.(hlevels .- flightalt))
   if abs(hlevels[i] - flightalt) > 60
     println(); @warn string("insufficient altitudes for lidar data saved; ",
@@ -281,9 +280,10 @@ feature classification at flight `alt`itude.
 """
 function atmosphericinfo(
   sat::CLay,
-  alt::AbstractFloat,
+  alt::Union{Missing,Real},
   isat::Int
 )::Union{Missing,Symbol}
+  ismissing(alt) && return missing
   top, base = sat.data[isat, [:layer_top, :layer_base]]
   feature = try
     for i = 1:length(top)
