@@ -568,7 +568,8 @@ struct FlightSet{T} <: PrimarySet{T}
     altmin::Real=5000,
     odelim::Union{Nothing,Char,String}=nothing,
     savedir::Union{String,Bool}="abs",
-    remarks=nothing) where T
+    remarks=nothing
+  ) where T
 
     # Return empty FlightSet, if no folders are passed to constructor
     all(isempty.([volpe, flightaware, webdata])) &&

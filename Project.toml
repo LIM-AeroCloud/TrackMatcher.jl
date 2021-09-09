@@ -1,7 +1,7 @@
 name = "TrackMatcher"
 uuid = "2cc584ca-dc9e-11e9-3e2d-1d1fc79f0777"
 authors = ["Peter Bräuer <pb866.git@gmail.com>"]
-version = "0.5.0-DEV"
+version = "0.5.0"
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
@@ -20,4 +20,4 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
 
 [compat]
-julia = "1.5"
+julia = "1.6"
