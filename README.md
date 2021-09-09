@@ -31,63 +31,74 @@ Usage
 In essence, 3 `TrackMatcher` structs are needed to load essential primary and secondary data, 
 and find intersections in the stored track data. A full overview is given in the 
 [WIKI](https://github.com/LIM-AeroCloud/TrackMatcher.jl/wiki) and this README is 
-only meant as a quick reminder of the most important functions.
+only meant as a quick reminder of the most important functions. Additionally, Julia's
+help function can be used by pressing `?` and the respective function name or 
+type constructor.
 
 
 Loading primary data
 --------------------
 
-`FlightData` of individual flights are loaded into a `FlightDB` with vectors of 
-`FlightData` for different database types, currently holding
+`FlightData` or `FlightTrack` of individual flights are loaded into a `FlightSet` 
+with vectors of `FlightData` for different database types, currently holding
 
-1. VOLPE AEDT inventory (`i` or `1`)
-2. FlightAware archived data (`a` or `2`)
-3. flightaware.com online data (`o` or `3`)
+1. VOLPE AEDT inventory (field/keyword `volpe`)
+2. FlightAware archived data (field/keyword  `flightaware`)
+3. flightaware.com online data (field/keyword  `webdata`)
 
-A convenience constructor for `FlightDB` exists needing only the database types 
-listed in a string with the letters or numbers as indicated in the list above and 
-the directories of the main database folders. Those folders are searched recursively 
-for the respective data files. More than one folder path can be listed for all the database types.
-The order in the list is free, but the order of folders must correspond to the order
-of dataset identifiers in `DBtype`:
+A convenience constructor for `FlightSet` exists, where data can be loaded by passing 
+a `String` or `Vector{String}` with directories of the input data files for each 
+source type to the individual fields of `FlightSet` using the keyword arguments listed
+above. Those folders are searched recursively for the respective data files. More than 
+one folder path can be listed for all the database types in a `Vector{String}`.
 
 ```julia
-FlightDB(DBtype::String, folder::Union{String, Vector{String}}...; kwargs)
+FlightSet{T}(;
+  volpe::Union{String,Vector{String}}=String[],
+  flightaware::Union{String,Vector{String}}=String[],
+  webdata::Union{String,Vector{String}}=String[],
+  altmin::Real=5000,
+  odelim::Union{Nothing,Char,String}=nothing,
+  savedir::Union{String,Bool}="abs",
+  remarks=nothing
+) where T
 ```
 
 A similar convenience constructor exists for `CloudTrack`s. As only one database type
 exists, only the directories are needed:
 
 ```julia
-CloudDB(folders::String...; kwargs)
+CloudSet{T}(
+  folders::String...;
+  savedir::Union{String,Bool}="abs",
+  structname::String="cloud",
+  remarks=nothing
+) where T
 ```
 
-### kwargs
-
-#### FlightDB and CloudDB
-- `Float::DataType=Float32`: Set the default precision of floating point numbers for flight data
-- `remarks=nothing`: any data or comments that can be attached to  `DBMetadata`
-
-#### FlightDB only
-- `altmin::Int=5000`: minimum altitude threshold for which to consider flight data
-- `odelim::Union{Nothing,Char,String}=nothing`: specify the column delimiter in the text files of the online data
+For details on the kwargs, see the [WIKI](https://github.com/LIM-AeroCloud/TrackMatcher.jl/wiki)
+or use the help function for the individual constructors.
 
 
 Loading CALIOP data from the CALIPSO satellite
 ----------------------------------------------
 
-CALIPSO positions and overpass times together with a file index of the corresponding
-granule hdf file are stored in the `data` field of `SatData`. Only one of the `type`s
-cloud profile (`CPro`) or cloud layer (`CLay`) data can be used to construct `SatData`.
-The `metadata` holds a `Dict` with the `fileindex` pointing to a file name (including
-the absolute folder path). 
-__File names/directories must not be changed in order for _TrackMatcher_ to find intersections correctly.__
-__It is currently only possible to find intersections on the same system, where the data was loaded.__  
-Further information in the `metadata` include the `type` of the satellite data,
-the `date` range of the data, the time the database was `created`, the `loadtime`,
-and any `remarks` as additional data or comments.
+Initially, only CALIPSO positions (lat/lon) and overpass times are stored as `SatData`
+in a `SatSet` for performance reasons. Each granule is stored as `SatData` or `SatTrack`,
+which are combined in the `granules` field of `SatSet`. Only one of the `type`s
+cloud profile (`CPro`) or cloud layer (`CLay`) data can be used to construct a `SatSet`.
 
-`SatData` can be instatiated, by giving any number of folder strings and any remarks
+In the vicinity of intersections, additional observations can be stored as `CPro` or
+`CLay` structs.
+__This feature is only available, if the file/folder structure does not change between__
+__loading the data and calculating intersections.__  It can be controlled with the
+`savedir` keyword argument.
+
+The `SatSet` `metadata` includes information about the granules, the `type` of the 
+satellite data, the `date` range of the data, the time the database was `created`, 
+the `loadtime`, and any `remarks` as additional data or comments.
+
+A `SatSet` can be constructed by giving any number of folder strings and any remarks
 using the keyword `remarks`. The `folders` are scanned recursively for any hdf file
 and the `type` of the satellite data is determined by keywords `CLay` or `CPro` in
 the folder/file names. If both types exist in the `folders`, the data type is determined
@@ -95,18 +106,18 @@ by the majority in the first 50 file names. Alternatively, the sat data type can
 be forced with the keyword `type` set to a `Symbol` `:CPro` or `:CLay`.
 
 ```julia
-SatData(folders::String...; kwargs...)
+SatSet{T}(
+  folders::String...;
+  type::Symbol=:undef,
+  savedir::Union{String,Bool}="abs",
+  remarks=nothing
+) where T
 ```
-
-### kwargs
-- `Float::DataType=Float32`: Set the default precision of floating point numbers for satellite data
-- `type::Symbol=:undef`: Set the satellite data type to layer (`CLay`) or profile (`CPro`) data
-- `remarks=nothing`: any data or comments that can be attached to the metadata of `SatData`
 
 ---
 > :information_source: **NOTE**
 >
-> `SatData` is designed to use CALIPSO data provided by the [AERIS/ICARE Data and Services Centre](http://www.icare.univ-lille1.fr/). 
+> `SatSet` is designed to use CALIPSO data provided by the [AERIS/ICARE Data and Services Centre](http://www.icare.univ-lille1.fr/). 
 > For the best performance, you should use the same file/folder format as used by ICARE. 
 > In particular, Cloud layer files must include the keyword `CLay` in the file name
 > and cloud profile data files the keyword `CPro`.
@@ -116,21 +127,36 @@ SatData(folders::String...; kwargs...)
 Finding intersections in the trajectories of the flight and satellite data
 --------------------------------------------------------------------------
 
-Intersections and corresponding accuracies and flight/satellite data in the vicinity of the intersection are stored in the `Intersection` struct.
+Intersections and corresponding accuracies and observation data in the vicinity 
+of the intersection are stored in the `XData` struct. Alternatively, an `Intersection`
+constructor can be used for the construction of `XData`.
 
 A convenience constructor exists for automatic calculation of the intersections 
-from the `FlightDB` and `SatData` with parameters controlling these calculations. 
-Additionally, it can be specified by the keyword `savesecondsattype` whether the 
-corresponding satellite data type of the `CLay` or `CPro` data stored in `SatData`
-should be saved as well. 
+from the `FlightSet` and `SatSet` with parameters controlling these calculations. 
+Additionally, it can be specified by the optional argument `savesecondsattype` 
+whether both satellite data types `CLay` and `CPro` should be stored in `SatSet`
+or only the specified main type. 
 __For this feature to work, folder and file names of `Clay`/`CPro` data must be identical__
 __except for the keywords `CLay`/`CPro` swapped.__
 
 Find intersections by instatiating the `Intersection` struct with:
 
 ```julia
-Intersection(flights::FlightDB, sat::SatData, savesecondsattype::Bool=false; kwargs...)
-Intersection(cloud::CloudDB, sat::SatData, savesecondsattype::Bool=false; kwargs...)
+Intersection{T}(
+  tracks::PrimarySet,
+  sat::SatSet,
+  savesecondsattype::Bool=false;
+  maxtimediff::Int=30,
+  primspan::Int=0,
+  secspan::Int=15,
+  lidarrange::Tuple{Real,Real}=(15_000,-Inf),
+  stepwidth::Real=0.01,
+  Xradius::Real=20_000,
+  expdist::Real=Inf,
+  atol::Real=0.1,
+  savedir::Union{String,Bool}="abs",
+  remarks=nothing
+) where T
 ```
 
 ### kwargs
@@ -146,5 +172,12 @@ Intersection(cloud::CloudDB, sat::SatData, savesecondsattype::Bool=false; kwargs
   assumed to correspond to the same intersection and only the intersection with the
   minimum delay between flight and sat overpass is saved
 - `expdist::Real=Inf`: maximum threshold for the distance of a found intersection to the nearest measured track point
-- `Float::DataType=Float32`: default precision of floating point numbers for intersection data
+- `atol::Real=0.1`: tolerance to increase the bounding box around primary tracks by `atol` degrees
+  increasing the search radius in secondary tracks preventing the omission of intersections due to
+  rounding errors
+- `savedir::Union{String,Bool}="abs"`: options to save absolute (`"abs"`) or relative
+  (`"rel"`) folder paths in the `metadata` of  `FlightData` or `SatSet`. When `savedir`
+  is set to an empty string (`""`) or `false`, folder strings are save as given in
+  the constructor. When set to an empty string or `false` in the `Intersection` constructor,
+  no observations are saved in `Intersection`.
 - `remarks=nothing`: any data or comments that can be attached to the metadata of `Intersection`
