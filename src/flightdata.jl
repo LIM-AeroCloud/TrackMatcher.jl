@@ -288,23 +288,22 @@ The routine works for several FlightAware archive versions. Floating point numbe
 are read with single precision or as defined by kwarg `Float`.
 """
 function readArchive(file, Float=Float32)
-  # Read file
-  track = CSV.read(file, DataFrame, datarow=2, normalizenames=true, ignoreemptylines=true,
+  # Read header and check version
+  header = readline(file)
+  old = contains(header, "(kts)")
+
+  # Load correct data version and return as DataFrame
+  old ?
+    CSV.read(file, DataFrame, datarow=2, normalizenames=true, ignoreemptyrows=true,
     silencewarnings=true, threaded=true, dateformat="m/d/y H:M:S",
-    types = Dict(:Latitude => Float, :Longitude => Float, :Altitude_feet_ => Float,
-    :Altitude_ft_ => Float, :Groundspeed_knots_ => Float, :Groundspeed_kts_ => Float,
-    :Rate => Float),
-    drop = ["Direction", "Facility_Name", "Facility_Description", "Estimated"])
-  ## Get column order and define column names
-  # Get column names of current file
-  datacols = names(track)
-  # Define unique key phrases for each column found in every FlightAware version
-  keys = [datacols[i] for i in findfirst.(occursin.(str, string.(datacols)) for str in
-    ["Flight_ID", "Ident", "Orig", "Dest", "Type",
-    "Time", "Lat", "Lon", "Alt", "speed", "Rate", "Course"])]
-  # Define standard column names
-  colnames = ["dbID", "flightID", "orig", "dest", "type",
-    "time", "lat", "lon", "alt", "speed", "climb", "heading"]
-  # Construct DataFrame
-  DataFrame(colnames .=> [getproperty(track, key) for key in keys])
+    header = ["dbID", "flightID", "type", "orig", "dest", "time", "lat", "lon",
+      "speed", "alt", "climb", "heading", "direction", "estimated"],
+    types = Dict(:lat => Float, :lon => Float, :alt => Float, :speed => Float, :climb => Float),
+    drop = ["direction", "estimated"]) :
+    CSV.read(file, DataFrame, datarow=2, normalizenames=true, ignoreemptyrows=true,
+    silencewarnings=true, threaded=true, dateformat="m/d/y H:M:S",
+    header = ["dbID", "flightID", "type", "orig", "dest", "time", "lat", "lon",
+      "speed", "alt", "climb", "heading", "direction", "fac_name", "fac_descr", "estimated"],
+    types = Dict(:lat => Float, :lon => Float, :alt => Float, :speed => Float, :climb => Float),
+    drop = ["direction", "fac_name", "fac_descr", "estimated"])
 end #function readArchive
