@@ -194,7 +194,7 @@ function loadWD(
     flight = CSV.read(file, DataFrame, delim=delim, ignoreemptylines=true, normalizenames=true,
       silencewarnings=true, threaded=false, copycols=false, types=Dict(:Latitude => Float,
       :Longitude => Float, :feet => String, :kts => Float, :Course => String,
-      :Rate => String), drop = ["mph", "Reporting_Facility"])
+      :Rate => String), drop = ["mph", "Reporting_Facility"], stringtype=String)
     # Convert knots to m/s
     flight.kts = knot2mps.(flight.kts)
     if length(names(flight)) ≠ 7 || names(flight)[2:7] ≠
@@ -299,11 +299,11 @@ function readArchive(file, Float=Float32)
     header = ["dbID", "flightID", "type", "orig", "dest", "time", "lat", "lon",
       "speed", "alt", "climb", "heading", "direction", "estimated"],
     types = Dict(:lat => Float, :lon => Float, :alt => Float, :speed => Float, :climb => Float),
-    drop = ["direction", "estimated"]) :
+    drop = ["direction", "estimated"], stringtype=String) :
     CSV.read(file, DataFrame, datarow=2, normalizenames=true, ignoreemptyrows=true,
     silencewarnings=true, threaded=true, dateformat="m/d/y H:M:S",
     header = ["dbID", "flightID", "type", "orig", "dest", "time", "lat", "lon",
       "speed", "alt", "climb", "heading", "direction", "fac_name", "fac_descr", "estimated"],
     types = Dict(:lat => Float, :lon => Float, :alt => Float, :speed => Float, :climb => Float),
-    drop = ["direction", "fac_name", "fac_descr", "estimated"])
+    drop = ["direction", "fac_name", "fac_descr", "estimated"], stringtype=String)
 end #function readArchive
