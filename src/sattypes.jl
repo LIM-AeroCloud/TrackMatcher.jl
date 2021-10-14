@@ -284,7 +284,7 @@ struct SatSet{T} <: SecondarySet{T}
     for file in satfiles
       # Find files with cloud layer data
       try
-        granule = SatData(ms, file)
+        granule = SatData{T}(ms, file)
         elonmin, elonmax = lonextrema(granule.data.lon, ≥)
         wlonmin, wlonmax = lonextrema(granule.data.lon, <)
         push!(metadata, (file=file,

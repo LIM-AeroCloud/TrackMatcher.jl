@@ -33,6 +33,7 @@ struct XMetadata{T} <: Intersection{T}
   stepwidth::T
   Xradius::T
   expdist::T
+  atol::T
   lidarrange::NamedTuple{(:top,:bottom),Tuple{T,T}}
   lidarprofile::NamedTuple
   sattype::Symbol
@@ -48,6 +49,7 @@ struct XMetadata{T} <: Intersection{T}
     stepwidth::Real,
     Xradius::Real,
     expdist::Real,
+    atol::Real,
     lidarrange::Tuple{Real,Real},
     lidarprofile::NamedTuple,
     sattype::Symbol,
@@ -58,7 +60,7 @@ struct XMetadata{T} <: Intersection{T}
     loadtime::Dates.CompoundPeriod,
     remarks
   ) where T
-    new{T}(maxtimediff, stepwidth, Xradius, expdist,
+    new{T}(maxtimediff, stepwidth, Xradius, expdist, atol,
       (top=T(lidarrange[1]), bottom=T(lidarrange[2])), lidarprofile,
       sattype, satdates, altmin, flightdates, created, loadtime, remarks)
   end #constructor 1 XMetaData
@@ -68,6 +70,7 @@ struct XMetadata{T} <: Intersection{T}
     stepwidth::Real,
     Xradius::Real,
     expdist::Real,
+    atol::Real,
     lidarrange::NamedTuple{(:top,:bottom),Tuple{T,T}},
     lidarprofile::NamedTuple,
     sattype::Symbol,
@@ -78,7 +81,7 @@ struct XMetadata{T} <: Intersection{T}
     loadtime::Dates.CompoundPeriod,
     remarks=nothing
   ) where T
-    new{T}(maxtimediff, stepwidth, Xradius, expdist, lidarrange, lidarprofile,
+    new{T}(maxtimediff, stepwidth, Xradius, expdist, atol, lidarrange, lidarprofile,
       sattype, satdates, altmin, flightdates, created, loadtime, remarks)
   end #constructor 2 XMetaData
 end #struct XMetaData
@@ -100,6 +103,7 @@ XMetadata{T}(meta::XMetadata) where T = XMetadata{T}(
   T(meta.stepwidth),
   T(meta.Xradius),
   T(meta.expdist),
+  T(meta.atol),
   (top = T(meta.lidarrange.top), bottom = T(meta.lidarrange.bottom)),
   (coarse = T.(meta.lidarprofile.coarse), fine = T.(meta.lidarprofile.fine),
     ibottom = meta.lidarprofile.ibottom, itop = meta.lidarprofile.itop,
@@ -349,7 +353,7 @@ struct XData{T} <: Intersection{T}
       "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",
       "\n▪ data\n▪ observations\n▪ accuracy\n▪ metadata")
     new{T}(Xdata, observations, accuracy, XMetadata{T}(maxtimediff, stepwidth, Xradius,
-      expdist, lidarrange, lidarprofile, sat.metadata.type, sat.metadata.date,
+      expdist, atol, lidarrange, lidarprofile, sat.metadata.type, sat.metadata.date,
       tracks.metadata.altmin, tracks.metadata.date, tc, loadtime, remarks))
   end #constructor 2 XData
 end #struct XData
