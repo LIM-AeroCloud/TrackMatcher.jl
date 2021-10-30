@@ -46,8 +46,8 @@ function addX!(
   dt::Dates.CompoundPeriod,
   Xradius::Real,
   Xprim::PrimaryTrack{T},
-  cpro::CPro,
-  clay::CLay,
+  cpro::CPro{T},
+  clay::CLay{T},
   tmf::DateTime,
   tms::DateTime,
   atmos::Union{Missing,Symbol},
@@ -165,7 +165,7 @@ function add_intersections!(
   Xsat = contains(string(sat.metadata.type), "CPro") ? cpro.data : clay.data
   # Calculate accuracies (unless data is not saved, i.e. savedir = false)
   fxmeas, ftmeas, sxmeas, stmeas = (ift == 0 || ist == 0) ?
-    (0, Dates.CompoundPeriod(), 0, Dates.CompoundPeriod()) :
+    (T(0), Dates.CompoundPeriod(), T(0), Dates.CompoundPeriod()) :
     (dist.haversine(Xp,(Xprim.data.lat[ift], Xprim.data.lon[ift]),
     earthradius(Xp[1])),
     Dates.canonicalize(Dates.CompoundPeriod(tmf - Xprim.data.time[ift])),

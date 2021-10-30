@@ -11,6 +11,7 @@ convertdir(dir::AbstractString, savedir::Union{String,Bool}="abs") =
     relpath(dir)
   end
 
+
 """
     findfiles!(inventory::Vector{String}, folder::String, extensions::String...)
 

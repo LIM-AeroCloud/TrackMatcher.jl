@@ -232,8 +232,7 @@ struct SatSet{T} <: SecondarySet{T}
   function SatSet{T}(granules::Vector{SatData{T}}, metadata::SecondaryMetadata{T}) where T
     # Ensure floats of correct precision
     convertFloats!.(granules, T)
-    # Check for correct column names and data types
-    standardnames = ["time", "lat", "lon"]
+    # Instantiate struct
     new{T}(granules, metadata)
   end #constructor 1 SatData
 
@@ -284,7 +283,7 @@ struct SatSet{T} <: SecondarySet{T}
     for file in satfiles
       # Find files with cloud layer data
       try
-        granule = SatData(ms, file)
+        granule = SatData{T}(ms, file)
         elonmin, elonmax = lonextrema(granule.data.lon, ≥)
         wlonmin, wlonmax = lonextrema(granule.data.lon, <)
         push!(metadata, (file=file,

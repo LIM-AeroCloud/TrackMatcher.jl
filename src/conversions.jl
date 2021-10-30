@@ -69,12 +69,6 @@ function earthradius(lat::T)::T where T<:AbstractFloat
 end #function earthradius
 
 
-"""Convert feet to kilometers"""
-function ft2km(ft::T)::T  where T<:Union{Missing,AbstractFloat}
-    0.0003048ft
-end #function ft2km
-
-
 """Convert feet to meters"""
 function ft2m(ft::T)::T  where T<:Union{Missing,AbstractFloat}
     0.3048ft

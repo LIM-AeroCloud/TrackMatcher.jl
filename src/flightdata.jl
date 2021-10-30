@@ -17,62 +17,40 @@ function loadVOLPE(
   Float::DataType=Float32,
   altmin::Real=5_000
 )
-
-  # Initialise inventory file array and start MATLAB for PCHIP fitting
+  # Initialise loop over file
   inventory = FlightData{Float}[]
-
+  track = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
+    alt = Float[], speed = Float[])
+  FID = -1
   # Loop over files
-  prog = pm.Progress(2length(files), "load inventory...")
+  prog = pm.Progress(length(files), "load VOLPE...")
   for file in files
-    # Load data
-    flights = CSV.read(file, DataFrame, datarow=3, footerskip=2, ignoreemptylines=true,
-      silencewarnings=true, threaded=true, copycols = false, dateformat="HH:MM:SS.sssm",
-      types = Dict("LATITUDE" => Float, "LONGITUDE" => Float, "ALTITUDE" => Float,
-      "SPEED" => Float), select = [1:11;16])
-    # Monitor progress for progress bar
-    pm.next!(prog, showvalues = [(:file,splitext(basename(file))[1])])
-
-    # Calculate time from individual columns and add as DateTime to DataFrame
-    flights.time = [DateTime(flights.SEGMENT_YEAR[i], flights.SEGMENT_MONTH[i],
-      flights.SEGMENT_DAY[i], flights.SEGMENT_HOUR[i], flights.SEGMENT_MIN[i],
-      flights.SEGMENT_SEC[i]) for i = 1:length(flights.FLIGHT_ID)]
-    # Unit conversions
-    flights.ALTITUDE = ft2m.(flights.ALTITUDE)
-    flights.SPEED = knot2mps.(flights.SPEED)
-
-    # Initialise loop over file
-    track = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
-      alt = Float[], speed = Float[])
-    FID = flights.FLIGHT_ID[1]
+    # Load input file (as row by row iterator)
+    flightdata = CSV.Rows(file, skipto=3, footerskip=2, ignoreemptyrows=true,
+      silencewarnings=true, dateformat="HH:MM:SS.sssm", types = Dict("FLIGHT_ID" => Int,
+      "LATITUDE" => Float, "LONGITUDE" => Float, "ALTITUDE" => Float,
+      "SPEED" => Float, "SEGMENT_YEAR" => Int, "SEGMENT_MONTH" => Int,
+      "SEGMENT_DAY" => Int, "SEGMENT_HOUR" => Int, "SEGMENT_MIN" => Int,
+      "SEGMENT_SEC" => Int), select = [1:11;16])
 
     # Loop over all data points
-    for i = 1:length(flights.time)
-      # If the next flight ID is found, save current flight
-      if flights.FLIGHT_ID[i] ≠ FID || i == length(flights.time)
-        # Ignore data with less than 2 data points
-        if length(track.time) ≤ 1
-          FID = flights.FLIGHT_ID[i]
-          # Empty possible entry
-          track = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
-            alt = Float[], speed = Float[])
-          continue
-        end
-        # Determine predominant flight direction, inflection points, and remove duplicate entries
-        flex, useLON = preptrack!(track)
-        # Save the FlightTrack in the inventory vector
-        isempty(flex) || push!(inventory, FlightTrack{Float}(track, FID,
-          missing, missing, missing, flex, useLON, "VOLPE", file))
-        # Empty data vectors
-        track = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
-          alt = Float[], speed = Float[])
-        FID = flights.FLIGHT_ID[i]
+    for row in flightdata
+      if FID == -1
+        # Set database ID for new flights in the file
+        FID = row.FLIGHT_ID
+      elseif FID ≠ row.FLIGHT_ID
+        # If the next flight ID is found, save current flight
+        FID = addtrack!(inventory, track, FID, row.FLIGHT_ID, file)
       end # saving FlightTrack
-      # Filter altitude threshold
-      if ismissing(flights.ALTITUDE[i]) || flights.ALTITUDE[i] ≥ altmin
-        push!(track, [flights.time[i], flights.LATITUDE[i],
-          flights.LONGITUDE[i], flights.ALTITUDE[i], flights.SPEED[i]])
-      end
+      # Read current row in file and filter and convert input data
+      alt = ft2m(row.ALTITUDE)
+      (ismissing(alt) || alt ≥ altmin) &&
+        push!(track, (time = DateTime(row.SEGMENT_YEAR, row.SEGMENT_MONTH,
+          row.SEGMENT_DAY, row.SEGMENT_HOUR, row.SEGMENT_MIN, row.SEGMENT_SEC),
+          lat = row.LATITUDE, lon = row.LONGITUDE, alt, speed = knot2mps(row.SPEED)))
     end #loop over flights
+    # Save last flight of the file
+    FID = addtrack!(inventory, track, FID, -1, file)
     # Monitor progress for progress bar
     pm.next!(prog, showvalues = [(:file,splitext(basename(file))[1])])
   end #loop over files
@@ -194,7 +172,7 @@ function loadWD(
     flight = CSV.read(file, DataFrame, delim=delim, ignoreemptylines=true, normalizenames=true,
       silencewarnings=true, threaded=false, copycols=false, types=Dict(:Latitude => Float,
       :Longitude => Float, :feet => String, :kts => Float, :Course => String,
-      :Rate => String), drop = ["mph", "Reporting_Facility"])
+      :Rate => String), drop = ["mph", "Reporting_Facility"], stringtype=String)
     # Convert knots to m/s
     flight.kts = knot2mps.(flight.kts)
     if length(names(flight)) ≠ 7 || names(flight)[2:7] ≠
@@ -280,6 +258,43 @@ end #function loadWD
 
 
 """
+addtrack!(
+  inventory::Vector{FlightData{T}},
+  track::DataFrame,
+  currID::Int,
+  nextID::Int,
+  file::String
+) where T
+
+Add the data of the current `track` from the input `file` to the `inventory` using
+the `currID` for identification. Ret
+"""
+function addtrack!(
+  inventory::Vector{FlightData{T}},
+  track::DataFrame,
+  currID::Int,
+  nextID::Int,
+  file::String
+) where T
+  # Ignore data with less than 2 data points
+  if size(track, 1) ≤ 1
+    # Empty possible entry
+    empty!(track)
+    # Return new database ID
+    return nextID
+  end
+  # Determine predominant flight direction, inflection points, and remove duplicate entries
+  flex, useLON = preptrack!(track)
+  # Save the FlightTrack in the inventory vector
+  isempty(flex) || push!(inventory, FlightTrack{T}(track, currID,
+    missing, missing, missing, flex, useLON, "VOLPE", file))
+  # Empty track data and return new database ID
+  empty!(track)
+  return nextID
+end #function addtrack!
+
+
+"""
     readArchive(file, Float=Float32) -> DataFrame
 
 Read FlightAware archived data from a csv `file` and return content as DataFrame.
@@ -288,23 +303,22 @@ The routine works for several FlightAware archive versions. Floating point numbe
 are read with single precision or as defined by kwarg `Float`.
 """
 function readArchive(file, Float=Float32)
-  # Read file
-  track = CSV.read(file, DataFrame, datarow=2, normalizenames=true, ignoreemptylines=true,
+  # Read header and check version
+  header = readline(file)
+  old = contains(header, "(kts)")
+
+  # Load correct data version and return as DataFrame
+  old ?
+    CSV.read(file, DataFrame, datarow=2, normalizenames=true, ignoreemptyrows=true,
     silencewarnings=true, threaded=true, dateformat="m/d/y H:M:S",
-    types = Dict(:Latitude => Float, :Longitude => Float, :Altitude_feet_ => Float,
-    :Altitude_ft_ => Float, :Groundspeed_knots_ => Float, :Groundspeed_kts_ => Float,
-    :Rate => Float),
-    drop = ["Direction", "Facility_Name", "Facility_Description", "Estimated"])
-  ## Get column order and define column names
-  # Get column names of current file
-  datacols = names(track)
-  # Define unique key phrases for each column found in every FlightAware version
-  keys = [datacols[i] for i in findfirst.(occursin.(str, string.(datacols)) for str in
-    ["Flight_ID", "Ident", "Orig", "Dest", "Type",
-    "Time", "Lat", "Lon", "Alt", "speed", "Rate", "Course"])]
-  # Define standard column names
-  colnames = ["dbID", "flightID", "orig", "dest", "type",
-    "time", "lat", "lon", "alt", "speed", "climb", "heading"]
-  # Construct DataFrame
-  DataFrame(colnames .=> [getproperty(track, key) for key in keys])
+    header = ["dbID", "flightID", "type", "orig", "dest", "time", "lat", "lon",
+      "speed", "alt", "climb", "heading", "direction", "estimated"],
+    types = Dict(:lat => Float, :lon => Float, :alt => Float, :speed => Float, :climb => Float),
+    drop = ["direction", "estimated"], stringtype=String) :
+    CSV.read(file, DataFrame, datarow=2, normalizenames=true, ignoreemptyrows=true,
+    silencewarnings=true, threaded=true, dateformat="m/d/y H:M:S",
+    header = ["dbID", "flightID", "type", "orig", "dest", "time", "lat", "lon",
+      "speed", "alt", "climb", "heading", "direction", "fac_name", "fac_descr", "estimated"],
+    types = Dict(:lat => Float, :lon => Float, :alt => Float, :speed => Float, :climb => Float),
+    drop = ["direction", "fac_name", "fac_descr", "estimated"], stringtype=String)
 end #function readArchive

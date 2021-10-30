@@ -65,7 +65,7 @@ FlightSet{T}(;
 ```
 
 A similar convenience constructor exists for `CloudTrack`s. As only one database type
-exists, only the directories are needed:
+exists, only the directories are needed as `vararg` rather than `kwarg`:
 
 ```julia
 CloudSet{T}(
