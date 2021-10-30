@@ -232,8 +232,7 @@ struct SatSet{T} <: SecondarySet{T}
   function SatSet{T}(granules::Vector{SatData{T}}, metadata::SecondaryMetadata{T}) where T
     # Ensure floats of correct precision
     convertFloats!.(granules, T)
-    # Check for correct column names and data types
-    standardnames = ["time", "lat", "lon"]
+    # Instantiate struct
     new{T}(granules, metadata)
   end #constructor 1 SatData
 

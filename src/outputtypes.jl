@@ -421,9 +421,9 @@ Store all relevant primary and secondary track data depending on the primary sou
 Construct `Data` from the individual fields or use a modified constructor to load
 all necessary data from the file names given in a vector of pairs with the following
 `String` keywords for the different databases:
-- `"inventory"`: VOLPE AEDT database
-- `"archive"`: FlightAware commercial data
-- `"onlineData"`: FlightAware web content
+- `"volpe"`: VOLPE AEDT database
+- `"flightaware"`: FlightAware commercial data
+- `"webdata"`: FlightAware web content
 - `"cloudtracks"`: cloud track data
 - `"sat"`: CALIPSO satellite track data
 
@@ -446,13 +446,13 @@ between the different datasets:
 struct MeasuredData{T} <: MeasuredSet{T}
   flight::Union{Nothing,FlightSet{T}}
   cloud::Union{Nothing,CloudSet{T}}
-  sat::Union{Nothing,SatData{T}}
+  sat::Union{Nothing,SatSet{T}}
 
   """ unmodified constructor for `MeasuredData` """
   function MeasuredData{T}(
     flight::Union{Nothing,FlightSet{T}},
     cloud::Union{Nothing,CloudSet{T}},
-    sat::Union{Nothing,SatData{T}},
+    sat::Union{Nothing,SatSet{T}},
   ) where T
     new{T}(flight, cloud, sat)
   end # unmodified constructor for MeasuredData
@@ -472,14 +472,14 @@ struct MeasuredData{T} <: MeasuredSet{T}
 
     # Load data
     flights = FlightSet{T}(;
-      inventory = folders["inventory"],
-      archive = folders["archive"],
-      onlineData = folders["onlineData"],
+      volpe = folders["volpe"],
+      flightaware = folders["flightaware"],
+      webdata = folders["webdata"],
       altmin, odelim, savedir, remarks=remarks["flights"]
     )
-    @debug trim_vec!.([flights.inventory, flights.archive, flights.onlineData], 300)
+    @debug trim_vec!.([flights.volpe, flights.flightaware, flights.webdata], 300)
     clouds = CloudSet{T}(folders["cloudtracks"]...; savedir, remarks = remarks["clouds"])
-    sat = SatTrack{T}(
+    sat = SatSet{T}(
       folders["sat"]...;
       type = sattype,
       savedir,
@@ -538,9 +538,9 @@ depending on the primary source to fields:
 Construct `Data` from the individual fields or use a modified constructor to load
 all necessary data from the file names given in a vector of pairs with the following
 `String` keywords for the different databases:
-- `"inventory"`: VOLPE AEDT database
-- `"archive"`: FlightAware commercial data
-- `"onlineData"`: FlightAware web content
+- `"volpe"`: VOLPE AEDT database
+- `"flightaware"`: FlightAware commercial data
+- `"webdata"`: FlightAware web content
 - `"cloudtracks"`: cloud track data
 - `"sat"`: CALIPSO satellite track data
 
@@ -641,7 +641,7 @@ Constructor for floating point conversions.
 Data{T}(data::Data) where T = Data{T}(
   FlightSet{T}(data.flight),
   CloudSet{T}(data.cloud),
-  SatData{T}(data.sat),
+  SatSet{T}(data.sat),
   (flight = Intersection{T}(data.intersection.flight),
     cloud = Intersection{T}(data.intersection.cloud))
 )
