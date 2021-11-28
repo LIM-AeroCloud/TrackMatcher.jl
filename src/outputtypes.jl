@@ -240,7 +240,7 @@ struct XData{T} <: Intersection{T}
     # Ensure floats of correct precision
     convertFloats!(data, T)
     convertFloats!(accuracy, T)
-    observations.flight = FlightData{T}.(observations.flight)
+    observations.primary = FlightData{T}.(observations.primary)
     observations.CPro = CPro{T}.(observations.CPro)
     observations.CLay = CLay{T}.(observations.CLay)
     # Check data
