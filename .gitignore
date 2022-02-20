@@ -1,3 +1,4 @@
 src/sandbox.jl
 src/WIP.jl
 !*.dat
+!*.txt
