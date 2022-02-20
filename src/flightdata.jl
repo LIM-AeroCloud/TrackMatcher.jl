@@ -170,7 +170,7 @@ function loadWD(
   for file in files
     # Read flight data
     flight = CSV.read(file, DataFrame, delim=delim, ignoreemptylines=true, normalizenames=true,
-      silencewarnings=true, threaded=false, copycols=false, types=Dict(:Latitude => Float,
+      silencewarnings=true, ntasks=1, copycols=false, types=Dict(:Latitude => Float,
       :Longitude => Float, :feet => String, :kts => Float, :Course => String,
       :Rate => String), drop = ["mph", "Reporting_Facility"], stringtype=String)
     # Convert knots to m/s
@@ -309,14 +309,14 @@ function readArchive(file, Float=Float32)
 
   # Load correct data version and return as DataFrame
   old ?
-    CSV.read(file, DataFrame, datarow=2, normalizenames=true, ignoreemptyrows=true,
-    silencewarnings=true, threaded=true, dateformat="m/d/y H:M:S",
+    CSV.read(file, DataFrame, skipto=2, normalizenames=true, ignoreemptyrows=true,
+    silencewarnings=true, dateformat="m/d/y H:M:S",
     header = ["dbID", "flightID", "type", "orig", "dest", "time", "lat", "lon",
       "speed", "alt", "climb", "heading", "direction", "estimated"],
     types = Dict(:lat => Float, :lon => Float, :alt => Float, :speed => Float, :climb => Float),
     drop = ["direction", "estimated"], stringtype=String) :
-    CSV.read(file, DataFrame, datarow=2, normalizenames=true, ignoreemptyrows=true,
-    silencewarnings=true, threaded=true, dateformat="m/d/y H:M:S",
+    CSV.read(file, DataFrame, skipto=2, normalizenames=true, ignoreemptyrows=true,
+    silencewarnings=true, dateformat="m/d/y H:M:S",
     header = ["dbID", "flightID", "type", "orig", "dest", "time", "lat", "lon",
       "speed", "alt", "climb", "heading", "direction", "fac_name", "fac_descr", "estimated"],
     types = Dict(:lat => Float, :lon => Float, :alt => Float, :speed => Float, :climb => Float),
