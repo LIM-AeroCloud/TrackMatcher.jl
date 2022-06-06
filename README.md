@@ -8,6 +8,8 @@ Overview
 The current version can match aircraft- or cloud-track (primary) data with CALIPSO satellite 
 (secondary) ground tracks and store relevant data in the vicinity of the intersection.
 
+[![DOI](https://zenodo.org/badge/210606226.svg)](https://zenodo.org/badge/latestdoi/210606226)
+
 
 Installation
 ------------
