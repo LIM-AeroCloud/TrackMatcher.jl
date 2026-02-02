@@ -1,4 +1,6 @@
-src/sandbox.jl
-src/WIP.jl
+# Ensure data files are not ignored by global rules
 !*.dat
 !*.txt
+!*.h5
+# Ignore Manifest
+Manifest.toml

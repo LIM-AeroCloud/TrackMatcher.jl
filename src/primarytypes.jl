@@ -390,7 +390,7 @@ struct FlightData{T} <: FlightTrack{T}
   """ Unmodified constructor for `FlightData` with basic checks for correct `data`"""
   function FlightData{T}(data::DataFrame, metadata::FlightMetadata{T}) where T
     # Ensure floats of correct precision
-    convertFloats!(data, T)
+    convert_floats!(data, T)
     # Column checks and warnings
     standardnames = ["time", "lat", "lon", "alt", "heading", "climb", "speed"]
     standardtypes = [Union{DateTime,Vector{DateTime}},
@@ -455,7 +455,7 @@ FlightData{T}() where T = FlightData{T}(DataFrame(time = DateTime[],
 External FlightData constructor for conversion of floating point precision.
 """
 function FlightData{T}(flight::FlightData) where T
-  convertFloats!(flight.data, T)
+  convert_floats!(flight.data, T)
   FlightData{T}(flight.data, FlightMetadata{T}(flight.metadata))
 end
 
@@ -710,7 +710,7 @@ struct CloudData{T} <: PrimaryTrack{T}
   function CloudData{T}(data::DataFrame, metadata::CloudMetadata) where T
 
     # Ensure floats of correct precision
-    convertFloats!(data, T)
+    convert_floats!(data, T)
     # Column checks and warnings
     standardnames = ["time", "lat", "lon"]
     standardtypes = [Union{DateTime,Vector{DateTime}}, Vector{T}, Vector{T}]

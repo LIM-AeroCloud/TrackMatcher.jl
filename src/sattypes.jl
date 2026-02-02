@@ -105,7 +105,7 @@ struct SatData{T} <: SatTrack{T}
   """ Unmodified constructor for `SatData` with basic checks for correct `data`"""
   function SatData{T}(data::DataFrame) where T
     # Ensure floats of correct precision
-    convertFloats!(data, T)
+    convert_floats!(data, T)
     # Check for correct column names and data types
     standardnames = ["time", "lat", "lon"]
     standardtypes = [Vector{DateTime}, Vector{T}, Vector{T}]
@@ -138,7 +138,7 @@ struct SatData{T} <: SatTrack{T}
     # Retrieve data from MATLAB
     data = mat.jdict(mat.get_mvariable(ms, :data))
     # Convert time to UTC DateTime
-    utc = convertUTC.(data["time"])
+    utc = convert_utc.(data["time"])
     # instantiate new struct
     new{T}(DataFrame(time = utc, lat = data["lat"], lon = data["lon"]))
   end #constructor 2 SatData
@@ -231,7 +231,7 @@ struct SatSet{T} <: SecondarySet{T}
   """ Unmodified constructor for `SatData` with basic checks for correct `data`"""
   function SatSet{T}(granules::Vector{SatData{T}}, metadata::SecondaryMetadata{T}) where T
     # Ensure floats of correct precision
-    convertFloats!.(granules, T)
+    convert_floats!.(granules, T)
     # Instantiate struct
     new{T}(granules, metadata)
   end #constructor 1 SatData
@@ -393,7 +393,7 @@ struct CLay{T} <: ObservationSet{T}
   """ Unmodified constructor for `CLay` """
   function CLay{T}(data::DataFrame) where T
     # Ensure floats of correct precision
-    convertFloats!(data, T)
+    convert_floats!(data, T)
     # Column checks and warnings
     standardnames = ["time", "lat", "lon", "layer_top", "layer_base", "atmos_state",
       "OD", "IWP", "Ttop", "Htropo", "night", "averaging"]
@@ -472,7 +472,7 @@ struct CLay{T} <: ObservationSet{T}
       # Get data from MATLAB
       data = mat.jdict(mat.get_mvariable(ms, :data))
       # Convert time to UTC DateTime
-      utc[i] = convertUTC.(data["time"])
+      utc[i] = convert_utc.(data["time"])
       utc[i] = utc[i][timeindex[i]]
       # Extract lat/lon
       lat[i], lon[i] = data["lat"][timeindex[i]], data["lon"][timeindex[i]]
@@ -544,7 +544,7 @@ end
 External `CLay` constructor for conversion of floating point precision.
 """
 function CLay{T}(clay::CLay) where T
-  convertFloats!(clay.data, T)
+  convert_floats!(clay.data, T)
   CLay{T}(clay.data)
 end
 
@@ -590,7 +590,7 @@ struct CPro{T} <: ObservationSet{T}
   """ unmodified constructor """
   function CPro{T}(data::DataFrame) where T
     # Ensure floats of correct precision
-    convertFloats!(data, T)
+    convert_floats!(data, T)
     # Column checks and warnings
     standardnames = ["time", "lat", "lon", "atmos_state", "EC532", "Htropo", "temp",
       "pressure", "rH", "IWC", "deltap", "CADscore", "night"]
@@ -670,7 +670,7 @@ struct CPro{T} <: ObservationSet{T}
       # Get data from MATLAB
       data = mat.jdict(mat.get_mvariable(ms, :data))
       # Convert time to UTC DateTime
-      utc[i] = convertUTC.(data["time"])
+      utc[i] = convert_utc.(data["time"])
       utc[i] = utc[i][timeindex[i]]
       # Extract essential data
       lat[i], lon[i] = data["lat"][timeindex[i]], data["lon"][timeindex[i]]
@@ -729,7 +729,7 @@ CPro{T}() where T = CPro{T}(DataFrame(time = DateTime[], lat = T[], lon = T[],
 External `CPro` constructor for conversion of floating point precision.
 """
 function CPro{T}(cpro::CPro) where T
-  convertFloats!(cpro.data, T)
+  convert_floats!(cpro.data, T)
   CPro{T}(cpro.data)
 end
 

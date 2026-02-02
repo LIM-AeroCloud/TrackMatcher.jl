@@ -238,8 +238,8 @@ struct XData{T} <: Intersection{T}
     metadata::XMetadata{T}
   ) where T
     # Ensure floats of correct precision
-    convertFloats!(data, T)
-    convertFloats!(accuracy, T)
+    convert_floats!(data, T)
+    convert_floats!(accuracy, T)
     observations.primary = FlightData{T}.(observations.primary)
     observations.CPro = CPro{T}.(observations.CPro)
     observations.CLay = CLay{T}.(observations.CLay)

@@ -195,7 +195,6 @@ import CSV
 import Dates
 import TimeZones as tz
 import Distances as dist
-import MATLAB as mat
 import MAT
 import IntervalRootFinding as root
 import Statistics as stats
@@ -236,23 +235,24 @@ abstract type Intersection{T} <: ComputedSet{T} end
 
 
 ## Export types and constructors
-export DataSet, Data, MeasuredSet, ComputedSet, PrimarySet, SecondarySet, ObservationSet,
-       FlightSet, CloudSet, SatSet, PrimaryTrack, SecondaryTrack,
-       FlightTrack, CloudTrack, SatTrack, FlightData, CloudData, SatData,
-       CLay, CPro, Intersection, XData, #APro, ALay,
-       FlightMetadata, CloudMetadata, PrimaryMetadata, SecondaryMetadata, XMetadata
+# export DataSet, Data, MeasuredSet, ComputedSet, PrimarySet, SecondarySet, ObservationSet,
+#        FlightSet, CloudSet, SatSet, PrimaryTrack, SecondaryTrack,
+#        FlightTrack, CloudTrack, SatTrack, FlightData, CloudData, SatData,
+#        CLay, CPro, Intersection, XData, #APro, ALay,
+#        FlightMetadata, CloudMetadata, PrimaryMetadata, SecondaryMetadata, XMetadata
 
 
 ## Import functions from Julia include files
-include("primarytypes.jl")    # concrete types/constructors for primary data/datasets
-include("sattypes.jl")        # concrete types/constructors for secondary sat track data and observations
-include("outputtypes.jl")     # concrete types/constructors for intersections and combined datasets
-include("datachecks.jl")      # helper functions for data checks
-include("dataprocessing.jl")  # helper functions for data processing
+include("filesystem.jl")    # helper functions for filesystem scans
+# include("primarytypes.jl")    # concrete types/constructors for primary data/datasets
+# include("sattypes_new.jl")        # concrete types/constructors for secondary sat track data and observations
+# include("outputtypes.jl")     # concrete types/constructors for intersections and combined datasets
+# include("datachecks.jl")      # helper functions for data checks
+# include("dataprocessing.jl")  # helper functions for data processing
 include("conversions.jl")     # helper functions for time/unit conversions
-include("lidar.jl")           # functions related to processing CALIOP lidar data
-include("flightdata.jl")      # functions related to loading flight databases/datasets
-include("clouddata.jl")       # functions related to loading cloud track databases/datasets
-include("match.jl")           # functions related to finding track intersections
+# include("lidar.jl")           # functions related to processing CALIOP lidar data
+# include("flightdata.jl")      # functions related to loading flight databases/datasets
+# include("clouddata.jl")       # functions related to loading cloud track databases/datasets
+# include("match.jl")           # functions related to finding track intersections
 
 end # module TrackMatcher

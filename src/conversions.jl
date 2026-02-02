@@ -2,43 +2,40 @@
 
 ## Type conversions
 
-# Overload Float functions in Base with new method to ignore missing values
-Base.Float16(::Missing) = missing
-Base.Float32(::Missing) = missing
-Base.Float64(::Missing) = missing
-
-
 """
-    convertFloats!(data::DataFrame, T::DataType=Float32)
+    convert_floats!(data::DataFrame, T::Type{<:AbstractFloat}=Float32) -> DataFrame
 
-Transform all columns of `Vector{AbstractFloat}` or `Vector{Union{Missing, AbstractFloat}}`
-to the precision of type `T`.
+Transform all columns of Type `<: Union{Missing, AbstractFloat}` or `<: Vector{<:Union{Missing, AbstractFloat}}`
+to the precision of type `T`. Returns the modified `data` DataFrame for piping.
+
+Ensures output columns have type `Union{Missing, T}` for consistency, even when empty.
 """
-function convertFloats!(data::DataFrame, T::DataType=Float32)
-  if isempty(data)
+function convert_floats!(data::DataFrame, T::Type{<:AbstractFloat}=Float32)::DataFrame
     for (i, col) in enumerate(eachcol(data))
-      eltype(col) <: Union{Missing, AbstractFloat} && (data[!, i] = T[])
-      eltype(col) <: Vector{<:Union{Missing, AbstractFloat}} &&
-        (data[!, i] = Vector{T}[])
+        if eltype(col) <: Union{Missing, AbstractFloat}
+            # Explicitly cast to Union{Missing, T} for type stability
+            data[!, i] = Vector{Union{Missing, T}}(df.passmissing(T).(col))
+        elseif eltype(col) <: Vector{<:Union{Missing, AbstractFloat}}
+            # Handle nested vectors with explicit type for empty collections
+            if isempty(col)
+                data[!, i] = Vector{Vector{Union{Missing, T}}}()
+            else
+                data[!, i] = [Vector{Union{Missing, T}}(df.passmissing(T).(c)) for c in col]
+            end
+        end
     end
-  else
-    for (i, col) in enumerate(eachcol(data))
-      eltype(col) <: Union{Missing, AbstractFloat} && (data[!, i] = T.(col))
-      eltype(col) <: Vector{<:Union{Missing, AbstractFloat}} &&
-        (data[!, i] = [T.(c) for c in col])
-    end
-  end
-end #function convertFloats!
+    return data
+end
 
 
 ## Time format conversion of satellite data
 
 """
-    convertUTC(t::AbstractFloat) -> DateTime
+    convert_utc(t::AbstractFloat) -> DateTime
 
 Convert the CALIOP Profile UTC time (`t`) to a `DateTime`.
 """
-function convertUTC(t::AbstractFloat)
+function convert_utc(t::AbstractFloat)::DateTime
   # Extract date from Float before decimal point and convert to Date
   date = floor(Int, t)
   d = Date("20"*string(date), "yyyymmdd")
@@ -52,19 +49,20 @@ function convertUTC(t::AbstractFloat)
 
   # Return a DateTime from date and time (h/m/s) with timezone UTC
   return DateTime(Dates.yearmonthday(d)..., h, m, s, ms)
-end #function convertUTC
+end #function convert_utc
 
 
 ## Data/unit conversion
 
 """
-    earthradius(lat::T) -> R::T
+    earthradius(lat::T<:AbstractFloat) -> Float64
 
 Calculate the Earth's radius `R` in dependence of the current `lat`itude
 considering the ellipsoidal shape of the Earth due to the rotational flattening.
 """
-function earthradius(lat::T)::T where T<:AbstractFloat
-  req, rpol = 6378137, 6356752
+function earthradius(lat::T)::Float64 where T<:AbstractFloat
+  lat = Float64(lat) # ¡ ensure double precision for calculations
+  req, rpol = 6378137., 6356752.  # ℹ equatorial and polar radius in meters
   √(((req^2*cosd(lat))^2 + (rpol^2*sind(lat))^2) / ((req*cosd(lat))^2 + (rpol*sind(lat))^2))
 end #function earthradius
 
