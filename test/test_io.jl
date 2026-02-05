@@ -25,7 +25,7 @@ function test_sat_datafiles(files, type, satfiles, expected_type=type)::Bool
 end
 
 
-## Filesystem testsets
+## Testsets
 
 @testset "read satellite data" begin
     @test TrackMatcher.scandir("data/correct", ".h5") == mixed_files
@@ -33,6 +33,7 @@ end
     @test TrackMatcher.scandir("data/correct", [".h5", ".hdf"]) == mixed_files
     @test isempty(TrackMatcher.scandir("data/no_satdata/", ".h5"))
     @test @test_logs(
+        (:info, "satellite data type auto-detected as CPro"),
         (:warn, "the given folder contains 1 non-CPro files which will be ignored"),
         test_sat_datafiles(mixed_files, :undef, cpro_files, :CPro)
     )
@@ -54,4 +55,8 @@ end
         (:warn, "no satellite data files found, TrackMatcher requires CALIOP data"),
         test_sat_datafiles(empty_files, :undef, empty_files, :undef)
     )
+end
+
+@testset "I/O checks" begin
+    # TODO @test checkcols!
 end

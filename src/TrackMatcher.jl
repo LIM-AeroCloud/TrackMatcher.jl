@@ -191,6 +191,8 @@ module TrackMatcher
 ## Import Julia packages
 import DataFrames as df
 import DataStructures as ds
+import StructArrays as sa
+import HDF5 as h5
 import CSV
 import Dates
 import TimeZones as tz
@@ -200,13 +202,14 @@ import IntervalRootFinding as root
 import Statistics as stats
 import ProgressMeter as pm
 import Logging as logg
+import IntervalArithmetic as intar
 
 # Import structs and functions from packages
-import IntervalArithmetic...
 import PCHIP: Polynomial, pchip, interpolate
-import DataFrames.DataFrame
-import Dates: DateTime, Date, Time
-import TimeZones.ZonedDateTime
+import DataFrames: DataFrame
+import StructArrays: StructArray
+import Dates: AbstractDateTime, DateTime, Date, Time
+import TimeZones: ZonedDateTime
 
 # Define Logger with log level
 logger = logg.ConsoleLogger(stdout, logg.Info)
@@ -244,14 +247,14 @@ abstract type Intersection{T} <: ComputedSet{T} end
 
 ## Import functions from Julia include files
 include("filesystem.jl")    # helper functions for filesystem scans
-# include("primarytypes.jl")    # concrete types/constructors for primary data/datasets
-# include("sattypes_new.jl")        # concrete types/constructors for secondary sat track data and observations
+include("primarytypes.jl")    # concrete types/constructors for primary data/datasets
+include("sattypes_new.jl")        # concrete types/constructors for secondary sat track data and observations
 # include("outputtypes.jl")     # concrete types/constructors for intersections and combined datasets
-# include("datachecks.jl")      # helper functions for data checks
+include("datachecks.jl")      # helper functions for data checks
 # include("dataprocessing.jl")  # helper functions for data processing
 include("conversions.jl")     # helper functions for time/unit conversions
 # include("lidar.jl")           # functions related to processing CALIOP lidar data
-# include("flightdata.jl")      # functions related to loading flight databases/datasets
+include("flightdata.jl")      # functions related to loading flight databases/datasets
 # include("clouddata.jl")       # functions related to loading cloud track databases/datasets
 # include("match.jl")           # functions related to finding track intersections
 

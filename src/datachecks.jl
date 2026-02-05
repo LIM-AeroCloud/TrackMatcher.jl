@@ -2,6 +2,7 @@
 
 ## File system scans and data processing
 
+# REFACTOR: remove
 convertdir(dir::AbstractString, savedir::Union{String,Bool}="abs") =
   if isempty(savedir) || savedir === false
     dir
@@ -17,6 +18,8 @@ convertdir(dir::AbstractString, savedir::Union{String,Bool}="abs") =
 
 Scan `folder` recursively for files with `extensions` and add to the `inventory`.
 Hidden files are ignored.
+
+# REFACTOR: Replace by `scandir`
 """
 function findfiles!(inventory::Vector{String}, folder::String, extensions::String...)
   # Scan directory for files and folders and save directory

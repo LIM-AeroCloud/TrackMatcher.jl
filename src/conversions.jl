@@ -8,19 +8,27 @@
 Transform all columns of Type `<: Union{Missing, AbstractFloat}` or `<: Vector{<:Union{Missing, AbstractFloat}}`
 to the precision of type `T`. Returns the modified `data` DataFrame for piping.
 
-Ensures output columns have type `Union{Missing, T}` for consistency, even when empty.
+Ensures output columns have type `Union{Missing, T}` only when missing values are present.
 """
 function convert_floats!(data::DataFrame, T::Type{<:AbstractFloat}=Float32)::DataFrame
     for (i, col) in enumerate(eachcol(data))
         if eltype(col) <: Union{Missing, AbstractFloat}
-            # Explicitly cast to Union{Missing, T} for type stability
-            data[!, i] = Vector{Union{Missing, T}}(df.passmissing(T).(col))
-        elseif eltype(col) <: Vector{<:Union{Missing, AbstractFloat}}
-            # Handle nested vectors with explicit type for empty collections
-            if isempty(col)
-                data[!, i] = Vector{Vector{Union{Missing, T}}}()
+            if any(ismissing, col)
+                # Explicitly cast to Union{Missing, T} when missings are present
+                data[!, i] = Vector{Union{Missing,T}}(df.passmissing(T).(col))
             else
-                data[!, i] = [Vector{Union{Missing, T}}(df.passmissing(T).(c)) for c in col]
+                data[!, i] = Vector{T}(T.(col))
+            end
+        elseif eltype(col) <: Vector{<:Union{Missing, AbstractFloat}}
+            # Handle nested vectors, using non-missing vectors when possible
+            if isempty(col)
+                data[!, i] = Vector{Vector{T}}()
+            else
+                if any(c -> any(ismissing, c), col)
+                    data[!, i] = [Vector{Union{Missing, T}}(df.passmissing(T).(c)) for c in col]
+                else
+                    data[!, i] = [Vector{T}(T.(c)) for c in col]
+                end
             end
         end
     end

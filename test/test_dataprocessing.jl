@@ -16,11 +16,11 @@
     t_poost2010 = 190102.00791336806
     @testset "floats" begin
         @test typeof.(eachcol(TrackMatcher.convert_floats!(df_empty, Float32))) ==
-            [Vector{String}, Vector{Int64}, Vector{Union{Missing, Float32}}, Vector{Union{Missing, Float32}},
-            Vector{Vector{Union{Missing, Float32}}}, Vector{Vector{Union{Missing, Float32}}}, Vector{Union{Missing, Float32}}]
+            [Vector{String}, Vector{Int64}, Vector{Float32}, Vector{Float32},
+            Vector{Vector{Float32}}, Vector{Vector{Float32}}, Vector{Float32}]
         @test typeof.(eachcol(TrackMatcher.convert_floats!(df_full, Float16))) ==
-            [Vector{String}, Vector{Int64}, Vector{Union{Missing, Float16}}, Vector{Union{Missing, Float16}},
-            Vector{Vector{Union{Missing, Float16}}}, Vector{Vector{Union{Missing, Float16}}}, Vector{Union{Missing, Float16}}, Vector{Union{Missing, Float16}}]
+            [Vector{String}, Vector{Int64}, Vector{Float16}, Vector{Union{Missing, Float16}},
+            Vector{Vector{Float16}}, Vector{Vector{Union{Missing, Float16}}}, Vector{Float16}, Vector{Union{Missing, Float16}}]
     end
     @testset "UTC" begin
         @test TrackMatcher.convert_utc(t_pre2010) == DateTime(2006,6,12,0,53,41,498) broken=true

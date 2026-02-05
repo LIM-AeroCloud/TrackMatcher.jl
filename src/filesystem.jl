@@ -40,6 +40,7 @@ function sat_datafiles!(files::Vector{String}, type::Symbol)::Symbol
             return type
         end
         type = ncpro ≥ nclay ? :CPro : :CLay
+        @info "satellite data type auto-detected as $type"
     end
     # Clean files from other data types
     i = findall(!contains(string(type)), files)
