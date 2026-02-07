@@ -1,6 +1,9 @@
-# Ensure data files are not ignored by global rules
-!*.dat
-!*.txt
-!*.h5
+# Ensure test data files are not ignored by global rules
+!test/**/*.dat
+!test/**/*.txt
+!test/**/*.h5
+!test/**/*.csv
+# Ensure Lidar Altitudes data files are not ignored
+!data/CPro_lidar_Altitudes_m.dat
 # Ignore Manifest
 Manifest.toml

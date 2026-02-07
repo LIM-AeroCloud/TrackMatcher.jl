@@ -56,18 +56,53 @@ floating point type of an existing `SecondaryMetadata`. The floating point type 
 in which case `Float32` will be used by default.
 """
 struct SecondaryMetadata{T<:AbstractFloat} <: SecondarySet{T}
-  granules::DataFrame
-  roots::ds.OrderedDict{Int,String}
-  type::Symbol
-  date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
-  created::AbstractDateTime
-  loadtime::Dates.CompoundPeriod
-  attachments
+    granules::DataFrame
+    roots::ds.OrderedDict{Int,String}
+    type::Symbol
+    date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
+    created::AbstractDateTime
+    loadtime::Dates.CompoundPeriod
+    attachments
+
+    #* Internal constructor with data checks
+    function SecondaryMetadata{T}(
+        granules::DataFrame,
+        roots::ds.OrderedDict{Int,String},
+        type::Symbol,
+        date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+        created::AbstractDateTime,
+        loadtime::Dates.CompoundPeriod,
+        attachments
+    ) where T<:AbstractFloat
+    # Check that required columns are present in granules DataFrame
+    colnames = ["file", "root", "tstart", "tstop", "latmin", "latmax", "elonmin", "elonmax", "wlonmin", "wlonmax"]
+    coltypes = [Vector{String}, Vector{Int}, Vector{DateTime}, Vector{DateTime},
+        Vector{T}, Vector{T}, Vector{T}, Vector{T}, Vector{T}, Vector{T}]
+    essentialcols = collect(1:length(colnames))
+    bounds = (:tstart => (Date(2000), Dates.now()), :tstop => (Date(2000), Dates.now()),
+        :latmin => (-90, 90), :latmax => (-90, 90),
+        :elonmin => (0, 180), :elonmax => (0, 180), :wlonmin => (-180, 0), :wlonmax => (-180, 0))
+    checkcols!(granules, colnames, coltypes, bounds, "SecondaryMetadata"; essentialcols)
+    granule_roots = (sort∘unique)(granules.root)
+    root_keys = roots.keys
+    granule_roots == root_keys ||
+        throw(ArgumentError("values in root column of granules must match keys of the roots OrderedDict\n"*
+            "got: $granule_roots\nvs.: $root_keys"))
+    all(granules.tstart .≤ granules.tstop) ||
+        throw(ArgumentError("tstart must be less than or equal to tstop for all granules"))
+    all(granules.latmin .≤ granules.latmax) ||
+        throw(ArgumentError("latmin must be less than or equal to latmax for all granules"))
+    all(granules.elonmin .≤ granules.elonmax) ||
+        throw(ArgumentError("elonmin must be less than or equal to elonmax for all granules"))
+    all(granules.wlonmin .≤ granules.wlonmax) ||
+        throw(ArgumentError("wlonmin must be less than or equal to wlonmax for all granules"))
+    new{T}(granules, roots, type, date, created, loadtime, attachments)
+  end
 end #struct SecondaryMetadata
 
 #* Constructor for empty SecondaryMetadata
 SecondaryMetadata{T}() where T = SecondaryMetadata{T}(
-    DataFrame(file = String[], tstart = DateTime[], tstop = DateTime[],
+    DataFrame(file = String[], root = Int[], tstart = DateTime[], tstop = DateTime[],
         latmin = T[], latmax = T[], elonmin = T[], elonmax = T[], wlonmin = T[], wlonmax = T[]
     ),
     ds.OrderedDict{Int,String}(),
@@ -79,8 +114,9 @@ SecondaryMetadata(args...) = SecondaryMetadata{Float32}(args...)
 
 #* Constructor for floating point type promotion
 SecondaryMetadata{T}(meta::SecondaryMetadata) where T = SecondaryMetadata{T}(
-    DataFrame(file = meta.granules.file,
+    DataFrame(file = meta.granules.file, root = meta.granules.root,
         tstart = meta.granules.tstart, tstop = meta.granules.tstop,
+        latmin = T.(meta.granules.latmin), latmax = T.(meta.granules.latmax),
         elonmin = T.(meta.granules.elonmin), elonmax = T.(meta.granules.elonmax),
         wlonmin = T.(meta.granules.wlonmin), wlonmax = T.(meta.granules.wlonmax)
     ),
@@ -108,7 +144,10 @@ struct SatData{T<:AbstractFloat} <: SatTrack{T}
     function SatData{T}(time::Vector{DateTime}, lat::Vector{<:AbstractFloat}, lon::Vector{<:AbstractFloat}) where T
         length(time) == length(lat) == length(lon) ||
             throw(DimensionMismatch("SatData vectors must have equal length"))
-        return new{T}(time, lat, lon)
+        checklimits(time, DateTime(2000), Dates.now())
+        checklimits(lat, T(-90), T(90))
+        checklimits(lon, T(-180), T(180))
+        new{T}(time, lat, lon)
     end
 end
 
@@ -274,3 +313,6 @@ SatSet(args...; kwargs...) = SatSet{Float32}(args...; kwargs...)
 SatSet{T}(sat::SatSet) where T<:AbstractFloat = SatSet{T}(
   SatData{T}.(sat.granules), SecondaryMetadata{T}(sat.metadata)
 )
+
+
+## stucts for observations

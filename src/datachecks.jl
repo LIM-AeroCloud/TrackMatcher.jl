@@ -112,6 +112,17 @@ end #function findflex
 ## Data checks and corrections
 
 """
+    checklimits(data::Vector, min, max) -> Bool
+
+Return `true`, if all values in `data` are between `min` and `max` or throw an ArgumentError.
+"""
+function checklimits(data::Vector, min, max)::Bool
+  success = all(min .≤ data .≤ max)
+  success || throw(ArgumentError("data values must be between $min and $max"))
+end
+
+
+"""
     checkcols!(
       data::DataFrame,
       standardnames::Vector{String},
@@ -138,7 +149,6 @@ function checkcols!(
   # Warn of non-standardised data
   check = (names(data) == standardnames && all([typeof(d) <: t for (d, t) in zip(df.eachcol(data), standardtypes)])) ||
     @warn "Non-standard names and/or order used for data columns. Trying to correct..." dataset id
-
   # Bring column bounds into the right format
   colbounds = definebounds(bounds, standardnames)
   # Setup vector holding checked and correct data column indices
@@ -196,7 +206,7 @@ end #function definebounds!
 
 
 """
-    checkbounds!(
+    checklimits!(
       correctcols::Vector{Int},
       bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
       data::DataFrame,
@@ -208,7 +218,7 @@ Check the `bounds` of a `col`umn in `data` and add the index `val`, if correct,
 to `correctcols`. The index is added in `correctcols` at the `pos`ition, the column
 will have in the final corrected DataFrame.
 """
-function checkbounds!(
+function checklimits!(
   correctcols::Vector{Int},
   bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
   data::DataFrame,
@@ -225,7 +235,7 @@ function checkbounds!(
     all(bounds[pos][1] .< skipmissing(data[!,col]) .< bounds[pos][2])
     correctcols[pos] = val
   end
-end #function checkbounds!
+end #function checklimits!
 
 
 """
@@ -255,7 +265,7 @@ function findbyname!(
   for (i, name) in enumerate(standardnames)
     col = findfirst(isequal(name), names(data))
     col ≠ nothing && typeof(data[!,name]) <: standardtypes[i] &&
-      checkbounds!(correctcols, bounds, data, name, i, col)
+      checklimits!(correctcols, bounds, data, name, i, col)
   end
   isempty(findall(isequal(0), correctcols)) && isnothing(check) &&
     @warn "all columns corrected based on column names"
@@ -285,7 +295,7 @@ function findbyposition!(
   isempty(findall(isequal(0), correctcols)) && return
   for pos in opencols
     try typeof(data[!,pos]) <: standardtypes[pos] &&
-      checkbounds!(correctcols, bounds, data, pos, pos, pos)
+      checklimits!(correctcols, bounds, data, pos, pos, pos)
     catch
       continue
     end
@@ -322,7 +332,7 @@ function findbytype!(
   isempty(findall(isequal(0), correctcols)) && return
   for i in opencols, j in remainingcols
     try typeof(data[!,j]) <: standardtypes[i] && correctcols[i] == 0 &&
-      checkbounds!(correctcols, bounds, data, j, i, j)
+      checklimits!(correctcols, bounds, data, j, i, j)
     catch
       continue
     end
@@ -355,7 +365,7 @@ function correctDF!(
   for (i, col) in enumerate(findall(isequal(0), correctcols))
     data[!,Symbol("missing$i")] = [missing for i = 1:length(data[!,1])]
     correctcols[col] = length(names(data))
-    col in essentialcols ? @error("column $(standardnames[col]) not found in data") :
+    col in essentialcols ? throw(ArgumentError("column $(standardnames[col]) not found in data")) :
       @warn("column $(standardnames[col]) not found in data; filled with `missing`")
   end
   additionalcols = setdiff(collect(1:length(names(data))), correctcols)
