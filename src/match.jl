@@ -147,7 +147,7 @@ function findoverlap(
     for granule in df.eachrow(sectrack.metadata.granules[t1:t2,:])]
   segments = [granule.data for granule in sectrack.granules[dt][inarea]]
   # filter granules for segments within a bounding box of the flight track
-  filter(df -> size(df, 1) > 1, filter.(withinbounds(primtrack.metadata.area, atol), segments)), dt
+  filter(df -> size(df, 1) > 1, filter.(withinlimits(primtrack.metadata.area, atol), segments)), dt
 end #function findoverlap
 
 

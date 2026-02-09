@@ -376,38 +376,6 @@ end #function get_flightdata
 
 
 """
-    get_DateTimeRoute(filename::String, tzone::String)
-
-From the `filename` and a custom time zone string (`tzone`), extract and return
-the starting date, the standardised time zone, the flight ID, origin, and destination.
-"""
-function get_DateTimeRoute(filename::String, tzone::String)
-
-    # Time is the first column and has to be addressed as flight[!,1] in the code
-    # due to different column names, in which the timezone is included
-    timezone = zonedict[tzone]
-    # Retrieve date and metadata from filename
-    flightID, datestr, course = try match(r"(.*?)_(.*?)_(.*)", filename).captures
-    catch
-      println()
-      println()
-      @warn "Flight ID, date, and course not found. Data skipped." file
-      return missing, missing, missing, missing, missing
-    end
-    orig, dest = match(r"(.*)[-|_](.*)", course).captures
-    date = try Dates.Date(datestr, "d-u-y", locale="english")
-    catch
-      println()
-      println()
-      @warn "Unable to parse date. Data skipped." file
-      return missing, missing, missing, missing, missing
-    end
-
-    return date, timezone, flightID, orig, dest
-end #function get_DateTimeRoute
-
-
-"""
     get_satdata(
       ms::mat.MSession,
       sat::SatData,

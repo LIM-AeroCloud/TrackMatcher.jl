@@ -248,7 +248,7 @@ abstract type Intersection{T} <: ComputedSet{T} end
 ## Import functions from Julia include files
 include("filesystem.jl")    # helper functions for filesystem scans
 include("primarytypes_new.jl")    # concrete types/constructors for primary data/datasets
-include("primarytypes.jl")    # concrete types/constructors for primary data/datasets
+# include("primarytypes.jl")    # concrete types/constructors for primary data/datasets
 include("sattypes_new.jl")        # concrete types/constructors for secondary sat track data and observations
 # include("outputtypes.jl")     # concrete types/constructors for intersections and combined datasets
 include("datachecks.jl")      # helper functions for data checks
@@ -256,7 +256,7 @@ include("datachecks.jl")      # helper functions for data checks
 include("conversions.jl")     # helper functions for time/unit conversions
 # include("lidar.jl")           # functions related to processing CALIOP lidar data
 include("flightdata.jl")      # functions related to loading flight databases/datasets
-include("clouddata.jl")       # functions related to loading cloud track databases/datasets
+# include("clouddata.jl")       # functions related to loading cloud track databases/datasets
 # include("match.jl")           # functions related to finding track intersections
 
 end # module TrackMatcher

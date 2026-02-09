@@ -120,7 +120,7 @@ The `DataFrame` of `data` has columns in the following order with the respective
 - `lon::Vector{<:Union{Missing,T}}`       (longitude in deg)
 - `alt::Vector{<:Union{Missing,T}}`       (altitude in meters)
 - `heading::Vector{<:Union{Missing,Int}}` (heading/direction of the aircraft in deg)
-- `climb::Vector{<:Union{Missing,Int}}`   (climbing (positive)/sinking (negative values) rate in m/s)
+- `climb::Vector{<:Union{Missing,Int}}`   (climb (positive)/sink (negative values) rate in m/s)
 - `speed::Vector{<:Union{Missing,T}}`     (velocity in m/s)
 
 By default, T<:AbstractFloat is set to `Float32`.

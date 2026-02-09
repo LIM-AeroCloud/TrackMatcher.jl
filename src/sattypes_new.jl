@@ -57,7 +57,7 @@ in which case `Float32` will be used by default.
 """
 struct SecondaryMetadata{T<:AbstractFloat} <: SecondarySet{T}
     granules::DataFrame
-    roots::ds.OrderedDict{Int,String}
+    roots::ds.OrderedDict{UInt16,String}
     type::Symbol
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
     created::AbstractDateTime
@@ -67,7 +67,7 @@ struct SecondaryMetadata{T<:AbstractFloat} <: SecondarySet{T}
     #* Internal constructor with data checks
     function SecondaryMetadata{T}(
         granules::DataFrame,
-        roots::ds.OrderedDict{Int,String},
+        roots::ds.OrderedDict{UInt16,String},
         type::Symbol,
         date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
         created::AbstractDateTime,
@@ -76,7 +76,7 @@ struct SecondaryMetadata{T<:AbstractFloat} <: SecondarySet{T}
     ) where T<:AbstractFloat
     # Check that required columns are present in granules DataFrame
     colnames = ["file", "root", "tstart", "tstop", "latmin", "latmax", "elonmin", "elonmax", "wlonmin", "wlonmax"]
-    coltypes = [Vector{String}, Vector{Int}, Vector{DateTime}, Vector{DateTime},
+    coltypes = [Vector{String}, Vector{UInt16}, Vector{DateTime}, Vector{DateTime},
         Vector{T}, Vector{T}, Vector{T}, Vector{T}, Vector{T}, Vector{T}]
     essentialcols = collect(1:length(colnames))
     bounds = (:tstart => (Date(2000), Dates.now()), :tstop => (Date(2000), Dates.now()),
@@ -102,10 +102,10 @@ end #struct SecondaryMetadata
 
 #* Constructor for empty SecondaryMetadata
 SecondaryMetadata{T}() where T = SecondaryMetadata{T}(
-    DataFrame(file = String[], root = Int[], tstart = DateTime[], tstop = DateTime[],
+    DataFrame(file = String[], root = UInt16[], tstart = DateTime[], tstop = DateTime[],
         latmin = T[], latmax = T[], elonmin = T[], elonmax = T[], wlonmin = T[], wlonmax = T[]
     ),
-    ds.OrderedDict{Int,String}(),
+    ds.OrderedDict{UInt16,String}(),
     :undef, (start=Dates.now(), stop=Dates.now()), Dates.now(), Dates.CompoundPeriod(), nothing
 )
 
@@ -144,9 +144,9 @@ struct SatData{T<:AbstractFloat} <: SatTrack{T}
     function SatData{T}(time::Vector{DateTime}, lat::Vector{<:AbstractFloat}, lon::Vector{<:AbstractFloat}) where T
         length(time) == length(lat) == length(lon) ||
             throw(DimensionMismatch("SatData vectors must have equal length"))
-        checklimits(time, DateTime(2000), Dates.now())
-        checklimits(lat, T(-90), T(90))
-        checklimits(lon, T(-180), T(180))
+        checklimits(time, DateTime(2000), Dates.now(), "time")
+        checklimits(lat, T(-90), T(90), "latitude")
+        checklimits(lon, T(-180), T(180), "longitude")
         new{T}(time, lat, lon)
     end
 end
@@ -257,10 +257,10 @@ function SatSet{T}(
     end
     # Loop over found files and load data
     granules = StructArray{SatData{T}}(undef, 0)
-    metadata = DataFrame(file = String[], root = Int[], tstart = DateTime[], tstop = DateTime[],
+    metadata = DataFrame(file = String[], root = UInt16[], tstart = DateTime[], tstop = DateTime[],
         latmin = T[], latmax = T[], elonmin = T[], elonmax = T[], wlonmin = T[], wlonmax = T[]
     )
-    roots = ds.OrderedDict{String,Int}()
+    roots = ds.OrderedDict{String,UInt16}()
     pm.@showprogress dt=1 desc="load sat data..." for data in paths
         root = realpath(data.root)
         haskey(roots, root) || (roots[root] = length(roots) + 1)

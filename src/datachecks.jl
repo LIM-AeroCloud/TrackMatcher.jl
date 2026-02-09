@@ -4,13 +4,13 @@
 
 # REFACTOR: remove
 convertdir(dir::AbstractString, savedir::Union{String,Bool}="abs") =
-  if isempty(savedir) || savedir === false
-    dir
-  elseif lowercase(savedir[1:3]) == "abs"
-    abspath(dir)
-  elseif lowercase(savedir[1:3]) == "rel"
-    relpath(dir)
-  end
+    if isempty(savedir) || savedir === false
+        dir
+    elseif lowercase(savedir[1:3]) == "abs"
+        abspath(dir)
+    elseif lowercase(savedir[1:3]) == "rel"
+        relpath(dir)
+    end
 
 
 """
@@ -22,19 +22,19 @@ Hidden files are ignored.
 # REFACTOR: Replace by `scandir`
 """
 function findfiles!(inventory::Vector{String}, folder::String, extensions::String...)
-  # Scan directory for files and folders and save directory
-  dir = readdir(folder); path = abspath(folder)
-  for file in dir
-    # Save current directory/file
-    cwd = joinpath(path, file)
-    if isdir(cwd)
-      # Step into subdirectories and scan them, too
-      findfiles!(inventory, cwd, extensions...)
-    elseif any(endswith.(file, extensions)) && !startswith(file, ".")
-      # Save files of correct type
-      push!(inventory, cwd)
+    # Scan directory for files and folders and save directory
+    dir = readdir(folder); path = abspath(folder)
+    for file in dir
+        # Save current directory/file
+        cwd = joinpath(path, file)
+        if isdir(cwd)
+            # Step into subdirectories and scan them, too
+            findfiles!(inventory, cwd, extensions...)
+        elseif any(endswith.(file, extensions)) && !startswith(file, ".")
+            # Save files of correct type
+            push!(inventory, cwd)
+        end
     end
-  end
 end # function findfiles!
 
 
@@ -46,30 +46,30 @@ Remove entries with duplicate x and y (`lat`/`lon` or `lon`/`lat`) values from
 `y` data is not.
 """
 function remdup!(data::DataFrame, useLON::Bool)
-  # Define x and y data
-  x, y = useLON ? (:lon, :lat) : (:lat, :lon)
-  # Initialise
-  i = 1
-  iEnd = size(data, 1)
-  # Loop over entries in vector
-  while i < iEnd
-    j = i + 1 # index for next consecutive line
-    while j ≤ iEnd && isapprox(data[i, x], data[j, x], atol = eps(data[j, x]))
-      if isapprox(data[j-1, y], data[j, y], atol = eps(data[j, y]))
-        # Delete datarow, if x and y are identical
-        data[j, x] = data[j-1, x]
-        delete!(data, j-1)
-        # Decrease the counter for the end of the arrays
-        iEnd -= 1
-      else
-        # If x values are equal but y values differ,
-        # add infinitessimal small increment to x value
-        data[j, x] = nextfloat(data[j-1, x])
-        j += 1 # set to next index
-      end
+    # Define x and y data
+    x, y = useLON ? (:lon, :lat) : (:lat, :lon)
+    # Initialise
+    i = 1
+    iEnd = size(data, 1)
+    # Loop over entries in vector
+    while i < iEnd
+        j = i + 1 # index for next consecutive line
+        while j ≤ iEnd && isapprox(data[i, x], data[j, x], atol = eps(data[j, x]))
+            if isapprox(data[j-1, y], data[j, y], atol = eps(data[j, y]))
+                # Delete datarow, if x and y are identical
+                data[j, x] = data[j-1, x]
+                deleteat!(data, j-1)
+                # Decrease the counter for the end of the arrays
+                iEnd -= 1
+            else
+                # If x values are equal but y values differ,
+                # add infinitessimal small increment to x value
+                data[j, x] = nextfloat(data[j-1, x])
+                j += 1 # set to next index
+            end
+        end
+        i += 1 # increase line counter
     end
-    i += 1 # increase line counter
-  end
 end #function remdup!
 
 
@@ -81,44 +81,46 @@ Find inflection points in `x` and return a vector of named tuples with index ran
 between inflection points and corresponding extrema.
 """
 function findflex(x::AbstractArray{<:Union{V,T} where V where T})
-  # Save starting index
-  flex = Int[1]
-  # Loop over data points
-  for i = 2:length(x)-1
-    # Find and save inflection points
-    if x[i-1] > x[i] < x[i+1] || x[i-1] < x[i] > x[i+1]
-      push!(flex, i)
+    # Save starting index
+    flex = Int[1]
+    # Loop over data points
+    for i = 2:length(x)-1
+        # Find and save inflection points
+        if x[i-1] > x[i] < x[i+1] || x[i-1] < x[i] > x[i+1]
+            push!(flex, i)
+        end
     end
-  end
-  T = eltype(x)
-  # Save end index
-  push!(flex, length(x))
-  # Initialise a vector for ranges between flex points, and min/max values
-  ranges = NamedTuple{(:range, :min, :max), Tuple{UnitRange{Int}, T, T}}[]
-  # Loop over saved inflection points
-  for i = 2:length(flex)
-    # Evaluate ascending/descending order of data and save extrema and range,
-    # if it range contains more than one data point
-    xmin, xmax = x[flex[i-1]] < x[flex[i]] ? (x[flex[i-1]], x[flex[i]]) :
-      (x[flex[i]], x[flex[i-1]])
-    flex[i] - flex[i-1] > 1 && push!(ranges, (range=flex[i-1]:flex[i], min=xmin, max=xmax))
-  end
+    T = eltype(x)
+    # Save end index
+    push!(flex, length(x))
+    # Initialise a vector for ranges between flex points, and min/max values
+    ranges = NamedTuple{(:range, :min, :max), Tuple{UnitRange{Int}, T, T}}[]
+    # Loop over saved inflection points
+    for i = 2:length(flex)
+        # Evaluate ascending/descending order of data and save extrema and range,
+        # if it range contains more than one data point
+        xmin, xmax = x[flex[i-1]] < x[flex[i]] ? (x[flex[i-1]], x[flex[i]]) :
+        (x[flex[i]], x[flex[i-1]])
+        flex[i] - flex[i-1] > 1 && push!(ranges, (range=flex[i-1]:flex[i], min=xmin, max=xmax))
+    end
 
-  # Return all ranges between flex points together with the corresponding extrema
-  return Tuple(ranges)
+    # Return all ranges between flex points together with the corresponding extrema
+    return Tuple(ranges)
 end #function findflex
 
 
 ## Data checks and corrections
 
 """
-    checklimits(data::Vector, min, max) -> Bool
+    checklimits(data::Vector, min, max, property::AbstractString) -> Bool
 
 Return `true`, if all values in `data` are between `min` and `max` or throw an ArgumentError.
+The `property` name is used for the error message.
 """
-function checklimits(data::Vector, min, max)::Bool
-  success = all(min .≤ data .≤ max)
-  success || throw(ArgumentError("data values must be between $min and $max"))
+function checklimits(data::Vector, min, max, property::AbstractString)::Bool
+    success = all(min .≤ skipmissing(data) .≤ max)
+    success || throw(ArgumentError("$property values are out of range\n"*
+        "got: [$(minimum(data)) ... $(maximum(data))], expected: [$min ... $max]"))
 end
 
 
@@ -138,45 +140,45 @@ Check the columns of the `data` `DataFrame` for the use of correct `standardname
 otherwise issue a warning stating the `dataset` and `id` and try to correct the `data`.
 """
 function checkcols!(
-  data::DataFrame,
-  standardnames::Vector{String},
-  standardtypes::Vector{<:Type},
-  bounds::Tuple{Vararg{Pair{<:Union{Int,Symbol},<:Tuple}}},
-  dataset::T where T<:Union{Nothing,<:AbstractString}=nothing,
-  id::Union{Nothing,Int,AbstractString}=nothing;
-  essentialcols::Vector{Int}=[1,2,3]
+    data::DataFrame,
+    standardnames::Vector{String},
+    standardtypes::Vector{<:Type},
+    bounds::Tuple{Vararg{Pair{<:Union{Int,Symbol},<:Tuple}}},
+    dataset::T where T<:Union{Nothing,<:AbstractString}=nothing,
+    id::Union{Nothing,Int,AbstractString}=nothing;
+    essentialcols::Vector{Int}=[1,2,3]
 )
-  # Warn of non-standardised data
-  check = (names(data) == standardnames && all([typeof(d) <: t for (d, t) in zip(df.eachcol(data), standardtypes)])) ||
-    @warn "Non-standard names and/or order used for data columns. Trying to correct..." dataset id
-  # Bring column bounds into the right format
-  colbounds = definebounds(bounds, standardnames)
-  # Setup vector holding checked and correct data column indices
-  correctcols = zeros(Int, length(standardnames))
-  # Find columns by name
-  findbyname!(correctcols, data, standardnames, standardtypes, colbounds, check)
-  # Find unchecked columns
-  opencols = setdiff(collect(1:min(length(names(data)), length(standardnames))),
-    filter(x -> x .≠ 0, correctcols))
-  # Find columns by position
-  findbyposition!(correctcols, opencols, data, standardtypes, colbounds)
-  # Find columns in data not associated with a correct column
-  remainingcols = setdiff(collect(1:length(names(data))),
-    filter(x -> x .≠ 0, correctcols))
-  # Find unchecked columns
-  opencols = findall(isequal(0), correctcols)
-  # Find columns by type and bounds
-  findbytype!(data, correctcols, opencols, remainingcols, standardtypes, colbounds)
-  # Correct DataFrame to the right format
-  correctDF!(data, correctcols, standardnames, essentialcols)
-  return data
+    # Warn of non-standardised data
+    check = (names(data) == standardnames && all([typeof(d) <: t for (d, t) in zip(df.eachcol(data), standardtypes)])) ||
+        @warn "Non-standard names and/or order used for data columns. Trying to correct..." dataset id
+    # Bring column bounds into the right format
+    colbounds = definebounds(bounds, standardnames)
+    # Setup vector holding checked and correct data column indices
+    correctcols = zeros(Int, length(standardnames))
+    # Find columns by name
+    findbyname!(correctcols, data, standardnames, standardtypes, colbounds, check)
+    # Find unchecked columns
+    opencols = setdiff(collect(1:min(length(names(data)), length(standardnames))),
+        filter(x -> x .≠ 0, correctcols))
+    # Find columns by position
+    findbyposition!(correctcols, opencols, data, standardtypes, colbounds)
+    # Find columns in data not associated with a correct column
+    remainingcols = setdiff(collect(1:length(names(data))),
+        filter(x -> x .≠ 0, correctcols))
+    # Find unchecked columns
+    opencols = findall(isequal(0), correctcols)
+    # Find columns by type and bounds
+    findbytype!(data, correctcols, opencols, remainingcols, standardtypes, colbounds)
+    # Correct DataFrame to the right format
+    correctDF!(data, correctcols, standardnames, essentialcols)
+    return data
 end #function checkcols!
 
 
 """
     definebounds(
-      bounds::Tuple{Vararg{Pair{<:Union{Int,Symbol},<:Tuple}}},
-      colnames::Vector{Symbol}
+        bounds::Tuple{Vararg{Pair{<:Union{Int,Symbol},<:Tuple}}},
+        colnames::Vector{Symbol}
     ) -> bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
 
 From a Tuple of Pairs with column names or indices pointing to tuples with min/max
@@ -185,67 +187,67 @@ to each of the `colnames`. If `bounds` are not defined, they are set to `-Inf`/`
 in the output vector.
 """
 function definebounds(
-  bounds::Tuple{Vararg{Pair{<:Union{Int,Symbol},<:Tuple}}},
-  colnames::Vector{String}
+    bounds::Tuple{Vararg{Pair{<:Union{Int,Symbol},<:Tuple}}},
+    colnames::Vector{String}
 )
-  colbounds = Dict(bounds)
-  bounds = Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}(undef,length(colnames))
-  for (i, name) in enumerate(colnames)
-    lower, upper = if haskey(colbounds, name)
-      colbounds[name]
-    elseif haskey(colbounds, i)
-      colbounds[i]
-    else
-      (-Inf, Inf)
+    colbounds = Dict(bounds)
+    bounds = Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}(undef,length(colnames))
+    for (i, name) in enumerate(colnames)
+        lower, upper = if haskey(colbounds, name)
+            colbounds[name]
+        elseif haskey(colbounds, i)
+            colbounds[i]
+        else
+            (-Inf, Inf)
+        end
+        bounds[i] = (lower, upper)
     end
-    bounds[i] = (lower, upper)
-  end
 
-  return bounds
+    return bounds
 end #function definebounds!
 
 
 """
     checklimits!(
-      correctcols::Vector{Int},
-      bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
-      data::DataFrame,
-      col::T where T <: Union{Int,Symbol},
-      pos::Int,
-      val::Int
+        correctcols::Vector{Int},
+        bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
+        data::DataFrame,
+        col::T where T <: Union{Int,Symbol},
+        pos::Int,
+        val::Int
     )
 Check the `bounds` of a `col`umn in `data` and add the index `val`, if correct,
 to `correctcols`. The index is added in `correctcols` at the `pos`ition, the column
 will have in the final corrected DataFrame.
 """
 function checklimits!(
-  correctcols::Vector{Int},
-  bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
-  data::DataFrame,
-  col::T where T <: Union{Int,String},
-  pos::Int,
-  val::Int
+    correctcols::Vector{Int},
+    bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
+    data::DataFrame,
+    col::T where T <: Union{Int,String},
+    pos::Int,
+    val::Int
 )
-  if typeof(bounds[pos]) .== Tuple{DateTime,DateTime} &&
-    all(bounds[pos][1] .< skipmissing(data[!,col]) .< bounds[pos][2])
-    correctcols[pos] = val
-  elseif typeof(bounds[pos]) .== Tuple{DateTime,DateTime}
-    return
-  elseif all(isinf.(bounds[pos])) ||
-    all(bounds[pos][1] .< skipmissing(data[!,col]) .< bounds[pos][2])
-    correctcols[pos] = val
-  end
+    if typeof(bounds[pos]) .== Tuple{DateTime,DateTime} &&
+        all(bounds[pos][1] .< skipmissing(data[!,col]) .< bounds[pos][2])
+        correctcols[pos] = val
+    elseif typeof(bounds[pos]) .== Tuple{DateTime,DateTime}
+        return
+    elseif all(isinf.(bounds[pos])) ||
+        all(bounds[pos][1] .< skipmissing(data[!,col]) .< bounds[pos][2])
+        correctcols[pos] = val
+    end
 end #function checklimits!
 
 
 """
     findbyname!(
-      correctcols::Vector{Int},
-      data::DataFrame,
-      standardnames::Vector{String},
-      standardtypes::Vector{<:Type},
-      bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
-      check::T where T<:Union{Nothing,Bool}
+        correctcols::Vector{Int},
+        data::DataFrame,
+        standardnames::Vector{String},
+        standardtypes::Vector{<:Type},
+        bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
+        check::T where T<:Union{Nothing,Bool}
     )
 
 Find columns by `standardnames` in `data` and add the current position as `Int`
@@ -255,30 +257,30 @@ found a mismatch of the column order, but all `data` columns could be identified
 `standardnames`.
 """
 function findbyname!(
-  correctcols::Vector{Int},
-  data::DataFrame,
-  standardnames::Vector{String},
-  standardtypes::Vector{<:Type},
-  bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
-  check::T where T<:Union{Nothing,Bool}
+    correctcols::Vector{Int},
+    data::DataFrame,
+    standardnames::Vector{String},
+    standardtypes::Vector{<:Type},
+    bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}},
+    check::T where T<:Union{Nothing,Bool}
 )
-  for (i, name) in enumerate(standardnames)
-    col = findfirst(isequal(name), names(data))
-    col ≠ nothing && typeof(data[!,name]) <: standardtypes[i] &&
-      checklimits!(correctcols, bounds, data, name, i, col)
-  end
-  isempty(findall(isequal(0), correctcols)) && isnothing(check) &&
-    @warn "all columns corrected based on column names"
+    for (i, name) in enumerate(standardnames)
+        col = findfirst(isequal(name), names(data))
+        col ≠ nothing && typeof(data[!,name]) <: standardtypes[i] &&
+        checklimits!(correctcols, bounds, data, name, i, col)
+    end
+    isempty(findall(isequal(0), correctcols)) && isnothing(check) &&
+        @warn "all columns corrected based on column names"
 end #function findbyname!
 
 
 """
     findbyposition!(
-      correctcols::Vector{Int},
-      opencols::Vector{Int},
-      data::DataFrame,
-      standardtypes::Vector{<:Type},
-      bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
+        correctcols::Vector{Int},
+        opencols::Vector{Int},
+        data::DataFrame,
+        standardtypes::Vector{<:Type},
+        bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
     )
 
 Find columns by the `standardtypes` and `bounds` at each column index in `data`
@@ -286,33 +288,33 @@ and add the current in `correctcols` for positive matches. Issue a warning,
 if all data could be corrected by type (and previously name).
 """
 function findbyposition!(
-  correctcols::Vector{Int},
-  opencols::Vector{Int},
-  data::DataFrame,
-  standardtypes::Vector{<:Type},
-  bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
+    correctcols::Vector{Int},
+    opencols::Vector{Int},
+    data::DataFrame,
+    standardtypes::Vector{<:Type},
+    bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
 )
-  isempty(findall(isequal(0), correctcols)) && return
-  for pos in opencols
-    try typeof(data[!,pos]) <: standardtypes[pos] &&
-      checklimits!(correctcols, bounds, data, pos, pos, pos)
-    catch
-      continue
+    isempty(findall(isequal(0), correctcols)) && return
+    for pos in opencols
+        try typeof(data[!,pos]) <: standardtypes[pos] &&
+            checklimits!(correctcols, bounds, data, pos, pos, pos)
+        catch
+            continue
+        end
     end
-  end
-  isempty(findall(isequal(0), correctcols)) &&
-    @warn "all columns corrected based on\n- column names\n- column positions"
+    isempty(findall(isequal(0), correctcols)) &&
+        @warn "all columns corrected based on\n- column names\n- column positions"
 end #function findbyposition!
 
 
 """
     findbytype!(
-      data::DataFrame,
-      correctcols::Vector{Int},
-      opencols::Vector{Int},
-      remainingcols::Vector{Int},
-      standardtypes::Vector{<:Type},
-      bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
+        data::DataFrame,
+        correctcols::Vector{Int},
+        opencols::Vector{Int},
+        remainingcols::Vector{Int},
+        standardtypes::Vector{<:Type},
+        bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
     )
 
 Find the missing columns `opencols` in `data` using the `remainingcols` in `data`
@@ -322,33 +324,33 @@ correct in a column. Issue a warning, if all data could be corrected by type
 (and previously name and position).
 """
 function findbytype!(
-  data::DataFrame,
-  correctcols::Vector{Int},
-  opencols::Vector{Int},
-  remainingcols::Vector{Int},
-  standardtypes::Vector{<:Type},
-  bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
+    data::DataFrame,
+    correctcols::Vector{Int},
+    opencols::Vector{Int},
+    remainingcols::Vector{Int},
+    standardtypes::Vector{<:Type},
+    bounds::Vector{Tuple{<:Union{Real,DateTime},<:Union{Real,DateTime}}}
 )
-  isempty(findall(isequal(0), correctcols)) && return
-  for i in opencols, j in remainingcols
-    try typeof(data[!,j]) <: standardtypes[i] && correctcols[i] == 0 &&
-      checklimits!(correctcols, bounds, data, j, i, j)
-    catch
-      continue
+    isempty(findall(isequal(0), correctcols)) && return
+    for i in opencols, j in remainingcols
+        try typeof(data[!,j]) <: standardtypes[i] && correctcols[i] == 0 &&
+            checklimits!(correctcols, bounds, data, j, i, j)
+        catch
+            continue
+        end
     end
-  end
 
-  isempty(findall(isequal(0), correctcols)) &&
-    @warn "all columns corrected based on\n- column names\n- column positions\n- column types and bounds"
+    isempty(findall(isequal(0), correctcols)) &&
+        @warn "all columns corrected based on\n- column names\n- column positions\n- column types and bounds"
 end #function findbytype!
 
 
 """
     correctDF!(
-      data::DataFrame,
-      correctcols::Vector{Int},
-      standardnames::Vector{String},
-      essentialcols::Vector{Int}
+        data::DataFrame,
+        correctcols::Vector{Int},
+        standardnames::Vector{String},
+        essentialcols::Vector{Int}
     )
 
 Correct the column order and/or names in `data` based on the order of indices in
@@ -357,38 +359,23 @@ Correct the column order and/or names in `data` based on the order of indices in
 values or additional columns being deleted.
 """
 function correctDF!(
-  data::DataFrame,
-  correctcols::Vector{Int},
-  standardnames::Vector{String},
-  essentialcols::Vector{Int}
+    data::DataFrame,
+    correctcols::Vector{Int},
+    standardnames::Vector{String},
+    essentialcols::Vector{Int}
 )
-  for (i, col) in enumerate(findall(isequal(0), correctcols))
-    data[!,Symbol("missing$i")] = [missing for i = 1:length(data[!,1])]
-    correctcols[col] = length(names(data))
-    col in essentialcols ? throw(ArgumentError("column $(standardnames[col]) not found in data")) :
-      @warn("column $(standardnames[col]) not found in data; filled with `missing`")
-  end
-  additionalcols = setdiff(collect(1:length(names(data))), correctcols)
-  !isempty(additionalcols) &&
-    @warn "additional column $(join(additionalcols, ", ", " and ")) deleted in data"
-  df.select!(data, correctcols)
-  df.rename!(data, standardnames)
+    for (i, col) in enumerate(findall(isequal(0), correctcols))
+        data[!,Symbol("missing$i")] = [missing for i = 1:length(data[!,1])]
+        correctcols[col] = length(names(data))
+        col in essentialcols ? throw(ArgumentError("column $(standardnames[col]) not found in data")) :
+        @warn("column $(standardnames[col]) not found in data; filled with `missing`")
+    end
+    additionalcols = setdiff(collect(1:length(names(data))), correctcols)
+    !isempty(additionalcols) &&
+        @warn "additional column $(join(additionalcols, ", ", " and ")) deleted in data"
+    df.select!(data, correctcols)
+    df.rename!(data, standardnames)
 end #function correctDF!
-
-
-"""
-    checkDBtype(DB::Vector{FlightTrack}, type::String) -> Vector{FlightTrack}
-
-Check whether the `DB` vector with `FlightTrack` contains only entries of the desired
-`type` (`VOLPE AEDT inventory`, `FlightAware archive`, or `flightaware.com online data`).
-Remove entries of a wrong type and return the revised vector.
-"""
-function checkDBtype(DB::Vector{<:FlightData}, source::String)
-  # Remove entries other than from source
-  removed = count([d.metadata.source.≠source for d in DB])
-  removed > 0 && @warn "$removed entries removed of database of type $source."
-  DB[[d.metadata.source.==source for d in DB]]
-end #function checkDBtype
 
 
 ## Prepare trajectory for interpolation and analysis of intersections
@@ -404,21 +391,21 @@ with the `flex` points in the x data for interpolation and a boolean `useLON`,
 which is true for longitude values used x data in the track interpolation.
 """
 function preptrack!(trajectory::DataFrame)
-  # calculate area covered by flight
-  lp = any(trajectory.lon .≥ 0) ? maximum(filter(l -> l ≥ 0, trajectory.lon)) -
-    minimum(filter(l -> l ≥ 0, trajectory.lon)) : 0
-  ln = any(trajectory.lon .< 0) ? maximum(filter(l -> l < 0, trajectory.lon)) -
-    minimum(filter(l -> l < 0, trajectory.lon)) : 0
-  # Determine main direction of trajectory (N<>S, E<>W) and use it as x values
-  # for trajectory interpolation (info stored as bool useLON)
-  useLON = maximum(trajectory.lat) - minimum(trajectory.lat) ≤ (lp + ln) *
-    cosd(stats.mean(trajectory.lat)) ? true : false
-  # Adjust for duplicate entries and
-  remdup!(trajectory, useLON)
-  # find flex points to cut data in segments needed for the interpolation
-  flex = useLON ? findflex(trajectory.lon) : findflex(trajectory.lat)
+    # calculate area covered by flight
+    lp = any(trajectory.lon .≥ 0) ? maximum(filter(l -> l ≥ 0, trajectory.lon)) -
+        minimum(filter(l -> l ≥ 0, trajectory.lon)) : 0
+    ln = any(trajectory.lon .< 0) ? maximum(filter(l -> l < 0, trajectory.lon)) -
+        minimum(filter(l -> l < 0, trajectory.lon)) : 0
+    # Determine main direction of trajectory (N<>S, E<>W) and use it as x values
+    # for trajectory interpolation (info stored as bool useLON)
+    useLON = maximum(trajectory.lat) - minimum(trajectory.lat) ≤ (lp + ln) *
+        cosd(stats.mean(trajectory.lat)) ? true : false
+    # Adjust for duplicate entries and
+    remdup!(trajectory, useLON)
+    # find flex points to cut data in segments needed for the interpolation
+    flex = useLON ? findflex(trajectory.lon) : findflex(trajectory.lat)
 
-  return flex, useLON
+    return flex, useLON
 end #function preptrack
 
 
@@ -431,17 +418,17 @@ next larger value.
 Vector `arr` consists of distances between coinciding coordinate pairs of different tracks.
 """
 function closest_points(arr::Vector{T})::Tuple{Int,Int} where T<:Real
-  m1 = argmin(abs.(arr))
-  m2 = if m1 == 1
-    2
-  elseif m1 == length(arr)
-    m1 - 1
-  elseif arr[m1-1] < arr[m1+1]
-    m1-1
-  else
-    m1+1
-  end
-  return m1, m2
+    m1 = argmin(abs.(arr))
+    m2 = if m1 == 1
+        2
+    elseif m1 == length(arr)
+        m1 - 1
+    elseif arr[m1-1] < arr[m1+1]
+        m1-1
+    else
+        m1+1
+    end
+    return m1, m2
 end #function closest_points
 
 
@@ -452,48 +439,48 @@ Find extrema in `lon`gitude values for eastern and western hemisphere by definin
 `rel` as `>` or `<` 0 filtering for the respective longitude values.
 """
 function lonextrema(lon::Vector{T}, rel::Function) where T
-  # Return minimum or NaN for non-existing track data in current hemisphere
-  try minimum(filter(rel(0), lon))
-  catch
-    T(NaN)
-  end,
-  # Return maximum or NaN for non-existing track data in current hemisphere
-  try maximum(filter(rel(0), lon))
-  catch
-    T(NaN)
-  end
+    # Return minimum or NaN for non-existing track data in current hemisphere
+    try minimum(filter(rel(0), lon))
+    catch
+        T(NaN)
+    end,
+    # Return maximum or NaN for non-existing track data in current hemisphere
+    try maximum(filter(rel(0), lon))
+    catch
+        T(NaN)
+    end
 end #function lonextrema
 
 
 
 """
-    withinbounds(area::NamedTuple, track, atol::Real=0.1) -> Vector{Bool}
+    withinlimits(area::NamedTuple, track, atol::Real=0.1) -> Vector{Bool}
 
 Compares the coordinate pairs in columns `lat` and `lon` of the `DataFrame` `track`
 to the `area` bounds `latmin`, `latmax`, `elonmin`, `elonmax`, `wlonmin`, and `wlonmax`
 of the given `area`. Coordinates are allowed to exceed the `area` by `atol` degrees.
 """
-function withinbounds(area::NamedTuple, track, atol::Real=0.1)
-  if isnan(area.elonmin) || isnan(area.elonmax)
-    (area.latmin - atol .≤ track.lat .≤ area.latmax + atol) .&
-    (area.wlonmin - atol .≤ track.lon .≤ area.wlonmax + atol)
-  elseif isnan(area.wlonmin) || isnan(area.wlonmax)
-    (area.latmin - atol .≤ track.lat .≤ area.latmax + atol) .&
-    (area.elonmin - atol .≤ track.lon .≤ area.elonmax + atol)
-  else
-    (area.latmin - atol .≤ track.lat .≤ area.latmax + atol) .&
-    ((area.elonmin - atol .≤ track.lon .≤ area.elonmax + atol) .|
-    (area.wlonmin - atol .≤ track.lon .≤ area.wlonmax + atol))
-  end
-end #function withinbounds
+function withinlimits(area::NamedTuple, track, atol::Real=0.1)
+    if isnan(area.elonmin) || isnan(area.elonmax)
+        (area.latmin - atol .≤ track.lat .≤ area.latmax + atol) .&
+        (area.wlonmin - atol .≤ track.lon .≤ area.wlonmax + atol)
+    elseif isnan(area.wlonmin) || isnan(area.wlonmax)
+        (area.latmin - atol .≤ track.lat .≤ area.latmax + atol) .&
+        (area.elonmin - atol .≤ track.lon .≤ area.elonmax + atol)
+    else
+        (area.latmin - atol .≤ track.lat .≤ area.latmax + atol) .&
+        ((area.elonmin - atol .≤ track.lon .≤ area.elonmax + atol) .|
+        (area.wlonmin - atol .≤ track.lon .≤ area.wlonmax + atol))
+    end
+end #function withinlimits
 
 
 """
-    withinbounds(area::NamedTuple, atol::Real=0.1) -> function (track) -> Vector{Bool}
+    withinlimits(area::NamedTuple, atol::Real=0.1) -> function (track) -> Vector{Bool}
 
 Generates a function that takes a `DataFrame` `track` with columns `lat` and `lon`
 and compares the coordinate pairs in columns `lat` and `lon` to the boundaries
 `latmin`, `latmax`, `elonmin`, `elonmax`, `wlonmin`, and `wlonmax` of the given
 `area`. Coordinates are allowed to exceed the `area` by `atol` degrees.
 """
-withinbounds(area::NamedTuple, atol::Real=0.1) = track -> withinbounds(area, track, atol)
+withinlimits(area::NamedTuple, atol::Real=0.1) = track -> withinlimits(area, track, atol)
