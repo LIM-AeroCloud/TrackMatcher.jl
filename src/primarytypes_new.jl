@@ -208,10 +208,10 @@ Immutable struct holding data for an individual flight track of the `FlightSet` 
 - `time::Vector{DateTime}` for UTC datetimes of the flight track points
 - `lat::Vector{T}` for latitudes of the flight track points
 - `lon::Vector{T}` for longitudes of the flight track points
-- `alt::Vector{T}` for altitudes of the flight track points in meters
+- `alt::Vector{<:Union{Missing,T}}` for altitudes of the flight track points in meters
 - `heading::Vector{<:Union{Missing,Int}}` for headings of the flight track points in degrees
-- `climb::Vector{<:Union{Missing,Int}}` for climb rates of the flight track points in meters per second
-- `speed::Vector{T}` for speeds at each flight track point in meters per second
+- `climb::Vector{<:Union{Missing,T}}` for climb rates of the flight track points in meters per second
+- `speed::Vector{<:Union{Missing,T}}` for speeds at each flight track point in meters per second
 - `metadata::FlightMetadata{T}` for metadata associated with the flight track
 
 By default, `Float32` is used for `T`.
@@ -239,15 +239,16 @@ struct FlightData{T<:AbstractFloat} <: FlightTrack{T}
     time::Vector{DateTime}
     lat::Vector{T}
     lon::Vector{T}
-    alt::Vector{T}
+    alt::Vector{<:Union{Missing,T}}
     heading::Vector{<:Union{Missing,Int}}
-    climb::Vector{<:Union{Missing,Int}}
-    speed::Vector{T}
+    climb::Vector{<:Union{Missing,T}}
+    speed::Vector{<:Union{Missing,T}}
     metadata::FlightMetadata{T}
 
     #* Internal constructor with data checks
-    function FlightData{T}(time::Vector{DateTime}, lat::Vector{T}, lon::Vector{T}, alt::Vector{T},
-        heading::Vector{<:Union{Missing,Int}}, climb::Vector{<:Union{Missing,Int}}, speed::Vector{T},
+    function FlightData{T}(time::Vector{DateTime}, lat::Vector{T}, lon::Vector{T},
+        alt::Vector{<:Union{Missing,T}}, heading::Vector{<:Union{Missing,Int}},
+        climb::Vector{<:Union{Missing,T}}, speed::Vector{<:Union{Missing,T}},
         metadata::FlightMetadata{T}) where T
         length(time) == length(lat) == length(lon) == length(alt) == length(heading) ==
             length(climb) == length(speed) ||
@@ -266,9 +267,9 @@ end #struct FlightData
 #* Main constructor parsing a DataFrame from file input and ensuring UTC time
 function FlightData{T}(
     track::DataFrame,
-    dbID::Union{Int,AbstractString},
-    flightID::Union{Missing,AbstractString},
-    aircraft::Union{Missing,AbstractString},
+    dbID::Union{Int,<:AbstractString},
+    flightID::Union{Missing,<:AbstractString},
+    aircraft::Union{Missing,<:AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{<:AbstractString,<:AbstractString}}},
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
     useLON::Bool,
@@ -293,13 +294,17 @@ function FlightData{T}(
 end #constructor 2 FlightData
 
 #* Constructor for empty FlightData
-FlightData{T}() where T<:AbstractFloat = FlightData{T}(DateTime[], T[], T[], T[], Int[], T[], T[],
+FlightData{T}() where T<:AbstractFloat = FlightData{T}(DateTime[], T[], T[],
+    Union{Missing,T}[], Union{Missing,Int}[], Union{Missing,T}[], Union{Missing,T}[],
     FlightMetadata{T}())
 
 #* Constructor for type promotion of FlightData
 FlightData{T}(flight::FlightData) where T<:AbstractFloat =
-  FlightData{T}(flight.time, T.(flight.lat), T.(flight.lon), T.(flight.alt), flight.heading,
-    flight.climb, T.(flight.speed), FlightMetadata{T}(flight.metadata))
+  FlightData{T}(flight.time, T.(flight.lat), T.(flight.lon),
+    [ismissing(x) ? missing : T(x) for x in flight.alt], flight.heading,
+    [ismissing(x) ? missing : T(x) for x in flight.climb],
+    [ismissing(x) ? missing : T(x) for x in flight.speed],
+    FlightMetadata{T}(flight.metadata))
 
 #* Constructor for default Float32 FlightData
 FlightData(args...; kwargs...) = FlightData{Float32}(args...; kwargs...)

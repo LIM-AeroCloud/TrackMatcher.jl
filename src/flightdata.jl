@@ -97,52 +97,38 @@ function load_flightaware(
     prog = pm.Progress(sum(length.(getfield.(paths, :files))), desc = "load archive...")
     for path in paths, file in path.files
         # Load data from csv file into standardised DataFrame
-        flights = read_archive(file, Float)
+        filepath = joinpath(path.root, file)
+        flights = read_archive(filepath, Float)
         # Unit conversions
         flights.alt = ft2m.(flights.alt)
         flights.speed = knot2mps.(flights.speed)
         flights.climb = ftpmin2mps.(flights.climb)
 
+        # Filter data: keep if lat/lon not missing and alt is missing or alt >= altmin
+        flights = flights[(.!ismissing.(flights.lat)) .& (.!ismissing.(flights.lon)) .&
+            (ismissing.(flights.alt) .| (flights.alt .≥ altmin)), :]
 
-        # Initialise loop over file
-        FID = flights.dbID[1]; n = 1
-        track = DataFrame(time = DateTime[], lat = Float[]; lon = Float[],
-            alt = Union{Missing,Float}[], speed = Union{Missing,Float}[],
-            climb = Union{Missing,Float}[], heading = Union{Missing,Int}[])
+        # Group by flight ID
+        groups = df.groupby(flights, :dbID)
+        sizehint!(archive, length(archive) + length(groups))
 
-        # Loop over all data points
-        for i = 1:df.nrow(flights)
-            # Save flight, if flight ID changes
-            if flights.dbID[i] ≠ FID || i == df.nrow(flights)
-                # Ignore data with less than 2 data points
-                if length(track.time) ≤ 1
-                    n = i
-                    FID = flights.dbID[n]
-                    # Empty possible entry
-                    track = empty(track)
-                    continue
-                end
-                # Determine predominant flight direction, inflection points, and remove duplicate entries
-                flex, useLON = preptrack!(track)
-                # Save the FlightTrack in the archive vector
-                isempty(flex) || push!(archive, FlightData{Float}(track, FID, flights.flightID[n],
-                flights.type[n], (orig=flights.orig[n], dest=flights.dest[n]), flex, useLON,
+        # Process each flight
+        for group in groups
+            df.nrow(group) ≤ 1 && continue
+
+            # Copy to DataFrame and select track columns
+            track = df.select(copy(group), :time, :lat, :lon, :alt, :speed, :climb, :heading)
+
+            # Determine predominant flight direction, inflection points, and remove duplicates
+            flex, useLON = preptrack!(track)
+
+            # Save the FlightTrack in the archive vector
+            isempty(flex) || push!(archive, FlightData{Float}(track, group.dbID[1],
+                group.flightID[1], group.type[1],
+                (orig=group.orig[1], dest=group.dest[1]), flex, useLON,
                 0x02, roots[path.root], file))
+        end #loop over flights
 
-                # Reset temporary data arrays
-                track = empty(track)
-                # Set Flight ID and position to next flight
-                n = i
-                FID = flights.dbID[n]
-            end
-            # Filter data
-            if !ismissing(flights.lat[i]) && !ismissing(flights.lon[i]) &&
-                (ismissing(flights.alt[i]) || flights.alt[i] ≥ altmin)
-                push!(track, [flights.time[i], flights.lat[i],
-                flights.lon[i], flights.alt[i], flights.speed[i],
-                flights.climb[i], flights.heading[i]])
-            end
-        end #loop over current flight
         # Monitor progress for progress bar
         pm.next!(prog, showvalues = [(:file,splitext(basename(file))[1])])
     end #loop over files

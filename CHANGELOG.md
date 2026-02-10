@@ -20,6 +20,8 @@
   - Replace internal `findfiles!` function by `scandir` in connection with `sat_datafiles!`
   - Add additional data checks on instantiation
 - Rename `checkbounds!` to `checklimits` to avoid confusion with `checkbounds` from Base ([#51])
+- Optimise load times for flight data by preferring column-wise operations over row-wise operations
+  and making use of DataFrames functions for grouping and transforming data ([#58])
 
 ### Removed
 
