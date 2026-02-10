@@ -8,12 +8,12 @@
         Float::DataType=Float32
     ) -> StructArray{FlightData{Float}}
 
-From a list of `files`, return a `Vector{FlightTrack}` that can
+From a list of `files`, return a `StructArray{FlightData{Float}}` that can
 be saved to the `inventory` field in `FlightSet`.
 
-When the `Vector{FlightTrack{T}}` is constructed, data can be filtered by a minimum
+When the `StructArray{FlightData{Float}}` is constructed, data can be filtered by a minimum
 altitude threshold in meters of the aircraft data (default: `altmin=5_000`).
-Floating point numbers in `FlightTrack` are of the precision set by `Float`,
+Floating point numbers in `FlightData{Float}` are of the precision set by `Float`,
 by default `Float32`.
 """
 function load_volpe(
@@ -25,39 +25,44 @@ function load_volpe(
     # Initialise loop over file
     inventory = StructArray{FlightData{Float}}(undef, 0)
     isempty(paths) && return inventory
-    track = DataFrame(time = DateTime[], lat = Float[], lon = Float[],
-        alt = Float[], speed = Float[])
-    FID = -1
-  # Loop over files
-    i = 0
+    # Loop over files
+    n = sum(length.(getfield.(paths, :files)))
     prog = pm.Progress(n, desc = "load VOLPE...")
     for path in paths, file in path.files
-        # Load input file (as row by row iterator)
-        flightdata = CSV.Rows(joinpath(path.root, file), skipto=3, footerskip=2, ignoreemptyrows=true,
-            silencewarnings=true, dateformat="HH:MM:SS.sssm", types = Dict("FLIGHT_ID" => Int,
-            "LATITUDE" => Float, "LONGITUDE" => Float, "ALTITUDE" => Float,
-            "SPEED" => Float, "SEGMENT_YEAR" => Int, "SEGMENT_MONTH" => Int,
-            "SEGMENT_DAY" => Int, "SEGMENT_HOUR" => Int, "SEGMENT_MIN" => Int,
-            "SEGMENT_SEC" => Int), select = [1:11;16])
-
-        # Loop over all data points
-        for row in flightdata
-            if FID == -1
-                # Set database ID for new flights in the file
-                FID = row.FLIGHT_ID
-            elseif FID ≠ row.FLIGHT_ID
-                # If the next flight ID is found, save current flight
-                FID = addtrack!(inventory, track, FID, row.FLIGHT_ID, file, roots[path.root])
-            end # saving FlightTrack
-            # Read current row in file and filter and convert input data
-            alt = ft2m(row.ALTITUDE)
-            (ismissing(alt) || alt ≥ altmin) &&
-                push!(track, (time = DateTime(row.SEGMENT_YEAR, row.SEGMENT_MONTH,
-                row.SEGMENT_DAY, row.SEGMENT_HOUR, row.SEGMENT_MIN, row.SEGMENT_SEC),
-                lat = row.LATITUDE, lon = row.LONGITUDE, alt, speed = knot2mps(row.SPEED)))
+        # Load data file
+        flightdata = CSV.read(joinpath(path.root, file), DataFrame, skipto=3, footerskip=2,
+            ignoreemptyrows=true, silencewarnings=true, dateformat="HH:MM:SS.sssm",
+            types = Dict("FLIGHT_ID" => Int, "LATITUDE" => Float, "LONGITUDE" => Float,
+            "ALTITUDE" => Float, "SPEED" => Float, "SEGMENT_YEAR" => Int,
+            "SEGMENT_MONTH" => Int, "SEGMENT_DAY" => Int, "SEGMENT_HOUR" => Int,
+            "SEGMENT_MIN" => Int, "SEGMENT_SEC" => Int), select = [1:11;16])
+        # Prepare and filter data
+        df.transform!(flightdata,
+            [:SEGMENT_YEAR, :SEGMENT_MONTH, :SEGMENT_DAY,
+            :SEGMENT_HOUR, :SEGMENT_MIN, :SEGMENT_SEC] =>
+            df.ByRow((y,m,d,h,min,s) -> DateTime(y,m,d,h,min,s)) => :time)
+        df.select!(flightdata,
+            :FLIGHT_ID => :FID,
+            :time,
+            :LATITUDE => :lat,
+            :LONGITUDE => :lon,
+            :ALTITUDE => :alt,
+            :SPEED => :speed)
+        flightdata.alt = ft2m.(flightdata.alt)
+        flightdata.speed = knot2mps.(flightdata.speed)
+        flightdata = flightdata[(ismissing.(flightdata.alt) .| (flightdata.alt .≥ altmin)), :]
+        # Group by individual flights
+        groups = df.groupby(flightdata, :FID)
+        sizehint!(inventory, length(inventory) + length(groups))
+        # Loop over flights
+        for group in groups
+            df.nrow(group) ≤ 1 && continue
+            track = copy(group) # ℹ avoid problems with views when modifying data
+            df.select!(track, df.Not(:FID))
+            flex, useLON = preptrack!(track)
+            isempty(flex) || push!(inventory, FlightData{Float}(track, group.FID[1],
+                missing, missing, missing, flex, useLON, 0x01, roots[path.root], file))
         end #loop over flights
-        # Save last flight of the file
-        FID = addtrack!(inventory, track, FID, -1, file, roots[path.root])
         # Monitor progress for progress bar
         pm.next!(prog, showvalues = [(:file,splitext(basename(file))[1])])
     end #loop over files
@@ -267,44 +272,6 @@ function load_webdata(
 
     return archive
 end #function loadWD
-
-
-"""
-    addtrack!(
-        inventory::StructArray{FlightData{T}},
-        track::DataFrame,
-        currID::Int,
-        nextID::Int,
-        file::String
-    ) where T -> Int
-
-Add the data of the current `track` from the input `file` to the `inventory` using
-the `currID` for identification. Ret
-"""
-function addtrack!(
-    inventory::StructArray{FlightData{T}},
-    track::DataFrame,
-    currID::Int,
-    nextID::Int,
-    file::String,
-    root::UInt16
-)::Int where T
-    # Ignore data with less than 2 data points
-    if size(track, 1) ≤ 1
-        # Empty possible entry
-        track = empty(track)
-        # Return new database ID
-        return nextID
-    end
-    # Determine predominant flight direction, inflection points, and remove duplicate entries
-    flex, useLON = preptrack!(track)
-    # Save the FlightTrack in the inventory vector
-    isempty(flex) || push!(inventory, FlightData{T}(track, currID,
-        missing, missing, missing, flex, useLON, 0x01, root, file))
-    # Empty track data and return new database ID
-    track = empty(track)
-    return nextID
-end #function addtrack!
 
 
 """

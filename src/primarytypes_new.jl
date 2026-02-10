@@ -1,7 +1,7 @@
 ## Metadata structs
 
 """
-# struct FlightMetadata{T} <: FlightTrack{T}
+# struct FlightMetadata{T<:AbstractFloat} <: FlightTrack{T}
 
 Immutable struct holding metadata for an individual `FlightTrack` of the `FlightSet` with fields
 
@@ -68,44 +68,45 @@ String holding the file name and path relative to the root directory.
 String holding the root directory path.
 
 
-# Instantiation
-# TODO Update description
+## Instantiation
 
-`FlightMetadata` is constructed automatically, when `FlightTrack` is instantiated using
-a modified constructor and `dbID`, `flightID`, `aircraft` type, `route`, `useLON`,
-`flex`, `source`, and `file`.
+`FlightMetadata` is constructed automatically, when `FlightData` is instantiated using
+a modified constructor and `dbID`, `flightID`, `route`, `aircraft` type, the `date` and `lat`/`lon`
+vectors, `useLON`, `flex`, `source`, `root`, and `file`.
 Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
 
     function FlightMetadata{T}(
-      dbID::Union{Int,AbstractString},
-      flightID::Union{Missing,AbstractString},
-      route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
-      aircraft::Union{Missing,AbstractString},
-      date::Vector{DateTime},
-      lat::Vector{<:Union{Missing,T}},
-      lon::Vector{<:Union{Missing,T}},
-      useLON::Bool,
-      flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
-      source::AbstractString,
-      file::AbstractString
-    ) where T -> struct FlightMetadata
+        dbID::Union{Int,AbstractString},
+        flightID::Union{Missing,AbstractString},
+        route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
+        aircraft::Union{Missing,AbstractString},
+        date::Vector{DateTime},
+        lat::Vector{<:Union{Missing,T}},
+        lon::Vector{<:Union{Missing,T}},
+        useLON::Bool,
+        flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
+        source::UInt8,
+        root::UInt16,
+        file::AbstractString
+    ) where T<:AbstractFloat -> struct FlightMetadata
 
 Or construct `FlightMetadata` by directly handing over every field:
 
     function FlightMetadata{T}(
-      dbID::Union{Int,AbstractString},
-      flightID::Union{Missing,AbstractString},
-      route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
-      aircraft::Union{Missing,AbstractString},
-      date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
-      area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,T}},
-      flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
-      useLON::Bool,
-      source::AbstractString,
-      file::AbstractString
-    ) where T -> struct FlightMetadata
+        dbID::Union{Int,AbstractString},
+        flightID::Union{Missing,AbstractString},
+        route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
+        aircraft::Union{Missing,AbstractString},
+        date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
+        area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,T}},
+        flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
+        useLON::Bool,
+        source::UInt8,
+        root::UInt16,
+        file::AbstractString
+    ) where T<:AbstractFloat -> struct FlightMetadata
 """
-struct FlightMetadata{T} <: FlightTrack{T}
+struct FlightMetadata{T<:AbstractFloat} <: FlightTrack{T}
     dbID::Union{Int,AbstractString}
     flightID::Union{Missing,AbstractString}
     route::Union{Missing,NamedTuple{(:orig,:dest),Tuple{AbstractString,AbstractString}}}
@@ -133,7 +134,7 @@ function FlightMetadata{T}(
     source::UInt8,
     root::UInt16,
     file::AbstractString
-) where T
+) where T<:AbstractFloat
     elonmin, elonmax = lonextrema(lon, ≥)
     wlonmin, wlonmax = lonextrema(lon, <)
     area = (latmin=minimum(lat), latmax=maximum(lat), elonmin, elonmax, wlonmin, wlonmax)
@@ -142,7 +143,7 @@ function FlightMetadata{T}(
 end #constructor 2 FlightMetadata
 
 #* Constructor for empty FlightMetadata
-FlightMetadata{T}() where T = FlightMetadata{T}(
+FlightMetadata{T}() where T<:AbstractFloat = FlightMetadata{T}(
     "", missing, missing, missing, (start=Dates.now(), stop=Dates.now()),
     (latmin=T(NaN), latmax=T(NaN), elonmin=T(NaN), elonmax=T(NaN), wlonmin=T(NaN), wlonmax=T(NaN)),
     ((range=0:0, min=T(NaN), max=T(NaN)),), false, 0x00, 0x0000, ""
@@ -152,7 +153,7 @@ FlightMetadata{T}() where T = FlightMetadata{T}(
 FlightMetadata(args...) = FlightMetadata{Float32}(args...)
 
 #* Constructor for floating point type promotion
-FlightMetadata{T}(meta::FlightMetadata) where T = FlightMetadata{T}(
+FlightMetadata{T}(meta::FlightMetadata) where T<:AbstractFloat = FlightMetadata{T}(
     meta.dbID, meta.flightID, meta.route, meta.aircraft, meta.date,
     (latmin = T(meta.area.latmin), latmax = T(meta.area.latmax), elonmin = T(meta.area.elonmin),
     elonmax = T(meta.area.elonmax), wlonmin = T(meta.area.wlonmin), wlonmax = T(meta.area.wlonmax)),
@@ -162,17 +163,19 @@ FlightMetadata{T}(meta::FlightMetadata) where T = FlightMetadata{T}(
 
 
 """
-# struct PrimaryMetadata{T} <: PrimarySet{T}
+# struct PrimaryMetadata{T<:AbstractFloat} <: PrimarySet{T}
 
 Immutable struct with additional information of databases:
 
 - `altmin::Real`: Minimum altitude threshold for which flight data is considered
 - `date`: NamedTuple with entries `start`/`stop` giving the time range of the database
+- `sources`: OrderedDict with a lookup table for database type
+- `roots`: OrderedDict with a lookup table for root directories of the given files
 - `created`: time of creation of database
 - `loadtime`: time it took to read data files and load it to the struct
 - `attachments`: any additional data or comments that can be attached to the database
 """
-struct PrimaryMetadata{T} <: PrimarySet{T}
+struct PrimaryMetadata{T<:AbstractFloat} <: PrimarySet{T}
     altmin::T
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
     sources::ds.OrderedDict{UInt8,String}
@@ -183,7 +186,7 @@ struct PrimaryMetadata{T} <: PrimarySet{T}
 end #struct PrimaryMetadata
 
 #* Constructor for empty PrimaryMetadata
-PrimaryMetadata{T}() where T = PrimaryMetadata{T}(NaN,
+PrimaryMetadata{T}() where T<:AbstractFloat = PrimaryMetadata{T}(NaN,
     (start=Dates.now(), stop=Dates.now()), ds.OrderedDict{UInt8,String}(0x00 => "undefined"),
         ds.OrderedDict{UInt16,String}(0x0000 => "/"), Dates.now(), Dates.CompoundPeriod(), nothing)
 
@@ -191,13 +194,48 @@ PrimaryMetadata{T}() where T = PrimaryMetadata{T}(NaN,
 PrimaryMetadata(args...) = PrimaryMetadata{Float32}(args...)
 
 #* Constructor for floating point type promotion
-PrimaryMetadata{T}(meta::PrimaryMetadata) where T = PrimaryMetadata{T}(T(meta.altmin),
+PrimaryMetadata{T}(meta::PrimaryMetadata) where T<:AbstractFloat = PrimaryMetadata{T}(T(meta.altmin),
     meta.date, meta.sources, meta.roots, meta.created, meta.loadtime, meta.attachments)
 
 
 ## Struct for single flight tracks
 
-struct FlightData{T} <: FlightTrack{T}
+"""
+# struct FlightData{T<:AbstractFloat} <: FlightTrack{T}
+
+Immutable struct holding data for an individual flight track of the `FlightSet` with fields
+
+- `time::Vector{DateTime}` for UTC datetimes of the flight track points
+- `lat::Vector{T}` for latitudes of the flight track points
+- `lon::Vector{T}` for longitudes of the flight track points
+- `alt::Vector{T}` for altitudes of the flight track points in meters
+- `heading::Vector{<:Union{Missing,Int}}` for headings of the flight track points in degrees
+- `climb::Vector{<:Union{Missing,Int}}` for climb rates of the flight track points in meters per second
+- `speed::Vector{T}` for speeds at each flight track point in meters per second
+- `metadata::FlightMetadata{T}` for metadata associated with the flight track
+
+By default, `Float32` is used for `T`.
+
+## Instantiation
+
+`FlightData` can be instantiated by directly handing over all data vectors and metadata Fields
+or using a modified constructor that takes a `DataFrame` with the flight track data read from
+a csv file and the metadata fields:
+
+    function FlightData{T}(
+        track::DataFrame,
+        dbID::Union{Int,AbstractString},
+        flightID::Union{Missing,AbstractString},
+        aircraft::Union{Missing,AbstractString},
+        route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{<:AbstractString,<:AbstractString}}},
+        flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
+        useLON::Bool,
+        source::UInt8,
+        root::UInt16,
+        file::AbstractString
+    ) where T<:AbstractFloat -> struct FlightData
+"""
+struct FlightData{T<:AbstractFloat} <: FlightTrack{T}
     time::Vector{DateTime}
     lat::Vector{T}
     lon::Vector{T}
@@ -219,7 +257,7 @@ struct FlightData{T} <: FlightTrack{T}
         checklimits(lon, -180, 180, "longitude")
         checklimits(alt, 0, 40000, "altitude")
         checklimits(heading, 0, 360, "heading")
-        checklimits(speed, 0, Inf, "speed")
+        checklimits(speed, 0, 2500, "speed")
         new{T}(time, lat, lon, alt, heading, climb, speed, metadata)
     end
 end #struct FlightData
@@ -237,7 +275,7 @@ function FlightData{T}(
     source::UInt8,
     root::UInt16,
     file::AbstractString
-) where T
+) where T<:AbstractFloat
     # Check dataframe columns of flight data; fill missing columns with missing values
     t = track.time
     t = t isa Vector{ZonedDateTime} ? [zt.utc_datetime for zt in t] : t
@@ -255,11 +293,11 @@ function FlightData{T}(
 end #constructor 2 FlightData
 
 #* Constructor for empty FlightData
-FlightData{T}() where T = FlightData{T}(DateTime[], T[], T[], T[], Int[], T[], T[],
+FlightData{T}() where T<:AbstractFloat = FlightData{T}(DateTime[], T[], T[], T[], Int[], T[], T[],
     FlightMetadata{T}())
 
 #* Constructor for type promotion of FlightData
-FlightData{T}(flight::FlightData) where T =
+FlightData{T}(flight::FlightData) where T<:AbstractFloat =
   FlightData{T}(flight.time, T.(flight.lat), T.(flight.lon), T.(flight.alt), flight.heading,
     flight.climb, T.(flight.speed), FlightMetadata{T}(flight.metadata))
 
@@ -270,12 +308,52 @@ FlightData(args...; kwargs...) = FlightData{Float32}(args...; kwargs...)
 FlightTrack(args...; kwargs...) = FlightData{Float32}(args...; kwargs...)
 
 #* Alias constructor for FlightData with type promotion
-FlightTrack{T}(args...; kwargs...) where T = FlightData{T}(args...; kwargs...)
+FlightTrack{T}(args...; kwargs...) where T<:AbstractFloat = FlightData{T}(args...; kwargs...)
 
 
 ## Struct for sets of flight tracks
 
-struct FlightSet{T} <: PrimarySet{T}
+"""
+# struct FlightSet{T<:AbstractFloat} <: PrimarySet{T}
+
+Immutable struct holding data for a set of flight tracks of the `FlightSet` with fields
+
+- `volpe::StructArray{FlightData{T}}` for flight track data from the VOLPE AEDT inventory
+- `flightaware::StructArray{FlightData{T}}` for flight track data from the commercially available database by FlightAware
+- `webdata::StructArray{FlightData{T}}` for flight track data from free online data by FlightAware
+- `metadata::PrimaryMetadata{T}` for metadata associated with the flight track set
+
+By default, `Float32` is used for `T`.
+
+`FlightSet` is used to store primary data and as source for TrackMatcher for intersection
+calculations.
+
+## Instantiation
+
+`FlightSet` can be instantiated by directly handing over the `StructArray`s for the different
+inventories and the `PrimaryMetadata` or using a main constructor that takes folder paths for
+the different inventories as `AbstractString` or `Vector{AbstractString}` and other parameters
+to load the data and construct the `StructArray`s and `PrimaryMetadata` automatically.
+
+    function FlightSet{T}(;
+        volpe::Union{String,Vector{String}}=String[],
+        flightaware::Union{String,Vector{String}}=String[],
+        webdata::Union{String,Vector{String}}=String[],
+        altmin::Real=5000,
+        delim::Union{Nothing,Char,String}=nothing,
+        attachments=nothing
+    ) where T<:AbstractFloat -> struct FlightSet
+
+### Keyword arguments for main constructor
+
+- `volpe`: folder path(s) for the VOLPE AEDT inventory data as `AbstractString` or `Vector{AbstractString}`
+- `flightaware`: folder path(s) for the commercially available database by FlightAware as `AbstractString` or `Vector{AbstractString}`
+- `webdata`: folder path(s) for the free online data by FlightAware as `AbstractString` or `Vector{AbstractString}`
+- `altmin`: minimum altitude threshold for which flight data is considered in meters (default: `5000`)
+- `delim`: delimiter for the free online data by FlightAware (default: `nothing`, i.e. auto-detection)
+- `attachments`: any additional data or comments that can be attached to the database (default: `nothing`)
+"""
+struct FlightSet{T<:AbstractFloat} <: PrimarySet{T}
     volpe::StructArray{FlightData{T}}
     flightaware::StructArray{FlightData{T}}
     webdata::StructArray{FlightData{T}}
@@ -283,7 +361,7 @@ struct FlightSet{T} <: PrimarySet{T}
 
     #* Internal constructor with data checks
     function FlightSet{T}(volpe::StructArray{FlightData{T}}, flightaware::StructArray{FlightData{T}},
-        webdata::StructArray{FlightData{T}}, metadata::PrimaryMetadata{T}) where T
+        webdata::StructArray{FlightData{T}}, metadata::PrimaryMetadata{T}) where T<:AbstractFloat
 
         # Check for correct dataset type in each vector and for correct floating point precision
         deleteat!(volpe, findall(data -> data.metadata.source ≠ 0x01, volpe))
@@ -303,7 +381,7 @@ function FlightSet{T}(;
     altmin::Real=5000,
     delim::Union{Nothing,Char,String}=nothing,
     attachments=nothing
-) where T
+) where T<:AbstractFloat
 
     # Return empty FlightSet, if no folders are passed to constructor
     all(isempty.([volpe, flightaware, webdata])) && return FlightSet{T}()
@@ -315,7 +393,6 @@ function FlightSet{T}(;
     # VOLPE AEDT dataset
     files = findfiles!(roots, volpe, ".csv")
     volpe = load_volpe(files, roots, altmin, T)
-    @show volpe
     # FlightAware commercial dataset
     files = findfiles!(roots, flightaware, ".csv")
     flightaware = load_flightaware(files, roots, altmin, T)
@@ -360,11 +437,10 @@ end # Main constructor FlightSet
 FlightSet(args...; kwargs...) = FlightSet{Float32}(args...; kwargs...)
 
 #* Constructor for empty FlightSet
-FlightSet{T}() where T = FlightSet{T}(FlightData{T}[], FlightData{T}[], FlightData{T}[], PrimaryMetadata{T}())
+FlightSet{T}() where T<:AbstractFloat = FlightSet{T}(FlightData{T}[], FlightData{T}[], FlightData{T}[], PrimaryMetadata{T}())
 
 #* Constructor for floating point type promotion
-# Check: if conversion works with StructArray
-FlightSet{T}(flights::FlightSet) where T = FlightSet{T}(
+FlightSet{T}(flights::FlightSet) where T<:AbstractFloat = FlightSet{T}(
     FlightData{T}.(flights.volpe),
     FlightData{T}.(flights.flightaware),
     FlightData{T}.(flights.webdata),

@@ -224,17 +224,17 @@ zonedict["_CEST_"] = tz.tz"+0200"
 
 ## Define type tree of abstract types
 abstract type DataSet{T<:AbstractFloat} end
-abstract type MeasuredSet{T} <: DataSet{T} end
-abstract type PrimarySet{T} <: MeasuredSet{T} end
-abstract type PrimaryTrack{T} <: PrimarySet{T} end
-abstract type FlightTrack{T} <: PrimaryTrack{T} end
-abstract type CloudTrack{T} <: PrimaryTrack{T} end
-abstract type SecondarySet{T} <: MeasuredSet{T} end
-abstract type SecondaryTrack{T} <: SecondarySet{T} end
-abstract type SatTrack{T} <: SecondaryTrack{T} end
-abstract type ObservationSet{T} <: MeasuredSet{T} end
-abstract type ComputedSet{T} <: DataSet{T} end
-abstract type Intersection{T} <: ComputedSet{T} end
+abstract type MeasuredSet{T<:AbstractFloat} <: DataSet{T} end
+abstract type PrimarySet{T<:AbstractFloat} <: MeasuredSet{T} end
+abstract type PrimaryTrack{T<:AbstractFloat} <: PrimarySet{T} end
+abstract type FlightTrack{T<:AbstractFloat} <: PrimaryTrack{T} end
+abstract type CloudTrack{T<:AbstractFloat} <: PrimaryTrack{T} end
+abstract type SecondarySet{T<:AbstractFloat} <: MeasuredSet{T} end
+abstract type SecondaryTrack{T<:AbstractFloat} <: SecondarySet{T} end
+abstract type SatTrack{T<:AbstractFloat} <: SecondaryTrack{T} end
+abstract type ObservationSet{T<:AbstractFloat} <: MeasuredSet{T} end
+abstract type ComputedSet{T<:AbstractFloat} <: DataSet{T} end
+abstract type Intersection{T<:AbstractFloat} <: ComputedSet{T} end
 
 
 ## Export types and constructors
