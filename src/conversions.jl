@@ -46,7 +46,8 @@ Convert the CALIOP Profile UTC time (`t`) to a `DateTime`.
 function convert_utc(t::AbstractFloat)::DateTime
   # Extract date from Float before decimal point and convert to Date
   date = floor(Int, t)
-  d = Date("20"*string(date), "yyyymmdd")
+  d = Date(lpad(date, 8, "0"), "yyyymmdd")
+  d += Dates.Year(2000)
   # Calculate overall time in seconds
   utc = (t - date) * 86400
   # From overall time, calculate hours, minutes, and seconds
