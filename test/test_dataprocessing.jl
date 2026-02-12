@@ -23,7 +23,7 @@
             Vector{Vector{Float16}}, Vector{Vector{Union{Missing, Float16}}}, Vector{Float16}, Vector{Union{Missing, Float16}}]
     end
     @testset "UTC" begin
-        @test TrackMatcher.convert_utc(t_pre2010) == DateTime(2006,6,12,0,53,41,498) broken=true
+        @test TrackMatcher.convert_utc(t_pre2010) == DateTime(2006,6,12,0,53,41,498)
         @test TrackMatcher.convert_utc(t_poost2010) == DateTime(2019,1,2,0,11,23,715)
     end
     @testset "earth radius" begin

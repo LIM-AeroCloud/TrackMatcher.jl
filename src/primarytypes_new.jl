@@ -13,10 +13,13 @@ Immutable struct holding metadata for an individual `FlightTrack` of the `Flight
 - `area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,AbstractFloat}}`
 - `flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}}`
 - `useLON::Bool`
-- `source::AbstractString`
-- `file::AbstractString`
+- `source::UInt8`
+- `root::UInt16`
+- `file::UInt16`
 
 By default, `Float32` is used for `T`.
+
+See also [`PrimaryMetadata`](@ref), [`FlightData`](@ref), [`FlightTrack`](@ref), [`FlightSet`](@ref), and [`PrimarySet`](@ref).
 
 ## dbID
 Database ID – integer counter for `volpe`,
@@ -87,7 +90,7 @@ Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
         flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
         source::UInt8,
         root::UInt16,
-        file::AbstractString
+        file::UInt16
     ) where T<:AbstractFloat -> struct FlightMetadata
 
 Or construct `FlightMetadata` by directly handing over every field:
@@ -103,7 +106,7 @@ Or construct `FlightMetadata` by directly handing over every field:
         useLON::Bool,
         source::UInt8,
         root::UInt16,
-        file::AbstractString
+        file::UInt16
     ) where T<:AbstractFloat -> struct FlightMetadata
 """
 struct FlightMetadata{T<:AbstractFloat} <: FlightTrack{T}
@@ -117,7 +120,7 @@ struct FlightMetadata{T<:AbstractFloat} <: FlightTrack{T}
     useLON::Bool
     source::UInt8
     root::UInt16
-    file::AbstractString
+    file::UInt16
 end
 
 #* Main constructor with limited tests and limited automated data construction
@@ -133,7 +136,7 @@ function FlightMetadata{T}(
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
     source::UInt8,
     root::UInt16,
-    file::AbstractString
+    file::UInt16
 ) where T<:AbstractFloat
     elonmin, elonmax = lonextrema(lon, ≥)
     wlonmin, wlonmax = lonextrema(lon, <)
@@ -146,7 +149,7 @@ end #constructor 2 FlightMetadata
 FlightMetadata{T}() where T<:AbstractFloat = FlightMetadata{T}(
     "", missing, missing, missing, (start=Dates.now(), stop=Dates.now()),
     (latmin=T(NaN), latmax=T(NaN), elonmin=T(NaN), elonmax=T(NaN), wlonmin=T(NaN), wlonmax=T(NaN)),
-    ((range=0:0, min=T(NaN), max=T(NaN)),), false, 0x00, 0x0000, ""
+    ((range=0:0, min=T(NaN), max=T(NaN)),), false, 0x00, 0x0000, 0x0000
 )
 
 #* Constructor for default Float32 FlightMetadata
@@ -170,16 +173,19 @@ Immutable struct with additional information of databases:
 - `altmin::Real`: Minimum altitude threshold for which flight data is considered
 - `date`: NamedTuple with entries `start`/`stop` giving the time range of the database
 - `sources`: OrderedDict with a lookup table for database type
-- `roots`: OrderedDict with a lookup table for root directories of the given files
+- `pathlookup`: OrderedDict with a lookup table for root directories of the given files and
+  file names for the  flight data
 - `created`: time of creation of database
 - `loadtime`: time it took to read data files and load it to the struct
 - `attachments`: any additional data or comments that can be attached to the database
+
+See also [`FlightMetadata`](@ref), [`FlightData`](@ref), [`FlightTrack`](@ref), [`FlightSet`](@ref), and [`PrimarySet`](@ref).
 """
 struct PrimaryMetadata{T<:AbstractFloat} <: PrimarySet{T}
     altmin::T
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
     sources::ds.OrderedDict{UInt8,String}
-    roots::ds.OrderedDict{UInt16,String}
+    pathlookup::ds.OrderedDict{String,ds.OrderedDict}
     created::Union{DateTime,ZonedDateTime}
     loadtime::Dates.CompoundPeriod
     attachments
@@ -188,14 +194,16 @@ end #struct PrimaryMetadata
 #* Constructor for empty PrimaryMetadata
 PrimaryMetadata{T}() where T<:AbstractFloat = PrimaryMetadata{T}(NaN,
     (start=Dates.now(), stop=Dates.now()), ds.OrderedDict{UInt8,String}(0x00 => "undefined"),
-        ds.OrderedDict{UInt16,String}(0x0000 => "/"), Dates.now(), Dates.CompoundPeriod(), nothing)
+        ds.OrderedDict("roots" => ds.OrderedDict{UInt16,String}(0x0000 => "/"),
+        "files" => ds.OrderedDict{UInt16,String}(0x0000 => "")),
+        Dates.now(), Dates.CompoundPeriod(), nothing)
 
 #* Constructor for default Float32 PrimaryMetadata
 PrimaryMetadata(args...) = PrimaryMetadata{Float32}(args...)
 
 #* Constructor for floating point type promotion
 PrimaryMetadata{T}(meta::PrimaryMetadata) where T<:AbstractFloat = PrimaryMetadata{T}(T(meta.altmin),
-    meta.date, meta.sources, meta.roots, meta.created, meta.loadtime, meta.attachments)
+    meta.date, meta.sources, meta.pathlookup, meta.created, meta.loadtime, meta.attachments)
 
 
 ## Struct for single flight tracks
@@ -216,6 +224,8 @@ Immutable struct holding data for an individual flight track of the `FlightSet` 
 
 By default, `Float32` is used for `T`.
 
+See also [`FlightTrack`](@ref), [`FlightMetadata`](@ref), [`FlightSet`](@ref), and [`PrimarySet`](@ref).
+
 ## Instantiation
 
 `FlightData` can be instantiated by directly handing over all data vectors and metadata Fields
@@ -232,7 +242,7 @@ a csv file and the metadata fields:
         useLON::Bool,
         source::UInt8,
         root::UInt16,
-        file::AbstractString
+        file::UInt16
     ) where T<:AbstractFloat -> struct FlightData
 """
 struct FlightData{T<:AbstractFloat} <: FlightTrack{T}
@@ -252,7 +262,7 @@ struct FlightData{T<:AbstractFloat} <: FlightTrack{T}
         metadata::FlightMetadata{T}) where T
         length(time) == length(lat) == length(lon) == length(alt) == length(heading) ==
             length(climb) == length(speed) ||
-            throw(DimensionMismatch("All data vectors must have the same length in FlightData."))
+            throw(DimensionMismatch("all data vectors must have the same length in FlightData"))
         checklimits(time, DateTime(2000), Dates.now(), "time")
         checklimits(lat, -90, 90, "latitude")
         checklimits(lon, -180, 180, "longitude")
@@ -275,7 +285,7 @@ function FlightData{T}(
     useLON::Bool,
     source::UInt8,
     root::UInt16,
-    file::AbstractString
+    file::UInt16
 ) where T<:AbstractFloat
     # Check dataframe columns of flight data; fill missing columns with missing values
     t = track.time
@@ -309,6 +319,17 @@ FlightData{T}(flight::FlightData) where T<:AbstractFloat =
 #* Constructor for default Float32 FlightData
 FlightData(args...; kwargs...) = FlightData{Float32}(args...; kwargs...)
 
+
+"""
+    FlightTrack(args...; kwargs...)
+    FlightTrack{T}(args...; kwargs...) where T<:AbstractFloat
+
+Alias constructors for `FlightData` with default `Float32` precision and type promotion.
+
+See also [`FlightData`](@ref), [`FlightMetadata`](@ref), [`FlightSet`](@ref), and [`PrimarySet`](@ref).
+"""
+function FlightTrack end
+
 #* Alias constructor for FlightData with default Float32 precision
 FlightTrack(args...; kwargs...) = FlightData{Float32}(args...; kwargs...)
 
@@ -332,6 +353,8 @@ By default, `Float32` is used for `T`.
 
 `FlightSet` is used to store primary data and as source for TrackMatcher for intersection
 calculations.
+
+See also [`PrimarySet`](@ref), [`FlightData`](@ref), [`FlightTrack`](@ref), and [`PrimaryMetadata`](@ref).
 
 ## Instantiation
 
@@ -394,16 +417,19 @@ function FlightSet{T}(;
     tstart = Dates.now()
 
     ## Load databases for each type
-    roots = ds.OrderedDict{String,UInt16}()
+    pathdict = ds.OrderedDict{String,ds.OrderedDict}(
+        "roots" => ds.OrderedDict{String,UInt16}(),
+        "files" => ds.OrderedDict{String,UInt16}()
+    )
     # VOLPE AEDT dataset
-    files = findfiles!(roots, volpe, ".csv")
-    volpe = load_volpe(files, roots, altmin, T)
+    files = findfiles!(pathdict, volpe, ".csv")
+    volpe = load_volpe(files, pathdict, altmin, T)
     # FlightAware commercial dataset
-    files = findfiles!(roots, flightaware, ".csv")
-    flightaware = load_flightaware(files, roots, altmin, T)
+    files = findfiles!(pathdict, flightaware, ".csv")
+    flightaware = load_flightaware(files, pathdict, altmin, T)
     # FlightAware web content
-    files = findfiles!(roots, webdata, [".tsv", ".txt", ".dat"])
-    webdata = load_webdata(files, roots, altmin, T, delim)
+    files = findfiles!(pathdict, webdata, [".tsv", ".txt", ".dat"])
+    webdata = load_webdata(files, pathdict, altmin, T, delim)
     # Determine overall time range of database from all flight tracks
     tmin, tmax = if isempty([volpe; flightaware; webdata])
         tstart, tstart
@@ -416,6 +442,7 @@ function FlightSet{T}(;
             [f.metadata.date.stop for f in webdata]])
     end
 
+    ## Finalise and construct flight set
     # wrap up and calculate load time
     tend = Dates.now()
     tc = tz.ZonedDateTime(tend, tz.localzone())
@@ -432,10 +459,13 @@ function FlightSet{T}(;
         0x02 => "FlightAware",
         0x03 => "web (flightaware.com)"
     )
-    roots = ds.OrderedDict(v => k for (k,v) in roots)
+    roots = ds.OrderedDict(v => k for (k,v) in pathdict["roots"])
+    files = ds.OrderedDict(v => k for (k,v) in pathdict["files"])
     # Instantiate
     FlightSet{T}(volpe, flightaware, webdata,
-        PrimaryMetadata{T}(altmin, (start=tmin, stop=tmax), sources, roots, tc, loadtime, attachments))
+        PrimaryMetadata{T}(altmin, (start=tmin, stop=tmax), sources, ds.OrderedDict(
+            "roots" => roots, "files" => files
+        ), tc, loadtime, attachments))
 end # Main constructor FlightSet
 
 #* Constructor for default Float32 FlightSet
@@ -451,3 +481,33 @@ FlightSet{T}(flights::FlightSet) where T<:AbstractFloat = FlightSet{T}(
     FlightData{T}.(flights.webdata),
     PrimaryMetadata{T}(flights.metadata)
 )
+
+"""
+    PrimarySet{T}(
+        volpe::Vector{FlightData{T}},
+        flightaware::Vector{FlightData{T}},
+        webdata::Vector{FlightData{T}},
+        metadata::PrimaryMetadata{T}
+    ) where T<:AbstractFloat
+    PrimarySet{T}(; kwargs...) where T<:AbstractFloat
+    PrimarySet{T}(tracks::FlightSet) where T<:AbstractFloat
+
+Alias constructors for `FlightSet{T}` instantiation.
+
+See also [`FlightSet`](@ref), [`FlightData`](@ref), [`FlightTrack`](@ref), and [`PrimaryMetadata`](@ref).
+"""
+function PrimarySet end
+
+PrimarySet{T}(
+  volpe::Vector{FlightData{T}},
+  flightaware::Vector{FlightData{T}},
+  webdata::Vector{FlightData{T}},
+  metadata::PrimaryMetadata{T}
+) where T<:AbstractFloat = FlightSet{T}(volpe, flightaware, webdata, metadata)
+
+#* Alias constructor for default Float32 PrimarySet
+PrimarySet{T}(; kwargs...) where T<:AbstractFloat =
+  FlightSet{T}(; kwargs...)
+
+#* Alias constructor for type promotion of FlightSet
+PrimarySet{T}(tracks::FlightSet) where T<:AbstractFloat = FlightSet{T}(tracks)

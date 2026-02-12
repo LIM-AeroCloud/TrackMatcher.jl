@@ -246,10 +246,10 @@ abstract type Intersection{T<:AbstractFloat} <: ComputedSet{T} end
 
 
 ## Import functions from Julia include files
-include("filesystem.jl")    # helper functions for filesystem scans
 include("primarytypes_new.jl")    # concrete types/constructors for primary data/datasets
 # include("primarytypes.jl")    # concrete types/constructors for primary data/datasets
-include("sattypes_new.jl")        # concrete types/constructors for secondary sat track data and observations
+include("sattypes.jl")          # concrete types/constructors for secondary sat track data and observations
+# include("observations.jl")      # concrete types/constructors for satellite observations
 # include("outputtypes.jl")     # concrete types/constructors for intersections and combined datasets
 include("datachecks.jl")      # helper functions for data checks
 # include("dataprocessing.jl")  # helper functions for data processing
