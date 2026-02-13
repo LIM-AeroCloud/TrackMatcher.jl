@@ -1,49 +1,68 @@
 ### Routines related to loading cloud track data
 
 """
-    loadCloudTracks(files::String...; Float::DataType=Float32)
+    load_cloudtracks(files::String...; Float::DataType=Float32)
 
 Load cloud track data from mat `files` and store in Julia format as `CloudTrack` structs.
 Set the floating point precision to `Float` (default: `Float32`).
 """
-function loadCloudTracks(
-  files::String...;
-  structname::String="filtered_trajectories",
-  Float::DataType=Float32
+function load_cloudtracks(
+    paths::Vector{@NamedTuple{root::String,files::Vector{String}}},
+    pathdict::ds.OrderedDict{String,ds.OrderedDict},
+    structname::String="filtered_trajectories",
+    Float::DataType=Float32
 )
-  # Initialise
-  tracks = CloudData[]
-  # Loop over all mat files
-  @pm.showprogress 1 "load cloud tracks..." for (i, file) in enumerate(files)
-    # Read data from mat files
-    t, latlon = readMAT(file, structname)
-    # Store data in Julia format as Vector of CloudTrack structs
-    storeMAT!(tracks, t, latlon, i, file; Float)
-  end #loop over files
+    # Initialise
+    cloudtracks = StructArray{CloudData{Float}}(undef, 0)
+    id = Int32(0)
+    # Loop over all mat files
+    ntracks = sum(length.(getfield.(paths, :files)))
+    prog = pm.Progress(ntracks, dt = 1, desc="load cloud tracks...")
+    for path in paths, file in path.files
+        # Read data from mat files
+        tracks = matread(file, path.root, structname, Float)
+        # Store data in Julia format as Vector of CloudTrack structs
+        matsave!(cloudtracks, tracks, id, pathdict, file, path.root, Float)
+        pm.next!(prog)
+    end #loop over files
+    pm.finish!(prog)
 
-  return tracks
-end #function loadCloudTracks
+    return cloudtracks
+end #function load_cloudtracks
 
 
 """
-    readMAT(file::String)
+    matread(file::AbstractString, root::AbstractString, structname::String="cloud", Float::DataType=Float32)
 
 Read cloud track data from a mat `file`.
 """
-function readMAT(file::String, structname::String="cloud")
-  # Send file name to MATLAB
-  data = MAT.matread(file)
-  t = vec(data[structname]["timestamp"])
-  latlon = vec(data[structname]["centrLatLon"])
-  return t, latlon
+function matread(file::AbstractString, root::AbstractString, structname::String="cloud", Float::DataType=Float32)
+    # Read data from mat file
+    data = MAT.matread(joinpath(root, file))
+    # Setup named tuple with time and lat/lon data
+    records = length(data[structname]["timestamp"])
+    tracks = (time = Vector{Vector{DateTime}}(), lat = Vector{Vector{Float}}(), lon = Vector{Vector{Float}}())
+    sizehint!(tracks.time, records)
+    sizehint!(tracks.lat, records)
+    sizehint!(tracks.lon, records)
+
+    # Loop over records and convert data to Julia format
+    for i = 1:records
+        t = vec(DateTime.(data[structname]["timestamp"][i], "yyyymmddHHMM"))
+        lat, lon = collect.(Float, eachcol(data[structname]["centrLatLon"][i]))
+        push!(tracks.time, t)
+        push!(tracks.lat, lat)
+        push!(tracks.lon, lon)
+    end
+    # Return data
+    return tracks
 end
 
 
 """
-    storeMAT!(
+    matsave!(
       tracks::Vector{CloudData},
-      t::Array,
-      latlon::Array,
+      tracks_data::NamedTuple{time::Vector{Vector{DateTime}},lat::Vector{Vector{Float}},lon::Vector{Vector{Float}}},
       fileID::Int,
       filename::String;
       Float::DataType=Float32
@@ -53,22 +72,28 @@ Append the vector with cloud `tracks` by timestamps `t` and coordinates `latlon`
 using the floating point precision set by `Float` (default: `Float32`) for the
 positional data. Pass on `fileID` and `filename` to the metadata.
 """
-function storeMAT!(
-  tracks::Vector{CloudData},
-  t::Array,
-  latlon::Array,
-  fileID::Int,
-  filename::String;
-  Float::DataType=Float32
+function matsave!(
+    tracks::StructArray{<:CloudData},
+    trackdata::NamedTuple{(:time,:lat,:lon)},
+    id::Int32,
+    pathdict::ds.OrderedDict,
+    file::AbstractString,
+    root::AbstractString,
+    Float::DataType=Float32
 )
-  # Transform MATLAB data into Julia Format and store as CloudTrack struct in a vector
-  for i = 1:length(t)
-    data = DataFrame(time = vec(DateTime.(t[i], "yyyymmddHHMM")),
-      lat = Float.(latlon[i][:,1]), lon = Float.(latlon[i][:,2]))
-    # Determine predominant trajectory direction, inflection points, and remove duplicate entries
-    flex, useLON = preptrack!(data)
-    isempty(flex) && continue
-    push!(tracks, CloudData{Float}(data, CloudMetadata{Float}(string(fileID, ".", i), data,
-      flex, useLON, filename)))
-  end
-end #function storeMAT!
+    # Transform MATLAB data into Julia Format and store as CloudTrack struct in a vector
+    for i = 1:length(trackdata.time)
+        # Determine predominant trajectory direction, inflection points, and remove duplicate entries
+        data = DataFrame(
+            time = trackdata.time[i],
+            lat = trackdata.lat[i],
+            lon = trackdata.lon[i]
+        )
+        flex, use_lon = preptrack!(data)
+        isempty(flex) && continue
+        id += Int32(1)
+        push!(tracks, CloudData{Float}(data, CloudMetadata{Float}(
+            data, id, flex, use_lon, pathdict["roots"][root], pathdict["files"][file]
+        )))
+    end
+end #function matsave!

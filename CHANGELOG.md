@@ -4,7 +4,7 @@
 
 ### Added
 
-- Setup tests (#55)
+- Setup tests ([#55])
 - Add `HDF5` and `StructArrays` as dependency ([#51], [#58])
 - Add method `checklimits` to check array fields of `SatData` are within expected limits ([#51])
 
@@ -13,15 +13,19 @@
 - Rename `convertFloats!` and `convertUTC` to `convert_floats!` and `convert_utc`, respectively,
   to be in line with Julia conventions
 - Refactor `convert_floats!` without type piracy
+- Rename fields and variables `useLON` to `use_lon`
 - Refactor satellite types and constructors ([#51])
   - Remove dataframe layer in `SatData` and store `time`, `lat`, `lon` directly in `StructArray`
     fields
   - Rename field `remarks` in `SecondaryMetadata` to `attachments` to signal more flexibility
   - Replace internal `findfiles!` function by `scandir` in connection with `sat_datafiles!`
   - Add additional data checks on instantiation
-- Rename `checkbounds!` to `checklimits` to avoid confusion with `checkbounds` from Base ([#51])
+- Rename `checkbounds!` to `checklimits!`/`checklimits` to avoid confusion with `checkbounds`
+  from Base ([#51])
 - Optimise load times for flight data by preferring column-wise operations over row-wise operations
   and making use of DataFrames functions for grouping and transforming data ([#58])
+- Refactor primary flight and cloud data and datasets to use StructArrays and optimize load times
+  and memory usage ([#58])
 
 ### Removed
 

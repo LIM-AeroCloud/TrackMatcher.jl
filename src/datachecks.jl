@@ -88,15 +88,15 @@ end
 
 
 """
-    remdup!(data::DataFrame, useLON::Bool)
+    remdup!(data::DataFrame, use_lon::Bool)
 
 Remove entries with duplicate x and y (`lat`/`lon` or `lon`/`lat`) values from
 `data` or increase `x` by an infinitessimal number if `x` data is identical, but
 `y` data is not.
 """
-function remdup!(data::DataFrame, useLON::Bool)
+function remdup!(data::DataFrame, use_lon::Bool)
     # Define x and y data
-    x, y = useLON ? (:lon, :lat) : (:lat, :lon)
+    x, y = use_lon ? (:lon, :lat) : (:lat, :lon)
     # Initialise
     i = 1
     iEnd = size(data, 1)
@@ -430,13 +430,13 @@ end #function correctDF!
 ## Prepare trajectory for interpolation and analysis of intersections
 
 """
-    preptrack(flight::DataFrame) -> flight, flex, useLON
+    preptrack(flight::DataFrame) -> flight, flex, use_lon
 
 Use the `flight` data to prepare the track for interpolation. Find the predominant
 flight direction and inflection (flex) points in the flight track.
 
 Return a tidied flight data from which duplicate entries are removed together
-with the `flex` points in the x data for interpolation and a boolean `useLON`,
+with the `flex` points in the x data for interpolation and a boolean `use_lon`,
 which is true for longitude values used x data in the track interpolation.
 """
 function preptrack!(trajectory::DataFrame)
@@ -446,15 +446,15 @@ function preptrack!(trajectory::DataFrame)
     ln = any(trajectory.lon .< 0) ? maximum(filter(l -> l < 0, trajectory.lon)) -
         minimum(filter(l -> l < 0, trajectory.lon)) : 0
     # Determine main direction of trajectory (N<>S, E<>W) and use it as x values
-    # for trajectory interpolation (info stored as bool useLON)
-    useLON = maximum(trajectory.lat) - minimum(trajectory.lat) ≤ (lp + ln) *
+    # for trajectory interpolation (info stored as bool use_lon)
+    use_lon = maximum(trajectory.lat) - minimum(trajectory.lat) ≤ (lp + ln) *
         cosd(stats.mean(trajectory.lat)) ? true : false
     # Adjust for duplicate entries and
-    remdup!(trajectory, useLON)
+    remdup!(trajectory, use_lon)
     # find flex points to cut data in segments needed for the interpolation
-    flex = useLON ? findflex(trajectory.lon) : findflex(trajectory.lat)
+    flex = use_lon ? findflex(trajectory.lon) : findflex(trajectory.lat)
 
-    return flex, useLON
+    return flex, use_lon
 end #function preptrack
 
 

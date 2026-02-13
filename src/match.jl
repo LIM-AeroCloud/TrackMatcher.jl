@@ -84,7 +84,7 @@ function find_intersections(
     # Continue only for sufficient overlap between flight/sat data
     pt.min < st.max && pt.max > st.min || continue
     # Find intersection coordinates
-    Xp, Xs = findXcoords(pt, st, stepwidth, track.metadata.useLON, Float)
+    Xp, Xs = findXcoords(pt, st, stepwidth, track.metadata.use_lon, Float)
     for i = 1:length(Xp)
       # Get precision of Intersection
       dx = dist.haversine(Xp[i], Xs[i], earthradius(Xp[i][1]))
@@ -159,8 +159,8 @@ the x data range (`min`/`max` values).
 """
 function interpolate_trackdata(track::T where T<:PrimaryTrack)
 
-  # Define x and y data based on useLON
-  x, y = track.metadata.useLON ?
+  # Define x and y data based on use_lon
+  x, y = track.metadata.use_lon ?
     (track.data.lon, track.data.lat) : (track.data.lat, track.data.lon)
   # Interpolate tracks and times for all segments
   idata = []
@@ -181,20 +181,20 @@ end #function interpolate_trackdata
 """
     function interpolate_satdata(
       trackdata::Vector{DataFrame},
-      useLON::Bool
+      use_lon::Bool
     ) -> Vector{Any}
 
 Interpolate `trackdata` with a PCHIP polynomial and define the range of the x data
 (`min`/`max` values). X data is defined by theprevailing flight direction from the
-`useLON` flag.
+`use_lon` flag.
 """
 function interpolate_satdata(
   trackdata::Vector{DataFrame},
   isat::UnitRange{Int},
-  useLON::Bool
+  use_lon::Bool
 )
-  # Define x and y data based on useLON
-  x, y = useLON ? (:lon, :lat) : (:lat, :lon)
+  # Define x and y data based on use_lon
+  x, y = use_lon ? (:lon, :lat) : (:lat, :lon)
 
   # Interpolate satellite tracks and flight times for all segments of interest
   idata = []
@@ -224,14 +224,14 @@ end #function interpolate_satdata
       track::NamedTuple,
       sat::NamedTuple,
       stepwidth::Real,
-      useLON::Bool,
+      use_lon::Bool,
       Float::DataType=Float32
     ) -> Xp::, Xs::Tuple{Float,Float}[]
 
 From the interpolated primary `track` and `sat` track (PCHIP polynomial), construct
 a function `track - sat` using the PCHIP method on interpolated data points constructed
 from both PCHIP polynomials in the common track range with the defined `stepwidth`.
-X data is defined by the flag `useLON` (true for longitude as x data) depending on
+X data is defined by the flag `use_lon` (true for longitude as x data) depending on
 the prevailing primary track direction.
 
 Find all intersections between both tracks by finding all roots in the defined
@@ -243,7 +243,7 @@ function findXcoords(
   track::NamedTuple,
   sat::NamedTuple,
   stepwidth::Real,
-  useLON::Bool,
+  use_lon::Bool,
   Float::DataType=Float32
 )
   # Define common interpolated x and y data
@@ -265,7 +265,7 @@ function findXcoords(
   Xp, Xs = Tuple{Float,Float}[], Tuple{Float,Float}[]
   for x in X
     isnan(x) && continue
-    if useLON
+    if use_lon
       push!(Xp, (track.track(x), x))
       push!(Xs, (sat.track(x), x))
     else

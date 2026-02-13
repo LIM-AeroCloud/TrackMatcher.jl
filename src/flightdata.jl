@@ -59,9 +59,9 @@ function load_volpe(
         for group in groups
             df.nrow(group) ≤ 1 && continue
             track = copy(group) # ℹ avoid problems with views when modifying data
-            flex, useLON = preptrack!(track)
+            flex, use_lon = preptrack!(track)
             isempty(flex) || push!(inventory, FlightData{Float}(track, group.FID[1],
-                missing, missing, missing, flex, useLON, 0x01, pathdict["roots"][path.root],
+                missing, missing, missing, flex, use_lon, 0x01, pathdict["roots"][path.root],
                 pathdict["files"][file]))
         end #loop over flights
         # Monitor progress for progress bar
@@ -122,11 +122,11 @@ function load_flightaware(
             # Copy to DataFrame and select track columns
             track = df.select(copy(group), :time, :lat, :lon, :alt, :speed, :climb, :heading)
             # Determine predominant flight direction, inflection points, and remove duplicates
-            flex, useLON = preptrack!(track)
+            flex, use_lon = preptrack!(track)
             # Save the FlightTrack in the archive vector
             isempty(flex) || push!(archive, FlightData{Float}(track, group.dbID[1],
                 group.flightID[1], group.type[1],
-                (orig=group.orig[1], dest=group.dest[1]), flex, useLON,
+                (orig=group.orig[1], dest=group.dest[1]), flex, use_lon,
                 0x02, pathdict["roots"][path.root], pathdict["files"][file]))
         end #loop over flights
 
@@ -266,11 +266,11 @@ function load_webdata(
             speed = speed, climb = climbingrate, heading = heading)
 
         # Determine predominant flight direction, inflection points, and remove duplicate entries
-        flex, useLON = preptrack!(track)
+        flex, use_lon = preptrack!(track)
 
         # Save data as FlightTrack
         isempty(flex) || push!(archive, FlightData{Float}(track, replace(filename, "_" => "/"),
-            flightID, missing, (orig=orig, dest=dest), flex, useLON, 0x03,
+            flightID, missing, (orig=orig, dest=dest), flex, use_lon, 0x03,
             pathdict["roots"][path.root], pathdict["files"][file]))
         # Monitor progress for progress bar
         pm.next!(prog)

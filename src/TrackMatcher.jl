@@ -246,17 +246,17 @@ abstract type Intersection{T<:AbstractFloat} <: ComputedSet{T} end
 
 
 ## Import functions from Julia include files
-include("primarytypes_new.jl")    # concrete types/constructors for primary data/datasets
-# include("primarytypes.jl")    # concrete types/constructors for primary data/datasets
-include("sattypes.jl")          # concrete types/constructors for secondary sat track data and observations
-# include("observations.jl")      # concrete types/constructors for satellite observations
-# include("outputtypes.jl")     # concrete types/constructors for intersections and combined datasets
-include("datachecks.jl")      # helper functions for data checks
-# include("dataprocessing.jl")  # helper functions for data processing
-include("conversions.jl")     # helper functions for time/unit conversions
-# include("lidar.jl")           # functions related to processing CALIOP lidar data
+include("flighttypes.jl")     # concrete types/constructors for flight data/datasets
 include("flightdata.jl")      # functions related to loading flight databases/datasets
-# include("clouddata.jl")       # functions related to loading cloud track databases/datasets
+include("cloudtypes.jl")      # concrete types/constructors for cloud data/datasets
+include("clouddata.jl")       # functions related to loading cloud track databases/datasets
+include("sattypes.jl")        # concrete types/constructors for secondary sat track data and observations
+include("datachecks.jl")      # helper functions for data checks
+include("conversions.jl")     # helper functions for time/unit conversions
+# include("observations.jl")    # concrete types/constructors for satellite observations
+# include("outputtypes.jl")     # concrete types/constructors for intersections and combined datasets
+# include("dataprocessing.jl")  # helper functions for data processing
+# include("lidar.jl")           # functions related to processing CALIOP lidar data
 # include("match.jl")           # functions related to finding track intersections
 
 end # module TrackMatcher

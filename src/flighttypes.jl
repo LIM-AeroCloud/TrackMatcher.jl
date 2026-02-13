@@ -12,14 +12,15 @@ Immutable struct holding metadata for an individual `FlightTrack` of the `Flight
 - `date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}`
 - `area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,AbstractFloat}}`
 - `flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange,AbstractFloat,AbstractFloat}}}}`
-- `useLON::Bool`
+- `use_lon::Bool`
 - `source::UInt8`
 - `root::UInt16`
 - `file::UInt16`
 
 By default, `Float32` is used for `T`.
 
-See also [`PrimaryMetadata`](@ref), [`FlightData`](@ref), [`FlightTrack`](@ref), [`FlightSet`](@ref), and [`PrimarySet`](@ref).
+See also [`PrimaryMetadata`](@ref), [`FlightData`](@ref), [`FlightTrack`](@ref),
+[`FlightSet`](@ref), [`PrimarySet`](@ref), and [`CloudMetadata`](@ref).
 
 ## dbID
 Database ID – integer counter for `volpe`,
@@ -55,7 +56,7 @@ flight.
 - `min` (`AbstractFloat`): minimum x value in the flight segment
 - `max` (`AbstractFloat`): maximum x value in the flight segment
 
-## useLON
+## use_lon
 Flag (`Bool`) whether to use longitude as x data for track interpolation.
 
 ## source
@@ -75,7 +76,7 @@ String holding the root directory path.
 
 `FlightMetadata` is constructed automatically, when `FlightData` is instantiated using
 a modified constructor and `dbID`, `flightID`, `route`, `aircraft` type, the `date` and `lat`/`lon`
-vectors, `useLON`, `flex`, `source`, `root`, and `file`.
+vectors, `use_lon`, `flex`, `source`, `root`, and `file`.
 Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
 
     function FlightMetadata{T}(
@@ -86,7 +87,7 @@ Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
         date::Vector{DateTime},
         lat::Vector{<:Union{Missing,T}},
         lon::Vector{<:Union{Missing,T}},
-        useLON::Bool,
+        use_lon::Bool,
         flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
         source::UInt8,
         root::UInt16,
@@ -103,7 +104,7 @@ Or construct `FlightMetadata` by directly handing over every field:
         date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
         area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,T}},
         flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
-        useLON::Bool,
+        use_lon::Bool,
         source::UInt8,
         root::UInt16,
         file::UInt16
@@ -117,7 +118,7 @@ struct FlightMetadata{T<:AbstractFloat} <: FlightTrack{T}
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
     area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,T}}
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}}
-    useLON::Bool
+    use_lon::Bool
     source::UInt8
     root::UInt16
     file::UInt16
@@ -132,7 +133,7 @@ function FlightMetadata{T}(
     date::Vector{DateTime},
     lat::Vector{<:Union{Missing,T}},
     lon::Vector{<:Union{Missing,T}},
-    useLON::Bool,
+    use_lon::Bool,
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
     source::UInt8,
     root::UInt16,
@@ -142,7 +143,7 @@ function FlightMetadata{T}(
     wlonmin, wlonmax = lonextrema(lon, <)
     area = (latmin=minimum(lat), latmax=maximum(lat), elonmin, elonmax, wlonmin, wlonmax)
     FlightMetadata{T}(dbID, flightID, route, aircraft, (start=date[1], stop=date[end]), area,
-        flex, useLON, source, root, file)
+        flex, use_lon, source, root, file)
 end #constructor 2 FlightMetadata
 
 #* Constructor for empty FlightMetadata
@@ -161,7 +162,7 @@ FlightMetadata{T}(meta::FlightMetadata) where T<:AbstractFloat = FlightMetadata{
     (latmin = T(meta.area.latmin), latmax = T(meta.area.latmax), elonmin = T(meta.area.elonmin),
     elonmax = T(meta.area.elonmax), wlonmin = T(meta.area.wlonmin), wlonmax = T(meta.area.wlonmax)),
     Tuple([(range = m.range, min = T.(m.min), max = T.(m.max)) for m in meta.flex]),
-    meta.useLON, meta.source, meta.root, meta.file
+    meta.use_lon, meta.source, meta.root, meta.file
 )
 
 
@@ -184,7 +185,7 @@ See also [`FlightMetadata`](@ref), [`FlightData`](@ref), [`FlightTrack`](@ref), 
 struct PrimaryMetadata{T<:AbstractFloat} <: PrimarySet{T}
     altmin::T
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
-    sources::ds.OrderedDict{UInt8,String}
+    sources::ds.OrderedDict{UInt8,String} # TODO move within lookup dict
     pathlookup::ds.OrderedDict{String,ds.OrderedDict}
     created::Union{DateTime,ZonedDateTime}
     loadtime::Dates.CompoundPeriod
@@ -224,7 +225,8 @@ Immutable struct holding data for an individual flight track of the `FlightSet` 
 
 By default, `Float32` is used for `T`.
 
-See also [`FlightTrack`](@ref), [`FlightMetadata`](@ref), [`FlightSet`](@ref), and [`PrimarySet`](@ref).
+See also [`FlightTrack`](@ref), [`FlightMetadata`](@ref), [`FlightSet`](@ref), [`PrimarySet`](@ref),
+and [`CloudMetadata`](@ref).
 
 ## Instantiation
 
@@ -239,7 +241,7 @@ a csv file and the metadata fields:
         aircraft::Union{Missing,AbstractString},
         route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{<:AbstractString,<:AbstractString}}},
         flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
-        useLON::Bool,
+        use_lon::Bool,
         source::UInt8,
         root::UInt16,
         file::UInt16
@@ -266,7 +268,7 @@ struct FlightData{T<:AbstractFloat} <: FlightTrack{T}
         checklimits(time, DateTime(2000), Dates.now(), "time")
         checklimits(lat, -90, 90, "latitude")
         checklimits(lon, -180, 180, "longitude")
-        checklimits(alt, 0, 40000, "altitude")
+        checklimits(alt, 0, 20000, "altitude")
         checklimits(heading, 0, 360, "heading")
         checklimits(speed, 0, 2500, "speed")
         new{T}(time, lat, lon, alt, heading, climb, speed, metadata)
@@ -282,7 +284,7 @@ function FlightData{T}(
     aircraft::Union{Missing,<:AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{<:AbstractString,<:AbstractString}}},
     flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
-    useLON::Bool,
+    use_lon::Bool,
     source::UInt8,
     root::UInt16,
     file::UInt16
@@ -296,7 +298,7 @@ function FlightData{T}(
     heading = hasproperty(track, :heading) ? track.heading : [missing for _ in t]
     climb = hasproperty(track, :climb) ? track.climb : [missing for _ in t]
     speed = hasproperty(track, :speed) ? track.speed : [missing for _ in t]
-    metadata = FlightMetadata{T}(dbID, flightID, route, aircraft, t, lat, lon, useLON, flex,
+    metadata = FlightMetadata{T}(dbID, flightID, route, aircraft, t, lat, lon, use_lon, flex,
         source, root, file)
 
     # Instatiate new FlightTrack
@@ -354,7 +356,8 @@ By default, `Float32` is used for `T`.
 `FlightSet` is used to store primary data and as source for TrackMatcher for intersection
 calculations.
 
-See also [`PrimarySet`](@ref), [`FlightData`](@ref), [`FlightTrack`](@ref), and [`PrimaryMetadata`](@ref).
+See also [`PrimarySet`](@ref), [`FlightData`](@ref), [`FlightTrack`](@ref),
+[`PrimaryMetadata`](@ref), and [`CloudSet`](@ref).
 
 ## Instantiation
 

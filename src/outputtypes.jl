@@ -317,7 +317,7 @@ struct XData{T} <: Intersection{T}
         end
         # Interpolate trajectories with PCHIP method
         primtracks = interpolate_trackdata(track)
-        sectracks = interpolate_satdata(overlap, isat, trackdata[i].metadata.useLON)
+        sectracks = interpolate_satdata(overlap, isat, trackdata[i].metadata.use_lon)
         # Calculate intersections and store data and metadata in DataFrames
         currdata, currobs, curraccuracy = find_intersections(ms, track,
           primtracks, tracks.metadata.altmin, sat, sectracks, dataset, ID, maxtimediff,
