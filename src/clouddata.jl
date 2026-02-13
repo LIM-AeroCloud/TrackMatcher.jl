@@ -34,7 +34,8 @@ end #function load_cloudtracks
 """
     matread(file::AbstractString, root::AbstractString, structname::String="cloud", Float::DataType=Float32)
 
-Read cloud track data from a mat `file`.
+Read cloud track data from a mat `file` in `root`. The saved struct has the top level `structname`.
+For floats, the precision defined by `Float` is used (default: `Float32`).
 """
 function matread(file::AbstractString, root::AbstractString, structname::String="cloud", Float::DataType=Float32)
     # Read data from mat file
@@ -61,16 +62,18 @@ end
 
 """
     matsave!(
-      tracks::Vector{CloudData},
-      tracks_data::NamedTuple{time::Vector{Vector{DateTime}},lat::Vector{Vector{Float}},lon::Vector{Vector{Float}}},
-      fileID::Int,
-      filename::String;
-      Float::DataType=Float32
+        tracks::StructArray{<:CloudData},
+        trackdata::NamedTuple{(:time,:lat,:lon)},
+        id::Int32,
+        pathdict::ds.OrderedDict,
+        file::AbstractString,
+        root::AbstractString,
+        Float::DataType=Float32
     )
 
-Append the vector with cloud `tracks` by timestamps `t` and coordinates `latlon`
-using the floating point precision set by `Float` (default: `Float32`) for the
-positional data. Pass on `fileID` and `filename` to the metadata.
+Append the vector with cloud `tracks` by timestamps `t` and coordinates `lat` and `lon` from
+`trackdata` using the floating point precision set by `Float` (default: `Float32`). Pass on
+`id`, `file`, and `root` to the metadata with the help of the `pathdict`.
 """
 function matsave!(
     tracks::StructArray{<:CloudData},
@@ -80,7 +83,7 @@ function matsave!(
     file::AbstractString,
     root::AbstractString,
     Float::DataType=Float32
-)
+)::Nothing
     # Transform MATLAB data into Julia Format and store as CloudTrack struct in a vector
     for i = 1:length(trackdata.time)
         # Determine predominant trajectory direction, inflection points, and remove duplicate entries
@@ -96,4 +99,5 @@ function matsave!(
             data, id, flex, use_lon, pathdict["roots"][root], pathdict["files"][file]
         )))
     end
+    return
 end #function matsave!

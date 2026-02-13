@@ -221,7 +221,7 @@ function CloudSet{T}(
         "\n▪ tracks ($(length(tracks)) entries)\n▪ metadata")
 
     # Instantiate CloudSet
-    CloudSet{T}(tracks, PrimaryMetadata{T}(0, (start=tmin, stop=tmax), ds.OrderedDict(), pathdict, tc, loadtime, attachments))
+    CloudSet{T}(tracks, PrimaryMetadata{T}(0, (start=tmin, stop=tmax), pathdict, tc, loadtime, attachments))
 end #modified constructor 2
 
 #* Constructor for empty CloudSet

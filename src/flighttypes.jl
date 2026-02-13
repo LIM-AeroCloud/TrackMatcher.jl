@@ -173,9 +173,7 @@ Immutable struct with additional information of databases:
 
 - `altmin::Real`: Minimum altitude threshold for which flight data is considered
 - `date`: NamedTuple with entries `start`/`stop` giving the time range of the database
-- `sources`: OrderedDict with a lookup table for database type
-- `pathlookup`: OrderedDict with a lookup table for root directories of the given files and
-  file names for the  flight data
+- `lookup`: combined dictionaries with lookup tables for repeated data to save memory
 - `created`: time of creation of database
 - `loadtime`: time it took to read data files and load it to the struct
 - `attachments`: any additional data or comments that can be attached to the database
@@ -185,26 +183,22 @@ See also [`FlightMetadata`](@ref), [`FlightData`](@ref), [`FlightTrack`](@ref), 
 struct PrimaryMetadata{T<:AbstractFloat} <: PrimarySet{T}
     altmin::T
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
-    sources::ds.OrderedDict{UInt8,String} # TODO move within lookup dict
-    pathlookup::ds.OrderedDict{String,ds.OrderedDict}
+    lookup::ds.OrderedDict{String,AbstractDict}
     created::Union{DateTime,ZonedDateTime}
     loadtime::Dates.CompoundPeriod
     attachments
 end #struct PrimaryMetadata
 
 #* Constructor for empty PrimaryMetadata
-PrimaryMetadata{T}() where T<:AbstractFloat = PrimaryMetadata{T}(NaN,
-    (start=Dates.now(), stop=Dates.now()), ds.OrderedDict{UInt8,String}(0x00 => "undefined"),
-        ds.OrderedDict("roots" => ds.OrderedDict{UInt16,String}(0x0000 => "/"),
-        "files" => ds.OrderedDict{UInt16,String}(0x0000 => "")),
-        Dates.now(), Dates.CompoundPeriod(), nothing)
+PrimaryMetadata{T}() where T<:AbstractFloat = PrimaryMetadata{T}(0, (start=Dates.now(), stop=Dates.now()),
+    ds.OrderedDict{String,AbstractDict}(), Dates.now(), Dates.CompoundPeriod(), nothing)
 
 #* Constructor for default Float32 PrimaryMetadata
 PrimaryMetadata(args...) = PrimaryMetadata{Float32}(args...)
 
 #* Constructor for floating point type promotion
 PrimaryMetadata{T}(meta::PrimaryMetadata) where T<:AbstractFloat = PrimaryMetadata{T}(T(meta.altmin),
-    meta.date, meta.sources, meta.pathlookup, meta.created, meta.loadtime, meta.attachments)
+    meta.date, meta.lookup, meta.created, meta.loadtime, meta.attachments)
 
 
 ## Struct for single flight tracks
@@ -312,11 +306,12 @@ FlightData{T}() where T<:AbstractFloat = FlightData{T}(DateTime[], T[], T[],
 
 #* Constructor for type promotion of FlightData
 FlightData{T}(flight::FlightData) where T<:AbstractFloat =
-  FlightData{T}(flight.time, T.(flight.lat), T.(flight.lon),
-    [ismissing(x) ? missing : T(x) for x in flight.alt], flight.heading,
-    [ismissing(x) ? missing : T(x) for x in flight.climb],
-    [ismissing(x) ? missing : T(x) for x in flight.speed],
-    FlightMetadata{T}(flight.metadata))
+    FlightData{T}(flight.time, T.(flight.lat), T.(flight.lon),
+        [ismissing(x) ? missing : T(x) for x in flight.alt], flight.heading,
+        [ismissing(x) ? missing : T(x) for x in flight.climb],
+        [ismissing(x) ? missing : T(x) for x in flight.speed],
+        FlightMetadata{T}(flight.metadata)
+    )
 
 #* Constructor for default Float32 FlightData
 FlightData(args...; kwargs...) = FlightData{Float32}(args...; kwargs...)
@@ -466,8 +461,8 @@ function FlightSet{T}(;
     files = ds.OrderedDict(v => k for (k,v) in pathdict["files"])
     # Instantiate
     FlightSet{T}(volpe, flightaware, webdata,
-        PrimaryMetadata{T}(altmin, (start=tmin, stop=tmax), sources, ds.OrderedDict(
-            "roots" => roots, "files" => files
+        PrimaryMetadata{T}(altmin, (start=tmin, stop=tmax), ds.OrderedDict(
+            "sources" => sources, "roots" => roots, "files" => files
         ), tc, loadtime, attachments))
 end # Main constructor FlightSet
 
@@ -502,15 +497,15 @@ See also [`FlightSet`](@ref), [`FlightData`](@ref), [`FlightTrack`](@ref), and [
 function PrimarySet end
 
 PrimarySet{T}(
-  volpe::Vector{FlightData{T}},
-  flightaware::Vector{FlightData{T}},
-  webdata::Vector{FlightData{T}},
-  metadata::PrimaryMetadata{T}
+    volpe::Vector{FlightData{T}},
+    flightaware::Vector{FlightData{T}},
+    webdata::Vector{FlightData{T}},
+    metadata::PrimaryMetadata{T}
 ) where T<:AbstractFloat = FlightSet{T}(volpe, flightaware, webdata, metadata)
 
 #* Alias constructor for default Float32 PrimarySet
 PrimarySet{T}(; kwargs...) where T<:AbstractFloat =
-  FlightSet{T}(; kwargs...)
+    FlightSet{T}(; kwargs...)
 
 #* Alias constructor for type promotion of FlightSet
 PrimarySet{T}(tracks::FlightSet) where T<:AbstractFloat = FlightSet{T}(tracks)
