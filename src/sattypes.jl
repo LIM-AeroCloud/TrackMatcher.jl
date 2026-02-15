@@ -58,7 +58,7 @@ in which case `Float32` will be used by default.
 struct SecondaryMetadata{T<:AbstractFloat} <: SecondarySet{T}
     granules::DataFrame
     roots::ds.OrderedDict{UInt16,String}
-    type::Symbol
+    type::Symbol #TODO save version
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
     created::AbstractDateTime
     loadtime::Dates.CompoundPeriod
@@ -89,13 +89,20 @@ struct SecondaryMetadata{T<:AbstractFloat} <: SecondarySet{T}
         throw(ArgumentError("values in root column of granules must match keys of the roots OrderedDict\n"*
             "got: $granule_roots\nvs.: $root_keys"))
     all(granules.tstart .≤ granules.tstop) ||
-        throw(ArgumentError("tstart must be less than or equal to tstop for all granules"))
-    all(granules.latmin .≤ granules.latmax) ||
-        throw(ArgumentError("latmin must be less than or equal to latmax for all granules"))
-    all(granules.elonmin .≤ granules.elonmax) ||
-        throw(ArgumentError("elonmin must be less than or equal to elonmax for all granules"))
-    all(granules.wlonmin .≤ granules.wlonmax) ||
-        throw(ArgumentError("wlonmin must be less than or equal to wlonmax for all granules"))
+        throw(ArgumentError("tstart must be less than or equal to tstop for all granules\n"*
+            "got: $(granules.tstart)\nvs.: $(granules.tstop)"))
+    all(zip(granules.latmin, granules.latmax)) do (a, b)
+        isnan(a) || isnan(b) || a ≤ b
+    end || throw(ArgumentError("latmin must be less than or equal to latmax for all granules\n"*
+        "got: $(granules.latmin)\nvs.: $(granules.latmax)"))
+    all(zip(granules.elonmin, granules.elonmax)) do (a, b)
+        isnan(a) || isnan(b) || a ≤ b
+    end || throw(ArgumentError("elonmin must be less than or equal to elonmax for all granules\n"*
+        "got: $(granules.elonmin)\nvs.: $(granules.elonmax)"))
+    all(zip(granules.wlonmin, granules.wlonmax)) do (a, b)
+        isnan(a) || isnan(b) || a ≤ b
+    end || throw(ArgumentError("wlonmin must be less than or equal to wlonmax for all granules\n"*
+        "got: $(granules.wlonmin)\nvs.: $(granules.wlonmax)"))
     new{T}(granules, roots, type, date, created, loadtime, attachments)
   end
 end #struct SecondaryMetadata
@@ -258,10 +265,12 @@ function SatSet{T}(
     # Loop over found files and load data
     granules = StructArray{SatData{T}}(undef, 0)
     metadata = DataFrame(file = String[], root = UInt16[], tstart = DateTime[], tstop = DateTime[],
-        latmin = T[], latmax = T[], elonmin = T[], elonmax = T[], wlonmin = T[], wlonmax = T[]
+    latmin = T[], latmax = T[], elonmin = T[], elonmax = T[], wlonmin = T[], wlonmax = T[]
     )
     roots = ds.OrderedDict{String,UInt16}()
-    pm.@showprogress dt=1 desc="load sat data..." for data in paths
+    total_files = sum(length(data.files) for data in paths)
+    progress = pm.Progress(total_files; dt=1, desc="Loading satellite data... ", showspeed=true)
+    for data in paths
         root = realpath(data.root)
         haskey(roots, root) || (roots[root] = length(roots) + 1)
         for file in data.files
@@ -279,8 +288,10 @@ function SatSet{T}(
             catch e
                 @warn "read error; data skipped" file exception=(e, catch_backtrace())
             end
+            pm.next!(progress)
         end
     end
+    pm.finish!(progress)
     # Return SatSet constructor
     tend = Dates.now()
     if isempty(metadata)
@@ -295,7 +306,7 @@ function SatSet{T}(
         type,
         date,
         tz.ZonedDateTime(tend, tz.localzone()),
-        tend - t0,
+        Dates.canonicalize(tend - t0),
         attachments
     ))
 end

@@ -236,14 +236,7 @@ CloudSet{T}(cloud::CloudSet) where T<:AbstractFloat = CloudSet{T}(
     PrimaryMetadata{T}(cloud.metadata)
 )
 
-"""
-    PrimarySet{T}(tracks::StructArray{CloudData{T}}, metadata::PrimaryMetadata{T}) where T<:AbstractFloat
-    PrimarySet{T}(folders::String...; kwargs...) where T<:AbstractFloat
-
-Alias constructor for `CloudSet{T}` constructors.
-"""
-function PrimarySet end
-
+#* Alias constructor for `CloudSet` (documented in flighttypes.jl)
 PrimarySet{T}(tracks::StructArray{CloudData{T}}, metadata::PrimaryMetadata{T}) where T<:AbstractFloat =
     CloudSet{T}(tracks, metadata)
 

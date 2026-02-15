@@ -14,18 +14,27 @@
   to be in line with Julia conventions
 - Refactor `convert_floats!` without type piracy
 - Rename fields and variables `useLON` to `use_lon`
-- Refactor satellite types and constructors ([#51])
+- Refactor satellite types and constructors ([#51], [#58])
   - Remove dataframe layer in `SatData` and store `time`, `lat`, `lon` directly in `StructArray`
     fields
+  - Remove dataframe layer in observation data `CLay` and `CPro` and store data in separate fields
   - Rename field `remarks` in `SecondaryMetadata` to `attachments` to signal more flexibility
-  - Replace internal `findfiles!` function by `scandir` in connection with `sat_datafiles!`
+  - Refactor internal `findfiles!` function using `scandir` in connection with `sat_datafiles!`
   - Add additional data checks on instantiation
 - Rename `checkbounds!` to `checklimits!`/`checklimits` to avoid confusion with `checkbounds`
   from Base ([#51])
-- Optimise load times for flight data by preferring column-wise operations over row-wise operations
+- Optimise load times for flight data by preferring column-wise operations over row-wise operations ([#58])
   and making use of DataFrames functions for grouping and transforming data ([#58])
-- Refactor primary flight and cloud data and datasets to use StructArrays and optimize load times
+- Refactor primary flight and cloud data and datasets to use StructArrays and optimize load times ([#58])
+  - Rename `dbID` in `FlightData` to `id` and `flightID` to `flight_num` for more consistency
+    in the naming scheme
   and memory usage ([#58])
+- Refine the `XData` struct and the calculation of intersection points ([#51], [#58])
+- Refine file handling and save root paths and file paths/names separately ([#58])
+- Use look-up dictionaries in the set metadata and reduced Strings or `UInt16` indices in the
+  track metadata to reduce struct sizes ([#58])
+- Use `Enum` instead of `Symbol` to describe the atmospheric conditions derived from the
+  Feature Classification Flag (FCF) [#58]
 
 ### Removed
 
@@ -36,8 +45,11 @@
 
 ### Fixed
 
+- Fixed errors in UTC time conversion by rounding the converted seconds of the day from the 
+  fraction of the day to 3 digits
 - `earthradius` now always return `Float64` instead of the input precision to ensure correct
   results and no overflow for `Float16`
+- Fixed compilation warnings by removing duplicate constructor for empty `FlightSet`
 
 ## [v0.5.4]
 

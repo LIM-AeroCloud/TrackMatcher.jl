@@ -61,7 +61,7 @@ function load_volpe(
             track = copy(group) # ℹ avoid problems with views when modifying data
             flex, use_lon = preptrack!(track)
             isempty(flex) || push!(inventory, FlightData{Float}(track, group.FID[1],
-                missing, missing, missing, flex, use_lon, 0x01, pathdict["roots"][path.root],
+                missing, missing, missing, flex, use_lon, "V", pathdict["roots"][path.root],
                 pathdict["files"][file]))
         end #loop over flights
         # Monitor progress for progress bar
@@ -114,7 +114,7 @@ function load_flightaware(
             (ismissing.(flights.alt) .| (flights.alt .≥ altmin)), :]
 
         # Group by flight ID
-        groups = df.groupby(flights, :dbID)
+        groups = df.groupby(flights, :id)
         sizehint!(archive, length(archive) + length(groups))
         # Process each flight
         for group in groups
@@ -124,10 +124,10 @@ function load_flightaware(
             # Determine predominant flight direction, inflection points, and remove duplicates
             flex, use_lon = preptrack!(track)
             # Save the FlightTrack in the archive vector
-            isempty(flex) || push!(archive, FlightData{Float}(track, group.dbID[1],
-                group.flightID[1], group.type[1],
+            isempty(flex) || push!(archive, FlightData{Float}(track, group.id[1],
+                group.flight_num[1], group.type[1],
                 (orig=group.orig[1], dest=group.dest[1]), flex, use_lon,
-                0x02, pathdict["roots"][path.root], pathdict["files"][file]))
+                "FA", pathdict["roots"][path.root], pathdict["files"][file]))
         end #loop over flights
 
         # Monitor progress for progress bar
@@ -207,7 +207,7 @@ function load_webdata(
 
         # Get time zone, data and flight metadata from file name and header of time column
         filename = splitext(basename(file))[1]
-        date, timezone, flightID, orig, dest = get_date_time_route(filename, tzone)
+        date, timezone, flight_num, orig, dest = get_date_time_route(filename, tzone)
 
         # Set to 2 days prior to allow corrections for timezone diffences in the next step
         date += Dates.Day(2)
@@ -270,7 +270,7 @@ function load_webdata(
 
         # Save data as FlightTrack
         isempty(flex) || push!(archive, FlightData{Float}(track, replace(filename, "_" => "/"),
-            flightID, missing, (orig=orig, dest=dest), flex, use_lon, 0x03,
+            flight_num, missing, (orig=orig, dest=dest), flex, use_lon, "W",
             pathdict["roots"][path.root], pathdict["files"][file]))
         # Monitor progress for progress bar
         pm.next!(prog)
@@ -297,14 +297,14 @@ function read_archive(file::AbstractString, Float::DataType=Float32)::DataFrame
     if old
         CSV.read(file, DataFrame, skipto=2, normalizenames=true, ignoreemptyrows=true,
             silencewarnings=true, dateformat="m/d/y H:M:S",
-            header = ["dbID", "flightID", "type", "orig", "dest", "time", "lat", "lon",
+            header = ["id", "flight_num", "type", "orig", "dest", "time", "lat", "lon",
             "speed", "alt", "climb", "heading", "direction", "estimated"],
             types = Dict(:lat => Float, :lon => Float, :alt => Float, :speed => Float, :climb => Float),
             drop = ["direction", "estimated"], stringtype=String)
     else
         CSV.read(file, DataFrame, skipto=2, normalizenames=true, ignoreemptyrows=true,
             silencewarnings=true, dateformat="m/d/y H:M:S",
-            header = ["dbID", "flightID", "type", "orig", "dest", "time", "lat", "lon",
+            header = ["id", "flight_num", "type", "orig", "dest", "time", "lat", "lon",
             "speed", "alt", "climb", "heading", "direction", "fac_name", "fac_descr", "estimated"],
             types = Dict(:lat => Float, :lon => Float, :alt => Float, :speed => Float, :climb => Float),
             drop = ["direction", "fac_name", "fac_descr", "estimated"], stringtype=String)
@@ -324,7 +324,7 @@ function get_date_time_route(filename::String, tzone::String)
     # due to different column names, in which the timezone is included
     timezone = zonedict[tzone]
     # Retrieve date and metadata from filename
-    flightID, datestr, course = try match(r"(.*?)_(.*?)_(.*)", filename).captures
+    flight_num, datestr, course = try match(r"(.*?)_(.*?)_(.*)", filename).captures
     catch
         println()
         println()
@@ -340,5 +340,5 @@ function get_date_time_route(filename::String, tzone::String)
         return missing, missing, missing, missing, missing
     end
 
-    return date, timezone, flightID, orig, dest
+    return date, timezone, flight_num, orig, dest
 end #function get_date_time_route
