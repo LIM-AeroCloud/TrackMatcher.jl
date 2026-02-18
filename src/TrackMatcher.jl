@@ -210,6 +210,7 @@ import DataFrames: DataFrame
 import StructArrays: StructArray
 import Dates: AbstractDateTime, DateTime, Date, Time
 import TimeZones: ZonedDateTime
+import IntervalArithmetic.Symbols: (..)
 
 # Define Logger with log level
 logger = logg.ConsoleLogger(stdout, logg.Info)
@@ -266,7 +267,7 @@ end
 """
 # Enum AerosolType
 
-- `aerosol (0)` (subtype not determined)
+- `undetermined (0)` (subtype not determined)
 - `marine (1)` (clean marine)
 - `dust (2)`
 - `polluted (3)` (polluted continental)
@@ -276,7 +277,7 @@ end
 - `other (7)`
 """
 @enum AerosolType::UInt16 begin
-    aerosol
+    undetermined
     marine
     dust
     polluted

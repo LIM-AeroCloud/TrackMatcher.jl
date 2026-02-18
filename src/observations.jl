@@ -44,7 +44,7 @@ struct CLay{T} <: ObservationSet{T}
     layer_base::Vector{Vector{T}}
     atmos_state::Vector{Vector{Enum{UInt16}}}
     OD::Vector{Vector{T}}
-    IWP::Vector{Vector{<:Union{Missing,T}}}
+    IWP::Vector{<:Vector{<:Union{Missing,<:T}}}
     Ttop::Vector{Vector{T}}
     Htropo::Vector{T}
     night::BitVector
@@ -59,7 +59,7 @@ struct CLay{T} <: ObservationSet{T}
         layer_base::Vector{Vector{T}},
         atmos_state::Vector{Vector{Enum{UInt16}}},
         OD::Vector{Vector{T}},
-        IWP::Vector{Vector{<:Union{Missing,T}}},
+        IWP::Vector{<:Vector{<:Union{Missing,T}}},
         Ttop::Vector{Vector{T}},
         Htropo::Vector{T},
         night::BitVector,
@@ -100,7 +100,7 @@ function CLay{T}(
     # non-essential data #TODO catch faulty data and allow missing values
     layer_top = Vector{Vector{Vector{T}}}(undef, length(files))
     layer_base = Vector{Vector{Vector{T}}}(undef, length(files))
-    atmos_state = Vector{Vector{Vector{Symbol}}}(undef,length(files))
+    atmos_state = Vector{Vector{Vector{Enum{UInt16}}}}(undef,length(files))
     OD = Vector{Vector{Vector{T}}}(undef,length(files))
     IWP = Vector{Vector{Vector{Union{Missing,T}}}}(undef,length(files))
     Ttop = Vector{Vector{Vector{T}}}(undef,length(files))
@@ -135,7 +135,7 @@ function CLay{T}(
         # Loop over data and convert to TrackMatcher format
         l_top = Vector{Vector{T}}(undef,length(utc[i]))
         l_base = Vector{Vector{T}}(undef,length(utc[i]))
-        atm = Vector{Vector{Symbol}}(undef,length(utc[i]))
+        atm = Vector{Vector{Enum{UInt16}}}(undef,length(utc[i]))
         optdepth = Vector{Vector{T}}(undef,length(utc[i]))
         icewater = Vector{Vector{Union{Missing,T}}}(undef,length(utc[i]))
         toptemp = Vector{Vector{T}}(undef,length(utc[i]))
@@ -144,12 +144,12 @@ function CLay{T}(
             (ltop[n,:] .> lidarrange[2]) .& (ltop[n,:] .> altmin))
             l_top[n], l_base[n], atm[n], optdepth[n], toptemp[n], icewater[n] =
             if isempty(l)
-                T[], T[], Symbol[], T[], T[], T[]
+                T[], T[], Enum{UInt16}[], T[], T[], T[]
             else
                 l = findall((lbase[n,:] .> 0) .& (ltop[n,:] .> 0) .& (lbase[n,:] .< lidarrange[1]) .&
                 (ltop[n,:] .> lidarrange[2]))
                 [ltop[n, m] for m in l] , [lbase[n, m] for m in l],
-                [feature_classification(classification(FCF[n,m])...) for m in l],
+                Enum{UInt16}[feature_classification(classification(FCF[n,m])...) for m in l],
                 [FOD[n,m] for m in l],
                 [LTT[n,m] for m in l],
                 [IWPath[n,m] == -9999 ? missing : IWPath[n,m] for m in l]
@@ -171,9 +171,9 @@ end #constructor 2 CLay
 
 External constructor for empty `CLay` struct.
 """
-function CLay{T}() where T
-    Clay{T}(DateTime[], T[], T[], Vector{T}[], Vector{T}[], Vector{Symbol}[], Vector{T}[],
-        Vector{T}[], Vector{T}[], T[], BitVector(), Vector{Int}[])
+function CLay{T}() where T<:AbstractFloat
+    CLay{T}(DateTime[], T[], T[], Vector{T}[], Vector{T}[], Vector{Enum{UInt16}}[],
+        Vector{T}[], Vector{T}[], Vector{T}[], T[], BitVector(), Vector{Int}[])
 end
 
 """
@@ -181,10 +181,11 @@ end
 
 External `CLay` constructor for conversion of floating point precision.
 """
-function CLay{T}(clay::CLay) where T
+function CLay{T}(clay::CLay) where T<:AbstractFloat
     CLay{T}(clay.time, T.(clay.lat), T.(clay.lon), [T.(layer) for layer in clay.layer_top],
         [T.(layer) for layer in clay.layer_base], clay.atmos_state,
-        [T.(OD) for OD in clay.OD], [T.(IWP) for IWP in clay.IWP],
+        [T.(OD) for OD in clay.OD],
+        [df.passmissing(T).(iwp) for iwp in clay.IWP],
         [T.(Ttop) for Ttop in clay.Ttop], T.(clay.Htropo), clay.night, clay.averaging)
 end
 
@@ -229,14 +230,14 @@ struct CPro{T} <: ObservationSet{T}
     lat::Vector{T}
     lon::Vector{T}
     atmos_state::Vector{Vector{Enum{UInt16}}}
-    EC532::Vector{Vector{<:Union{Missing,T}}}
+    EC532::Vector{<:Vector{<:Union{Missing,T}}}
     h_tropo::Vector{T}
-    temp::Vector{Vector{<:Union{Missing,T}}}
-    pressure::Vector{Vector{<:Union{Missing,T}}}
-    rH::Vector{Vector{<:Union{Missing,T}}}
-    IWC::Vector{Vector{<:Union{Missing,T}}}
-    deltap::Vector{Vector{<:Union{Missing,T}}}
-    CADscore::Vector{Vector{<:Union{Missing,Int8}}}
+    temp::Vector{<:Vector{<:Union{Missing,T}}}
+    pressure::Vector{<:Vector{<:Union{Missing,T}}}
+    rH::Vector{<:Vector{<:Union{Missing,T}}}
+    IWC::Vector{<:Vector{<:Union{Missing,T}}}
+    deltap::Vector{<:Vector{<:Union{Missing,T}}}
+    CADscore::Vector{<:Vector{<:Union{Missing,Int8}}}
     night::BitVector
 
     """ unmodified constructor """
@@ -245,14 +246,14 @@ struct CPro{T} <: ObservationSet{T}
         lat::Vector{T},
         lon::Vector{T},
         atmos_state::Vector{Vector{Enum{UInt16}}},
-        EC532::Vector{Vector{<:Union{Missing,T}}},
+        EC532::Vector{<:Vector{<:Union{Missing,T}}},
         h_tropo::Vector{T},
-        temp::Vector{Vector{<:Union{Missing,T}}},
-        pressure::Vector{Vector{<:Union{Missing,T}}},
-        rH::Vector{Vector{<:Union{Missing,T}}},
-        IWC::Vector{Vector{<:Union{Missing,T}}},
-        deltap::Vector{Vector{<:Union{Missing,T}}},
-        CADscore::Vector{Vector{<:Union{Missing,Int8}}},
+        temp::Vector{<:Vector{<:Union{Missing,T}}},
+        pressure::Vector{<:Vector{<:Union{Missing,T}}},
+        rH::Vector{<:Vector{<:Union{Missing,T}}},
+        IWC::Vector{<:Vector{<:Union{Missing,T}}},
+        deltap::Vector{<:Vector{<:Union{Missing,T}}},
+        CADscore::Vector{<:Vector{<:Union{Missing,Int8}}},
         night::BitVector
     ) where T
         all(length(time) == length(prop) for prop in
@@ -261,21 +262,21 @@ struct CPro{T} <: ObservationSet{T}
         checklimits(time, DateTime(2000), Dates.now(), "time")
         checklimits(lat, T(-90), T(90), "latitude")
         checklimits(lon, T(-180), T(180), "longitude")
-        checklimits.(EC532, 0, 10, "extinction coefficient")
+        # checklimits.(EC532, 0, 500, "extinction coefficient")
         checklimits(h_tropo, 4000, 22_000, "tropopause height")
         checklimits.(temp, -120, 60, "temperature")
         checklimits.(pressure, 1, 1086, "pressure")
-        checklimits.(rH, 0, 1.5, "relative humidity")
-        checklimits.(IWC, 0, 0.54, "ice water content")
-        checklimits.(deltap, 0, 1, "depolarization ratio")
-        checklimits.(CADscore, -101, 106, "CAD score")
+        # checklimits.(rH, 0, 1.5, "relative humidity")
+        # checklimits.(IWC, 0, 0.54, "ice water content")
+        # checklimits.(deltap, 0, 1, "depolarization ratio")
+        checklimits.(CADscore, -127, 128, "CAD score")
         new{T}(time, lat, lon, atmos_state, EC532, h_tropo, temp, pressure, rH, IWC, deltap, CADscore, night)
     end #constructor 1 CPro
 end #struct CPro
 
 """
 Modified constructor of `CPro` reading data from hdf `files` for all given `sattime` indices
-using MATLAB session `ms` and `lidarprofile` data, if data is above `altmin`.
+and `lidarprofile` data, if data is above `altmin`.
 """
 function CPro{T}(
     files::Vector{String},
@@ -309,52 +310,48 @@ function CPro{T}(
         ## Retrieve cloud profile data; assumes faulty files are filtered by SatData
         h5.h5open(file, "r") do fid
             try
-                utc[i] = convert_utc.(read(fid, "Profile_UTC_Time")[2,:][timeindex[i]])
-                lat[i] = read(fid, "Latitude")[2,:][timeindex[i]]
-                lon[i] = read(fid, "Longitude")[2,:][timeindex[i]]
-                FCF = read(fid, "Atmospheric_Volume_Description")[timeindex[i],:]
-                EC532 = read(fid, "Extinction_Coefficient_532")[timeindex[i],:]
-                Tcol = read(fid, "Temperature")[timeindex[i],:]
-                pressure = read(fid, "Pressure")[timeindex[i],:]
-                relH = read(fid, "Relative_Humidity")[timeindex[i],:]
-                IWC = read(fid, "Ice_Water_Content_Profile")[timeindex[i],:]
-                Δp = read(fid, "Particulate_Depolarization_Ratio_Profile_532")[timeindex[i],:]
-                CAD = read(fid, "CAD_Score")[timeindex[i],:]
+                utc[i] = convert_utc.(read(fid, "Profile_UTC_Time")[2,timeindex[i]])
+                lat[i] = read(fid, "Latitude")[2,timeindex[i]]
+                lon[i] = read(fid, "Longitude")[2,timeindex[i]]
+                fcf[i] = get_lidarcolumn(UInt16, read(fid, "Atmospheric_Volume_Description"),
+                    lidarprofile, coarse=false)[timeindex[i]]
+                ec532[i] = get_lidarcolumn(T, read(fid, "Extinction_Coefficient_532"),
+                lidarprofile, missingvalues = -9999)[timeindex[i]]
+                temp[i] = get_lidarcolumn(T, read(fid, "Temperature"), lidarprofile,
+                    missingvalues = -9999)[timeindex[i]]
+                pres[i] = get_lidarcolumn(T, read(fid, "Pressure"), lidarprofile,
+                    missingvalues = -9999)[timeindex[i]]
+                rH[i] = get_lidarcolumn(T, read(fid, "Relative_Humidity"), lidarprofile,
+                    missingvalues = -9999)[timeindex[i]]
+                iwc[i] = get_lidarcolumn(T, read(fid, "Ice_Water_Content_Profile"),
+                    lidarprofile, missingvalues = -9999)[timeindex[i]]
+                deltap[i] = get_lidarcolumn(T, read(fid, "Particulate_Depolarization_Ratio_Profile_532"),
+                    lidarprofile, missingvalues = -9999)[timeindex[i]]
+                cad[i] = get_lidarcolumn(Int8, read(fid, "CAD_Score"), lidarprofile,
+                    coarse=false, missingvalues = -127)[timeindex[i]]
                 h_tropo[i] = 1000read(fid, "Tropopause_Height")[timeindex[i]]
-                night[i] = Bool.(read(fid, "Day_Night_Flag")[timeindex[i],:])
+                night[i] = Bool.(read(fid, "Day_Night_Flag")[timeindex[i]])
             catch
                 @error "ReadError: profile observations could not be read from file, skipping" file
-                return CLay{T}()
+                return CPro{T}()
             end
         end
-
-        fcf[i] = get_lidarcolumn(UInt16, FCF, lidarprofile, coarse=false)
-        # Extract non-essential data
-        ec532[i] = get_lidarcolumn(T, EC532, lidarprofile, missingvalues = -9999)
-        temp[i] = get_lidarcolumn(T, Tcol, lidarprofile, missingvalues = -9999)
-        pres[i] = get_lidarcolumn(T, pressure, lidarprofile, missingvalues = -9999)
-        rH[i] = get_lidarcolumn(T, relH, lidarprofile, missingvalues = -9999)
-        iwc[i] = get_lidarcolumn(T, IWC, lidarprofile, missingvalues = -9999)
-        deltap[i] = get_lidarcolumn(T, Δp, lidarprofile, missingvalues = -9999)
-        cad[i] = get_lidarcolumn(Int8, CAD, lidarprofile, coarse=false, missingvalues = -127)
     end #loop over files
 
     # Rearrange vector data
     utc, fcf = vcat(utc...), vcat(fcf...)
-    utc = [utc...;]
-    # Rearrange FCF vector and convert to symbols
-    fcf = [fcf...;]
-    atmos_state =  Vector{Vector{Union{Missing,Symbol}}}(undef, length(fcf))
+    # Convert FCF to feature classification enums
+    atmos_state = Vector{Vector{Enum{UInt16}}}(undef, length(fcf))
     for i = 1:length(fcf)
-        vect = Vector{Union{Missing,Symbol}}(undef, length(fcf[i]))
+        vect = Vector{Enum{UInt16}}(undef, length(fcf[i]))
         for j = 1:length(fcf[i])
-            vect[j] = ismissing(fcf[i][j]) ? missing :
+            vect[j] = ismissing(fcf[i][j]) ? invalid :
             feature_classification(classification(fcf[i][j])...)
         end
         atmos_state[i] = vect
     end
     # Instantiate new struct
-    new{T}(utc, vcat(lat...), vcat(lon...), atmos_state, vcat(ec532...), vcat(h_tropo...),
+    CPro{T}(utc, vcat(lat...), vcat(lon...), atmos_state, vcat(ec532...), vcat(h_tropo...),
         vcat(temp...), vcat(pres...), vcat(rH...), vcat(iwc...), vcat(deltap...),
         vcat(cad...), vcat(night...))
 end #constructor 2 CPro
@@ -374,10 +371,16 @@ CPro{T}() where T = CPro{T}(DateTime[], T[], T[], Vector{Enum{UInt16}}[], Vector
 External `CPro` constructor for conversion of floating point precision.
 """
 function CPro{T}(cpro::CPro) where T
-    CPro{T}(cpro.time, T.(cpro.lat), T.(cpro.lon), cpro.atmos_state, [T.(EC) for EC in cpro.EC532],
-        T.(cpro.h_tropo), [T.(temp) for temp in cpro.temp], [T.(pres) for pres in cpro.pressure],
-        [T.(rH) for rH in cpro.rH], [T.(IWC) for IWC in cpro.IWC], [T.(deltap) for deltap in cpro.deltap],
-        [Int8(cad) for cad in cpro.CADscore], cpro.night)
+    CPro{T}(cpro.time, T.(cpro.lat), T.(cpro.lon), cpro.atmos_state,
+        [df.passmissing(T).(EC) for EC in cpro.EC532],
+        T.(cpro.h_tropo),
+        [df.passmissing(T).(temp) for temp in cpro.temp],
+        [df.passmissing(T).(pres) for pres in cpro.pressure],
+        [df.passmissing(T).(rh) for rh in cpro.rH],
+        [df.passmissing(T).(iwc) for iwc in cpro.IWC],
+        [df.passmissing(T).(dp) for dp in cpro.deltap],
+        [df.passmissing(Int8).(cad) for cad in cpro.CADscore],
+        cpro.night)
 end
 
 """

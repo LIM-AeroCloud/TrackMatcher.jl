@@ -167,9 +167,11 @@ Return `true`, if all values in `data` are between `min` and `max` or throw an A
 The `property` name is used for the error message.
 """
 function checklimits(data::Vector, min, max, property::AbstractString)::Bool
+    # Return true if all values are missing (valid case for optional data)
+    all(ismissing, data) && return true
     success = all(min .≤ skipmissing(data) .≤ max)
     success || throw(ArgumentError("$property values are out of range\n"*
-        "got: [$(minimum(data)) ... $(maximum(data))], expected: [$min ... $max]"))
+        "got: [$(minimum(skipmissing(data))) ... $(maximum(skipmissing(data)))], expected: [$min ... $max]"))
 end
 
 

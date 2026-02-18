@@ -42,13 +42,11 @@ end #function get_lidarheights
 """
     function get_lidarcolumn(
         T::DataType,
-        ms::mat.MSession,
-        variable::String,
+        var::Array{Tv},
         lidarprofile::NamedTuple;
         coarse::Bool = true,
         missingvalues = missing
-    )
-
+    ) where Tv
 Append the vector `vec` with CALIPSO lidar data of the `variable` using the MATLAB
 session `ms` to read the variable from an hdf file already opened in `ms` outside
 of `append_lidardata!`. Information about the lidar heigths used in `vec` are stored
@@ -67,32 +65,58 @@ function get_lidarcolumn(
 ) where Tv
     # Convert var to type t
     Tv ≠ T && (var = T.(var))
-    # Initialise vector to store all row vectors and loop over matrix
-    row = Vector{Vector{Union{Missing,T}}}(undef, size(var, 1))
-    for i = 1:size(var, 1)
-        row[i] = if coarse && ismissing(missingvalues)
-            # Save row vector for coarse heights data without transforming missing values
-            var[i,lidarprofile.itop:lidarprofile.ibottom]
+    # Validate lidarprofile indices
+    if lidarprofile.ibottom <= 0
+        throw(ArgumentError("Invalid lidar height range: ibottom = $(lidarprofile.ibottom). " *
+            "Check that the lidar range (top, bottom) captures valid altitude levels. " *
+            "For example, use (15_000, -Inf) to include all data from 15km down to ground level."))
+    end
+    if lidarprofile.itop > lidarprofile.ibottom
+        throw(ArgumentError("Invalid lidar height range: itop ($(lidarprofile.itop)) > ibottom ($(lidarprofile.ibottom)). " *
+            "The altitude range may be empty or inverted."))
+    end
+    if !coarse && lidarprofile.i30 <= 0
+        throw(ArgumentError("Invalid lidar height range for fine resolution (coarse=false): i30 = $(lidarprofile.i30). " *
+            "The 30m transition altitude may not exist in the specified range."))
+    end
+    # Determine number of profiles (last dimension for HDF5 data)
+    nprofiles = ndims(var) == 2 ? size(var, 2) : size(var, 3)
+    # Initialise vector to store all row vectors and loop over profiles
+    row = Vector{Vector{Union{Missing,T}}}(undef, nprofiles)
+    for i = 1:nprofiles
+        row[i] = if ndims(var) == 2 && coarse && ismissing(missingvalues)
+            # 2D array: Save column vector for coarse heights without transforming missing values
+            var[lidarprofile.itop:lidarprofile.ibottom, i]
+        elseif ndims(var) == 2 && coarse
+            # 2D array: Save column vector for coarse heights after transforming missing values
+            v = convert(Vector{Union{Missing,T}}, var[lidarprofile.itop:lidarprofile.ibottom, i])
+            v[v.==missingvalues] .= missing
+            v
+        elseif coarse && ismissing(missingvalues)
+            # 3D array: Save column vector for coarse heights without transforming missing values
+            var[1, lidarprofile.itop:lidarprofile.ibottom, i]
         elseif coarse
-            # Save row vector for coarse heights data after transforming missing values
-            v = convert(Vector{Union{Missing,T}}, var[i,lidarprofile.itop:lidarprofile.ibottom])
+            # 3D array: Save column vector for coarse heights after transforming missing values
+            v = convert(Vector{Union{Missing,T}}, var[1, lidarprofile.itop:lidarprofile.ibottom, i])
             v[v.==missingvalues] .= missing
             v
         elseif ismissing(missingvalues)
-            # Save row vector for coarse heights data after transforming missing values
+            # 3D array: Save fine resolution heights without transforming missing values
             v = Vector{T}(undef,length(lidarprofile.fine))
-            v[1:lidarprofile.i30-1] = var[i,lidarprofile.itop:lidarprofile.itop+lidarprofile.i30-2,1]
-            v[lidarprofile.i30:2:end] = var[i,lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom,1]
-            v[lidarprofile.i30+1:2:end] = var[i,lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom,2]
+            v[1:lidarprofile.i30-1] = var[1, lidarprofile.itop:lidarprofile.itop+lidarprofile.i30-2, i]
+            v[lidarprofile.i30:2:end] = var[1, lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom, i]
+            v[lidarprofile.i30+1:2:end] = var[2, lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom, i]
             v
         else
-            # Save row vector for refined heights data after transforming missing values
-            v = convert(Matrix{Union{Missing,T}}, var[i,lidarprofile.itop:lidarprofile.ibottom,:])
-            v[v.==missingvalues] .= missing
-            v = Vector{T}(undef,length(lidarprofile.fine))
-            v[1:lidarprofile.i30-1] = var[i,lidarprofile.itop:lidarprofile.itop+lidarprofile.i30-2,1]
-            v[lidarprofile.i30:2:end] = var[i,lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom,1]
-            v[lidarprofile.i30+1:2:end] = var[i,lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom,2]
+            # 3D array: Save fine resolution heights after transforming missing values
+            v1 = convert(Vector{Union{Missing,T}}, var[1, lidarprofile.itop:lidarprofile.ibottom, i])
+            v2 = convert(Vector{Union{Missing,T}}, var[2, lidarprofile.itop:lidarprofile.ibottom, i])
+            v1[v1.==missingvalues] .= missing
+            v2[v2.==missingvalues] .= missing
+            v = Vector{Union{Missing,T}}(undef,length(lidarprofile.fine))
+            v[1:lidarprofile.i30-1] = v1[1:lidarprofile.i30-1]
+            v[lidarprofile.i30:2:end] = v1[lidarprofile.i30:end]
+            v[lidarprofile.i30+1:2:end] = v2[lidarprofile.i30:end]
             v
         end
     end

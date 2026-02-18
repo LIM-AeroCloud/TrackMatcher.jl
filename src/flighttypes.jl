@@ -390,9 +390,9 @@ struct FlightSet{T<:AbstractFloat} <: PrimarySet{T}
         webdata::StructArray{FlightData{T}}, metadata::PrimaryMetadata{T}) where T<:AbstractFloat
 
         # Check for correct dataset type in each vector and for correct floating point precision
-        deleteat!(volpe, findall(data -> data.metadata.source ≠ 0x01, volpe))
-        deleteat!(flightaware, findall(data -> data.metadata.source ≠ 0x02, flightaware))
-        deleteat!(webdata, findall(data -> data.metadata.source ≠ 0x03, webdata))
+        deleteat!(volpe, findall(data -> data.metadata.source ≠ "V", volpe))
+        deleteat!(flightaware, findall(data -> data.metadata.source ≠ "FA", flightaware))
+        deleteat!(webdata, findall(data -> data.metadata.source ≠ "W", webdata))
 
         # Instantiate new struct
         new{T}(volpe, flightaware, webdata, metadata)

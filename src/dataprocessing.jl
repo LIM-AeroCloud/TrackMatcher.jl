@@ -50,10 +50,10 @@ function addX!(
     clay::CLay{T},
     tmf::DateTime,
     tms::DateTime,
-    atmos::Union{Missing,Symbol},
-    fxmeas::T,
+    atmos::Enum{UInt16},
+    fxmeas::AbstractFloat,
     ftmeas::Dates.CompoundPeriod,
-    sxmeas::T,
+    sxmeas::AbstractFloat,
     stmeas::Dates.CompoundPeriod,
     alt::Union{Missing,Real}
 ) where T
@@ -111,6 +111,7 @@ end #function addX!
         expdist::Real,
         lidarprofile::NamedTuple,
         lidarrange::Tuple{Real,Real},
+        saveobs::Bool,
         savesecondsattype::Bool
     ) where T<:AbstractFloat
 
@@ -152,21 +153,21 @@ function add_intersections!(
     expdist::Real,
     lidarprofile::NamedTuple,
     lidarrange::Tuple{Real,Real},
-    saveobs::Union{String,Bool},
+    saveobs::Bool,
     savesecondsattype::Bool
 ) where T<:AbstractFloat
     # Extract the DataFrame rows of the sat/flight data near the intersection
     Xprim, ift = get_flightdata(track, Xp, primspan, saveobs)
-    alt = ift == 0 ? NaN : Xprim.data.alt[ift]
+    alt = ift == 0 ? NaN : Xprim.alt[ift]
     cpro, clay, atmos, ist = get_satdata(sat, obsindex, secspan, tms, alt, altmin,
         trackID, lidarprofile, lidarrange, saveobs, savesecondsattype, T)
-    Xsat = contains(string(sat.metadata.type), "CPro") ? cpro.data : clay.data
+    Xsat = contains(string(sat.metadata.type), "CPro") ? cpro : clay
     # Calculate accuracies (unless data is not saved, i.e. savedir = false)
     fxmeas, ftmeas, sxmeas, stmeas = (ift == 0 || ist == 0) ?
         (T(0), Dates.CompoundPeriod(), T(0), Dates.CompoundPeriod()) :
-        (dist.haversine(Xp,(Xprim.data.lat[ift], Xprim.data.lon[ift]),
+        (dist.haversine(Xp,(Xprim.lat[ift], Xprim.lon[ift]),
         earthradius(Xp[1])),
-        Dates.canonicalize(Dates.CompoundPeriod(tmf - Xprim.data.time[ift])),
+        Dates.canonicalize(Dates.CompoundPeriod(tmf - Xprim.time[ift])),
         dist.haversine(Xs, (Xsat.lat[ist], Xsat.lon[ist]), earthradius(Xs[1])),
         Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.time[ist])))
     # Exclude data with long distances to nearest flight measurement
@@ -202,7 +203,7 @@ end #function add_intersections
         expdist::Real,
         lidarprofile::NamedTuple,
         lidarrange::Tuple{Real,Real},
-        saveobs::Union{String,Bool},
+        saveobs::Bool,
         savesecondsattype::Bool
     ) where T<:AbstractFloat
 
@@ -242,7 +243,7 @@ function add_intersections!(
   expdist::Real,
   lidarprofile::NamedTuple,
   lidarrange::Tuple{Real,Real},
-  saveobs::Union{String,Bool},
+  saveobs::Bool,
   savesecondsattype::Bool
 ) where T<:AbstractFloat
     NA = T(NaN) # set precision of NaNs according to Float
@@ -250,7 +251,7 @@ function add_intersections!(
     Xcloud, ift = CloudTrack{T}(), 0
     cpro, clay, atmos, ist = get_satdata(sat, obsindex, secspan, tms, NA, altmin,
         trackID, lidarprofile, lidarrange, saveobs, savesecondsattype, T)
-    Xsat = contains(string(sat.metadata.type), "CPro") ? cpro.data : clay.data
+    Xsat = contains(string(sat.metadata.type), "CPro") ? cpro : clay
     # Calculate accuracies (unless data is not saved, i.e. savedir = false)
     fxmeas, ftmeas, sxmeas, stmeas = (ift == 0 || ist == 0) ?
         (NA, Dates.CompoundPeriod(), NA, Dates.CompoundPeriod()) :
@@ -295,7 +296,7 @@ function find_timespan(
         ifile -= 1 # move to previous file
         ifile < 1 && break # stop at first file
         ispan -= irow # reduce data span by number of rows in the last file
-        irow = size(sat.granules[ifile].data, 1) # calculate new row number
+        irow = length(sat.granules[ifile].time) # calculate new row number
         # Save indices
         pushfirst!(nstop, irow)
         irow - ispan ≤ 0 ? pushfirst!(nstart, 1) : pushfirst!(nstart, irow - ispan)
@@ -305,13 +306,13 @@ function find_timespan(
     irow, ifile, ispan = obsindex.time, obsindex.file, dataspan
     # Process granule with intersection
     isempty(nstart) ? push!(nstart, irow - ispan) : push!(nstart, 1)
-    len = size(sat.granules[ifile].data, 1)
+    len = length(sat.granules[ifile].time)
     irow + ispan > len ? push!(nstop, len) : push!(nstop, irow + ispan)
     ifile += 1
     ispan -= len - irow + 1
     # Find file and time indices in granules past the intersection
-    while ispan > size(sat.granules[ifile].data, 1)
-        len = size(sat.granules[ifile].data, 1) # number of time indices in granule
+    while ispan > length(sat.granules[ifile].time)
+        len = length(sat.granules[ifile].time) # number of time indices in granule
         # Save indices
         push!(nstart, 1)
         push!(nstop, len)
@@ -357,17 +358,19 @@ function get_flightdata(
     # Retrieve observations, if saveobs is true
     (saveobs === false || isempty(saveobs)) && return FlightData{T}(), 0
     # Generate coordinate pairs from lat/lon columns
-    coords = ((flight.data.lat[i], flight.data.lon[i]) for i = 1:size(flight.data,1))
+    coords = zip(flight.lat, flight.lon)
     # Find the index (DataFrame row) of the intersection in the flight data
     imin = argmin(dist.haversine.(coords, [X], earthradius(X[1])))
     # Construct FlightTrack at Intersection
-    t1 = max(1, min(imin-primspan, length(flight.data.time)))
-    t2 = min(length(flight.data.time), imin+primspan)
+    t1 = max(1, min(imin-primspan, length(flight.time)))
+    t2 = min(length(flight.time), imin+primspan)
     # t2 = t-timespan > length(data[:,1]) ? 0 : t2
-    track = FlightData{T}(flight.data[t1:t2,:], flight.metadata)
+    track = FlightData{T}(
+        (getproperty(flight, prop)[t1:t2] for prop in propertynames(flight)[1:end-1])...,
+        flight.metadata
+    )
 
-    flightcoords = ((track.data.lat[i], track.data.lon[i])
-        for i = 1:size(track.data, 1))
+    flightcoords = zip(track.lat, track.lon)
     return track, argmin(dist.haversine.(flightcoords, [X], earthradius(X[1])))
 end #function get_flightdata
 
@@ -417,7 +420,8 @@ function get_satdata(
         return CPro{Float}(), CLay{Float}(), missing, 0
     # Retrieve DataFrame at Intersection ± maxtimediff time steps
     obsindex = find_timespan(sat, obsindex, timespan)
-    primfiles = sat.metadata.granules.file[obsindex.file]
+    ifile = sat.metadata.granules.root[obsindex.file]
+    primfiles = joinpath.(getindex.(Ref(sat.metadata.roots), ifile), sat.metadata.granules.file[obsindex.file])
     secfiles = if contains(string(sat.metadata.type), "CPro") && savesecondtype
         replace.(primfiles, "CPro" => "CLay")
     elseif contains(string(sat.metadata.type), "CLay") && savesecondtype
@@ -447,8 +451,8 @@ function get_satdata(
     end
 
     # Get meteorological conditions at the intersection
-    ts = !isempty(cpro.data) ?
-        argmin(abs.(cpro.data.time .- tms)) : argmin(abs.(clay.data.time .- tms))
+    ts = !isempty(cpro.time) ?
+        argmin(abs.(cpro.time .- tms)) : argmin(abs.(clay.time .- tms))
     atmos = if contains(string(sat.metadata.type), "CPro")
         atmosphericinfo(cpro, lidarprofile.fine, ts, trackalt, trackID)
     else
@@ -467,18 +471,20 @@ to the `data` in a DataFrame with a `time`, `lat`, and `lon` column.
 
 Time is linearly interpolated between the 2 closest points to `X`.
 """
-function interpolate_time(data::DataFrame, X::Tuple{T,T}  where T<:AbstractFloat)
+function interpolate_time(track::PrimaryTrack, X::Tuple{T,T} where T<:AbstractFloat, n::Int)
+    r = track.metadata.flex[n].range
+    time, lat, lon = track.time[r], track.lat[r], track.lon[r]
     # Calculate distances for each coordinate pair to X
-    d = dist.haversine.(((φ, λ) for (φ, λ) in zip(data.lat, data.lon)), [X], earthradius(X[1]))
+    d = dist.haversine.(((φ, λ) for (φ, λ) in zip(lat, lon)), [X], earthradius(X[1]))
     index = closest_points(d)
-    d = dist.haversine((data.lat[index[1]], data.lon[index[1]]),
-        (data.lat[index[2]], data.lon[index[2]]), earthradius(data.lat[index[1]]))
+    d = dist.haversine((lat[index[1]], lon[index[1]]),
+        (lat[index[2]], lon[index[2]]), earthradius(lat[index[1]]))
     # Get distance of closest point to calculated intersection
-    dx = dist.haversine((data.lat[index[1]], data.lon[index[1]]), X, earthradius(data.lat[index[1]]))
+    dx = dist.haversine((lat[index[1]], lon[index[1]]), X, earthradius(lat[index[1]]))
     # Get time difference between the two closest points to the calcuated intersection
-    dt = data.time[index[2]] - data.time[index[1]]
+    dt = time[index[2]] - time[index[1]]
     # Return interpolated time
-    round(data.time[index[1]] + Dates.Millisecond(round(dx/d*dt.value)), Dates.Second)
+    round(time[index[1]] + Dates.Millisecond(round(dx/d*dt.value)), Dates.Second)
 end #function interpolate_time
 
 
@@ -496,21 +502,22 @@ function interpolate_time(
     X::Tuple{T,T}  where T<:AbstractFloat
 )
     # Compile data from relevant granules
-    data = vcat([sat.granules[i].data for i in fileindex]...)
+    time, lat, lon = (vcat(getproperty.(sat.granules[fileindex], prop)...)
+        for prop in propertynames(sat.granules))
     # Calculate distances for each coordinate pair to X
-    d = dist.haversine.(((φ, λ) for (φ, λ) in zip(data.lat, data.lon)), [X], earthradius(X[1]))
+    d = dist.haversine.(((φ, λ) for (φ, λ) in zip(lat, lon)), [X], earthradius(X[1]))
     index = closest_points(d)
-    d = dist.haversine((data.lat[index[1]], data.lon[index[1]]),
-        (data.lat[index[2]], data.lon[index[2]]), earthradius(data.lat[index[1]]))
+    d = dist.haversine((lat[index[1]], lon[index[1]]),
+        (lat[index[2]], lon[index[2]]), earthradius(lat[index[1]]))
     # Get distance of closest point to calculated intersection
-    dx = dist.haversine((data.lat[index[1]], data.lon[index[1]]), X, earthradius(data.lat[index[1]]))
+    dx = dist.haversine((lat[index[1]], lon[index[1]]), X, earthradius(lat[index[1]]))
     # Get time difference between the two closest points to the calcuated intersection
-    dt = data.time[index[2]] - data.time[index[1]]
+    dt = time[index[2]] - time[index[1]]
     # Get interpolated time
-    ti = round(data.time[index[1]] + Dates.Millisecond(round(dx/d*dt.value)), Dates.Second)
+    ti = round(time[index[1]] + Dates.Millisecond(round(dx/d*dt.value)), Dates.Second)
     # Find file and row index of closest point to intersection
     i0 = fileindex[1] - 1 + findfirst(sat.metadata.granules.tstart[fileindex] .≤ ti .≤ sat.metadata.granules.tstop[fileindex])
-    t0 = index[1] - sum([size(s.data, 1) for s in sat.granules[fileindex[1]:i0-1]], init=0)
+    t0 = index[1] - sum(length(g.time) for g in sat.granules[fileindex[1]:i0-1]; init=0)
     # Return interpolated time and indices of closest point
     return ti, (file = i0, time = t0)
 end #function interpolate_time

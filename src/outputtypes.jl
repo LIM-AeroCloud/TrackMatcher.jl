@@ -240,14 +240,14 @@ struct XData{T} <: Intersection{T}
         # Ensure floats of correct precision
         convert_floats!(data, T)
         convert_floats!(accuracy, T)
-        observations.primary = FlightData{T}.(observations.primary)
-        observations.CPro = CPro{T}.(observations.CPro)
-        observations.CLay = CLay{T}.(observations.CLay)
+        # observations.primary = FlightData{T}.(observations.primary)
+        # observations.CPro = CPro{T}.(observations.CPro)
+        # observations.CLay = CLay{T}.(observations.CLay)
         # Check data
         standardnames = ["id", "lat", "lon", "alt", "tdiff", "tprim", "tsec", "atmos_state"]
         standardtypes = [Vector{String}, Vector{<:T}, Vector{<:T}, Vector{<:Union{Missing,T}},
         Vector{Dates.CompoundPeriod}, Vector{DateTime}, Vector{DateTime},
-        Vector{<:Union{Missing,Symbol}}]
+        Vector{Enum{UInt16}}]
         bounds = (:lat => (-90,90), :lon => (-180,180), :alt => (0, Inf))
         checkcols!(data, standardnames, standardtypes, bounds, "Intersection.data")
         # Check observations
@@ -282,7 +282,7 @@ function XData{T}(
     Xradius::Real=20_000,
     expdist::Real=Inf,
     atol::Real=0.1,
-    savedir::Union{String,Bool}="abs",
+    savedir::Bool=true,
     remarks=nothing
 ) where T
     # Initialise DataFrames with Intersection data and monitor start time
@@ -299,18 +299,17 @@ function XData{T}(
     # Get lidar altitude levels
     lidarprofile = get_lidarheights(lidarrange, T)
     # Loop over data from different datasets and interpolate track data and time, throw error on failure
-    prog = pm.Progress(length(trackdata), "find intersections...")
+    prog = pm.Progress(length(trackdata), desc = "find intersections...")
     for (i, track) in enumerate(trackdata)
         # Get dataset source and ID
         dataset = track isa FlightTrack ? trackdata[i].metadata.source : "C"
         id = trackdata[i].metadata.id
-        try
+        # try
             # Find sat tracks in the vicinity of flight tracks, where intersections are possible
             overlap, isat = findoverlap(track, sat, maxtimediff, atol)
             if isempty(overlap)
                 pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
-                    (:featured, length(Xdata.id[.!ismissing.(Xdata.atmos_state) .&
-                    (Xdata.atmos_state .≠ :no_signal) .& (Xdata.atmos_state .≠ :clear)]))])
+                    (:featured, count(s -> s ≠ invalid && s ≠ no_signal && s ≠ clear, Xdata.atmos_state))])
                 continue
             end
             # Interpolate trajectories with PCHIP method
@@ -323,19 +322,18 @@ function XData{T}(
                 expdist, savedir, savesecondsattype, T)
             append!(Xdata, currdata); append!(observations, currobs)
             append!(accuracy, curraccuracy)
-        catch err
-            @debug begin
-                @show id
-                rethrow(err)
-            end
-            # Issue warning on failure of interpolating track or time data
-            @warn("Track data and/or time could not be interpolated. Data ignored.",
-            dataset, id)
-        end
+        # catch err
+        #     @debug begin
+        #         @show id
+        #         rethrow(err)
+        #     end
+        #     # Issue warning on failure of interpolating track or time data
+        #     @warn("Track data and/or time could not be interpolated. Data ignored.",
+        #     dataset, id)
+        # end
         # Monitor progress for progress bar
         pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
-            (:featured, length(Xdata.id[.!ismissing.(Xdata.atmos_state) .&
-            (Xdata.atmos_state .≠ :no_signal) .& (Xdata.atmos_state .≠ :clear)]))])
+            (:featured, count(s -> s ≠ invalid && s ≠ no_signal && s ≠ clear, Xdata.atmos_state))])
     end #loop over flights
     pm.finish!(prog)
     # Convert primary observations to correct type

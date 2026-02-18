@@ -70,7 +70,7 @@ function find_intersections(
     # Initialise DataFrames for current flight
     Xdata = DataFrame(id=String[], lat=Float[], lon=Float[],
         alt=Union{Missing,Float}[], tdiff=Dates.CompoundPeriod[], tprim = DateTime[],
-        tsec = DateTime[], atmos_state = Union{Missing,Symbol}[])
+        tsec = DateTime[], atmos_state = Enum{UInt16}[])
     observations = DataFrame(id=String[], primary=PrimaryTrack[], CPro=CPro[], CLay=CLay[])
     accuracy = DataFrame(id=String[], intersection=Float[], primdist=Float[],
         secdist=Float[], primtime=Dates.CompoundPeriod[], sectime=Dates.CompoundPeriod[])
@@ -84,12 +84,12 @@ function find_intersections(
         Xp, Xs = findXcoords(pt, st, stepwidth, track.metadata.use_lon, Float)
         for i = 1:length(Xp)
         # Get precision of Intersection
-        dx = dist.haversine(Xp[i], Xs[i], earthradius(Xp[i][1]))
+        dx = dist.haversine(Xp[i], Xs[i], earthradius(Xp[i][1])) |> Float
         # Determine time difference between aircraf/satellite at intersection
         # Use only the current flight segment for the time interpolation
         # from the flex data in the flight metadata, which coincides with the flighttracks
         # For each flight segment between flex points, one interpolated flight-track exists
-        tmf = interpolate_time(track.data[track.metadata.flex[n].range,:], Xp[i])
+        tmf = interpolate_time(track, Xp[i], n)
         tms, obsindex = interpolate_time(sat, st.timeindex, Xs[i])
         dt = Dates.canonicalize(Dates.CompoundPeriod(tms-tmf))
         # Skip intersections that exceed allowed time difference
@@ -142,7 +142,8 @@ function findoverlap(
         granule.wlonmin - atol > primtrack.metadata.area.wlonmax ||
         granule.wlonmax + atol < primtrack.metadata.area.wlonmin)
         for granule in df.eachrow(sectrack.metadata.granules[t1:t2,:])]
-    segments = [granule.data for granule in sectrack.granules[dt][inarea]]
+    segments = [DataFrame(time = granule.time, lat = granule.lat, lon = granule.lon)
+        for granule in sectrack.granules[dt][inarea]]
     # filter granules for segments within a bounding box of the flight track
     filter(df -> size(df, 1) > 1, filter.(withinlimits(primtrack.metadata.area, atol), segments)), dt
 end #function findoverlap
@@ -158,7 +159,7 @@ function interpolate_trackdata(track::PrimaryTrack)
 
     # Define x and y data based on use_lon
     x, y = track.metadata.use_lon ?
-        (track.data.lon, track.data.lat) : (track.data.lat, track.data.lon)
+        (track.lon, track.lat) : (track.lat, track.lon)
     # Interpolate tracks and times for all segments
     idata = []
     for f in track.metadata.flex
@@ -253,10 +254,21 @@ function findXcoords(
     # Use double precision for intersection finding
     xdata, ydata = Float64.(xdata), Float64.(ydata)
     # Define function to find minimum distance between both tracks
-    coorddist(x) = interpolate(pchip(xdata, ydata), x)
+    pc = pchip(xdata, ydata)
+    function coorddist(x)
+        if x isa intar.Interval
+            # Evaluate at interval bounds to get a conservative interval result
+            xlo, xhi = intar.inf(x), intar.sup(x)
+            ylo, yhi = interpolate(pc, xlo), interpolate(pc, xhi)
+            return min(ylo, yhi) .. max(ylo, yhi)
+        else
+            return interpolate(pc, x)
+        end
+    end
     # Find minimum distance by solving primary track - sat track = 0
-    rts = root.roots(coorddist, xdata[1] .. xdata[end], root.Krawczyk)
-    X = Float.(root.mid.(root.interval.(rts)))
+    # Disable automatic differentiation to avoid ForwardDiff with intervals
+    rts = root.roots(coorddist, xdata[1] .. xdata[end], derivative=Returns(1 .. 1))
+    X = Float.([intar.mid(r.region) for r in rts])
 
     # Return Vector with coordinate pairs
     Xp, Xs = Tuple{Float,Float}[], Tuple{Float,Float}[]
