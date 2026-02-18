@@ -131,8 +131,8 @@ function findoverlap(
     t2 = findfirst(primtrack.metadata.date.stop .≤ sectrack.metadata.granules.tstop)
         if isnothing(t1) || isnothing(t2)
         @warn string("no sufficient satellite data for time index ",
-            "$(primtrack.data.time[1] - Dates.Minute(maxtimediff))...",
-            "$(primtrack.data.time[end] + Dates.Minute(maxtimediff))")
+            "$(primtrack.time[1] - Dates.Minute(maxtimediff))...",
+            "$(primtrack.time[end] + Dates.Minute(maxtimediff))")
         return DataFrame[], 0:-1
         end
     dt = t1 < t2 ? (t1:t2) : (t2:t1)

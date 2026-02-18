@@ -269,7 +269,7 @@ function SatSet{T}(
     )
     roots = ds.OrderedDict{String,UInt16}()
     total_files = sum(length(data.files) for data in paths)
-    progress = pm.Progress(total_files; dt=1, desc="Loading satellite data... ", showspeed=true)
+    progress = pm.Progress(total_files; desc="Loading satellite data... ")
     for data in paths
         root = realpath(data.root)
         haskey(roots, root) || (roots[root] = length(roots) + 1)

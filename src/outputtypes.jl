@@ -304,7 +304,7 @@ function XData{T}(
         # Get dataset source and ID
         dataset = track isa FlightTrack ? trackdata[i].metadata.source : "C"
         id = trackdata[i].metadata.id
-        # try
+        try
             # Find sat tracks in the vicinity of flight tracks, where intersections are possible
             overlap, isat = findoverlap(track, sat, maxtimediff, atol)
             if isempty(overlap)
@@ -322,15 +322,15 @@ function XData{T}(
                 expdist, savedir, savesecondsattype, T)
             append!(Xdata, currdata); append!(observations, currobs)
             append!(accuracy, curraccuracy)
-        # catch err
-        #     @debug begin
-        #         @show id
-        #         rethrow(err)
-        #     end
-        #     # Issue warning on failure of interpolating track or time data
-        #     @warn("Track data and/or time could not be interpolated. Data ignored.",
-        #     dataset, id)
-        # end
+        catch err
+            @debug begin
+                @show id
+                rethrow(err)
+            end
+            # Issue warning on failure of interpolating track or time data
+            @warn("Track data and/or time could not be interpolated. Data ignored.",
+            dataset, id)
+        end
         # Monitor progress for progress bar
         pm.next!(prog, showvalues = [(:hits, length(Xdata.id)),
             (:featured, count(s -> s ≠ invalid && s ≠ no_signal && s ≠ clear, Xdata.atmos_state))])

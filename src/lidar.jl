@@ -241,8 +241,10 @@ function atmosphericinfo(
         "invalid used for feature in intersections of flight $(flight_num)")
         invalid
     else
-        try sat.data.atmos_state[isat][i]
+        try sat.atmos_state[isat][i]
         catch
+            @error "failed to retrieve atmospheric state for flight $(flight_num) "*
+                "at altitude $(hlevels[i]); setting to 'invalid'"
             invalid
         end
     end
@@ -268,14 +270,15 @@ function atmosphericinfo(
     isat::Int
 )::Enum{UInt16}
     ismissing(alt) && return invalid
-    top, base = sat.data[isat, [:layer_top, :layer_base]]
+    top, base = sat[isat, [:layer_top, :layer_base]]
     feature = try
         for i = 1:length(top)
             if base[i] ≤ alt ≤ top[i]
-                return sat.data.atmos_state[isat][i]
+                return sat.atmos_state[isat][i]
             end
         end
     catch
+        @error "failed to retrieve atmospheric state at altitude $alt; setting to 'invalid'"
         return invalid
     end
     isnothing(feature) && return invalid
