@@ -191,23 +191,26 @@ module TrackMatcher
 ## Import Julia packages
 import DataFrames as df
 import DataStructures as ds
+import StructArrays as sa
+import HDF5 as h5
 import CSV
 import Dates
 import TimeZones as tz
 import Distances as dist
-import MATLAB as mat
 import MAT
 import IntervalRootFinding as root
 import Statistics as stats
 import ProgressMeter as pm
 import Logging as logg
+import IntervalArithmetic as intar
 
 # Import structs and functions from packages
-import IntervalArithmetic...
 import PCHIP: Polynomial, pchip, interpolate
-import DataFrames.DataFrame
-import Dates: DateTime, Date, Time
-import TimeZones.ZonedDateTime
+import DataFrames: DataFrame
+import StructArrays: StructArray
+import Dates: AbstractDateTime, DateTime, Date, Time
+import TimeZones: ZonedDateTime
+import IntervalArithmetic.Symbols: (..)
 
 # Define Logger with log level
 logger = logg.ConsoleLogger(stdout, logg.Info)
@@ -222,17 +225,91 @@ zonedict["_CEST_"] = tz.tz"+0200"
 
 ## Define type tree of abstract types
 abstract type DataSet{T<:AbstractFloat} end
-abstract type MeasuredSet{T} <: DataSet{T} end
-abstract type PrimarySet{T} <: MeasuredSet{T} end
-abstract type PrimaryTrack{T} <: PrimarySet{T} end
-abstract type FlightTrack{T} <: PrimaryTrack{T} end
-abstract type CloudTrack{T} <: PrimaryTrack{T} end
-abstract type SecondarySet{T} <: MeasuredSet{T} end
-abstract type SecondaryTrack{T} <: SecondarySet{T} end
-abstract type SatTrack{T} <: SecondaryTrack{T} end
-abstract type ObservationSet{T} <: MeasuredSet{T} end
-abstract type ComputedSet{T} <: DataSet{T} end
-abstract type Intersection{T} <: ComputedSet{T} end
+abstract type MeasuredSet{T<:AbstractFloat} <: DataSet{T} end
+abstract type PrimarySet{T<:AbstractFloat} <: MeasuredSet{T} end
+abstract type PrimaryTrack{T<:AbstractFloat} <: PrimarySet{T} end
+abstract type FlightTrack{T<:AbstractFloat} <: PrimaryTrack{T} end
+abstract type CloudTrack{T<:AbstractFloat} <: PrimaryTrack{T} end
+abstract type SecondarySet{T<:AbstractFloat} <: MeasuredSet{T} end
+abstract type SecondaryTrack{T<:AbstractFloat} <: SecondarySet{T} end
+abstract type SatTrack{T<:AbstractFloat} <: SecondaryTrack{T} end
+abstract type ObservationSet{T<:AbstractFloat} <: MeasuredSet{T} end
+abstract type ComputedSet{T<:AbstractFloat} <: DataSet{T} end
+abstract type Intersection{T<:AbstractFloat} <: ComputedSet{T} end
+
+
+## Define Enums for aerosol and cloud classification
+
+"""
+# Enum SkyCondition
+
+- `invalid (0)` (bad or missing data)
+- `clear (1)`
+- `cloud (2)`
+- `aerosol (3)`
+- `stratospheric (4)` (polar stratospheric cloud (PSC) or stratospheric aerosol)
+- `surface (5)`
+- `subsurface (6)`
+- `no_signal (7)` (totally attenuated)
+"""
+@enum SkyCondition::UInt16 begin
+    invalid
+    clear
+    cloud
+    aerosol
+    stratospheric
+    surface
+    subsurface
+    no_signal
+end
+
+
+"""
+# Enum AerosolType
+
+- `undetermined (0)` (subtype not determined)
+- `marine (1)` (clean marine)
+- `dust (2)`
+- `polluted (3)` (polluted continental)
+- `remote (4)` (remote continental)
+- `polluted_dust (5)`
+- `smoke (6)`
+- `other (7)`
+"""
+@enum AerosolType::UInt16 begin
+    undetermined
+    marine
+    dust
+    polluted
+    remote
+    polluted_dust
+    smoke
+    other
+end
+
+
+"""
+# Enum CloudType
+
+- `low_trasparent (0)` (low overcast, transparent)
+- `low_opaque (1)` (low overcast, opaque)
+- `transition_sc (2)` (transition stratocumulus)
+- `cu (3)` (low, broken cumulus)
+- `ac (4)` (altocumulus, transparent)
+- `as (5)` (altostratus, opaque)
+- `ci (6)` (cirrus, transparent)
+- `cb (7)` (cumulonimbus, opaque)
+"""
+@enum CloudType::UInt16 begin
+    low_trasparent
+    low_opaque
+    transition_sc
+    cu
+    ac
+    as
+    ci
+    cb
+end
 
 
 ## Export types and constructors
@@ -243,16 +320,18 @@ export DataSet, Data, MeasuredSet, ComputedSet, PrimarySet, SecondarySet, Observ
        FlightMetadata, CloudMetadata, PrimaryMetadata, SecondaryMetadata, XMetadata
 
 
-## Import functions from Julia include files
-include("primarytypes.jl")    # concrete types/constructors for primary data/datasets
-include("sattypes.jl")        # concrete types/constructors for secondary sat track data and observations
-include("outputtypes.jl")     # concrete types/constructors for intersections and combined datasets
-include("datachecks.jl")      # helper functions for data checks
-include("dataprocessing.jl")  # helper functions for data processing
-include("conversions.jl")     # helper functions for time/unit conversions
-include("lidar.jl")           # functions related to processing CALIOP lidar data
+## Source files
+include("flighttypes.jl")     # concrete types/constructors for flight data/datasets
 include("flightdata.jl")      # functions related to loading flight databases/datasets
+include("cloudtypes.jl")      # concrete types/constructors for cloud data/datasets
 include("clouddata.jl")       # functions related to loading cloud track databases/datasets
+include("sattypes.jl")        # concrete types/constructors for secondary sat track data and observations
+include("datachecks.jl")      # helper functions for data checks
+include("conversions.jl")     # helper functions for time/unit conversions
+include("outputtypes.jl")     # concrete types/constructors for intersections and combined datasets
+include("observations.jl")    # concrete types/constructors for satellite observations
 include("match.jl")           # functions related to finding track intersections
+include("dataprocessing.jl")  # helper functions for data processing
+include("lidar.jl")           # functions related to processing CALIOP lidar data
 
 end # module TrackMatcher

@@ -1,7 +1,7 @@
 name = "TrackMatcher"
 uuid = "2cc584ca-dc9e-11e9-3e2d-1d1fc79f0777"
-authors = ["Peter Bräuer <pb866.git@gmail.com>"]
 version = "0.6.0-DEV"
+authors = ["Peter Bräuer <pb866.git@gmail.com>"]
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
@@ -9,15 +9,40 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
+HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 IntervalArithmetic = "d1acc4aa-44c8-5952-acd4-ba5d80a2a253"
 IntervalRootFinding = "d2bf35a9-74e0-55ec-b149-d360ff49b807"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 MAT = "23992714-dd62-5051-b70f-ba57cb901cac"
-MATLAB = "10e44e05-a98a-55b3-a45b-ba969058deb6"
 PCHIP = "c8f64214-e9a7-4300-b062-3bdcd891a6e3"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
 
 [compat]
-julia = "1.6"
+CSV = "0.10"
+DataFrames = "1"
+DataStructures = "0.18"
+Dates = "1"
+Distances = "0.10"
+HDF5 = "0.17"
+IntervalArithmetic = "1"
+IntervalRootFinding = "0.6"
+Logging = "1"
+MAT = "0.10"
+PCHIP = "0.2"
+ProgressMeter = "1"
+Statistics = "1"
+StructArrays = "0.7"
+TimeZones = "1"
+julia = "1"
+
+[sources]
+PCHIP = {url = "https://github.com/LIM-AeroCloud/PCHIP.jl.git"}
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

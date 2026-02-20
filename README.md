@@ -56,13 +56,13 @@ one folder path can be listed for all the database types in a `Vector{String}`.
 
 ```julia
 FlightSet{T}(;
-  volpe::Union{String,Vector{String}}=String[],
-  flightaware::Union{String,Vector{String}}=String[],
-  webdata::Union{String,Vector{String}}=String[],
-  altmin::Real=5000,
-  odelim::Union{Nothing,Char,String}=nothing,
-  savedir::Union{String,Bool}="abs",
-  remarks=nothing
+    volpe::Union{String,Vector{String}}=String[],
+    flightaware::Union{String,Vector{String}}=String[],
+    webdata::Union{String,Vector{String}}=String[],
+    altmin::Real=5000,
+    delim::Union{Nothing,Char,String}=nothing,
+    savedir::Union{String,Bool}="abs",
+    attachments=nothing
 ) where T
 ```
 
@@ -71,16 +71,15 @@ exists, only the directories are needed as `vararg` rather than `kwarg`:
 
 ```julia
 CloudSet{T}(
-  folders::String...;
-  savedir::Union{String,Bool}="abs",
-  structname::String="cloud",
-  remarks=nothing
+    folders::String...;
+    savedir::Union{String,Bool}="abs",
+    structname::String="cloud",
+    attachments=nothing
 ) where T
 ```
 
 For details on the kwargs, see the [WIKI](https://github.com/LIM-AeroCloud/TrackMatcher.jl/wiki)
 or use the help function for the individual constructors.
-
 
 Loading CALIOP data from the CALIPSO satellite
 ----------------------------------------------
@@ -98,10 +97,10 @@ __loading the data and calculating intersections.__  It can be controlled with t
 
 The `SatSet` `metadata` includes information about the granules, the `type` of the 
 satellite data, the `date` range of the data, the time the database was `created`, 
-the `loadtime`, and any `remarks` as additional data or comments.
+the `loadtime`, and any `attachments` as additional data or comments.
 
-A `SatSet` can be constructed by giving any number of folder strings and any remarks
-using the keyword `remarks`. The `folders` are scanned recursively for any hdf file
+A `SatSet` can be constructed by giving any number of folder strings and any attachments
+using the keyword `attachments`. The `folders` are scanned recursively for any hdf file
 and the `type` of the satellite data is determined by keywords `CLay` or `CPro` in
 the folder/file names. If both types exist in the `folders`, the data type is determined
 by the majority in the first 50 file names. Alternatively, the sat data type can
@@ -109,10 +108,10 @@ be forced with the keyword `type` set to a `Symbol` `:CPro` or `:CLay`.
 
 ```julia
 SatSet{T}(
-  folders::String...;
-  type::Symbol=:undef,
-  savedir::Union{String,Bool}="abs",
-  remarks=nothing
+    folders::String...;
+    type::Symbol=:undef,
+    savedir::Union{String,Bool}="abs",
+    attachments=nothing
 ) where T
 ```
 
@@ -145,19 +144,19 @@ Find intersections by instatiating the `Intersection` struct with:
 
 ```julia
 Intersection{T}(
-  tracks::PrimarySet,
-  sat::SatSet,
-  savesecondsattype::Bool=false;
-  maxtimediff::Int=30,
-  primspan::Int=0,
-  secspan::Int=15,
-  lidarrange::Tuple{Real,Real}=(15_000,-Inf),
-  stepwidth::Real=0.01,
-  Xradius::Real=20_000,
-  expdist::Real=Inf,
-  atol::Real=0.1,
-  savedir::Union{String,Bool}="abs",
-  remarks=nothing
+    tracks::PrimarySet,
+    sat::SatSet,
+    savesecondsattype::Bool=false;
+    maxtimediff::Int=30,
+    primspan::Int=0,
+    secspan::Int=15,
+    lidarrange::Tuple{Real,Real}=(15_000,-Inf),
+    stepwidth::Real=0.01,
+    Xradius::Real=20_000,
+    expdist::Real=Inf,
+    atol::Real=0.1,
+    savedir::Union{String,Bool}="abs",
+    attachments=nothing
 ) where T
 ```
 
@@ -182,4 +181,4 @@ Intersection{T}(
   is set to an empty string (`""`) or `false`, folder strings are save as given in
   the constructor. When set to an empty string or `false` in the `Intersection` constructor,
   no observations are saved in `Intersection`.
-- `remarks=nothing`: any data or comments that can be attached to the metadata of `Intersection`
+- `attachments=nothing`: any data or comments that can be attached to the metadata of `Intersection`
