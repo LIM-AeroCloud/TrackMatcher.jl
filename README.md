@@ -8,8 +8,9 @@ Overview
 The current version can match aircraft- or cloud-track (primary) data with CALIPSO satellite 
 (secondary) ground tracks and store relevant data in the vicinity of the intersection.
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6192721.svg)](https://zenodo.org/records/6192721)
-
+| **Release**                      | **Build Status**                                                          |
+|:--------------------------------:|:-------------------------------------------------------------------------:|
+| [![DOI][zenodo-img]][zenodo-url] | [![Build Status][CI-img]][CI-url] [![Coverage][codecov-img]][codecov-url] |
 
 Installation
 ------------
@@ -182,3 +183,12 @@ Intersection{T}(
   the constructor. When set to an empty string or `false` in the `Intersection` constructor,
   no observations are saved in `Intersection`.
 - `attachments=nothing`: any data or comments that can be attached to the metadata of `Intersection`
+
+[CI-img]: https://github.com/LIM-AeroCloud/TrackMatcher.jl/actions/workflows/CI.yml/badge.svg?branch=dev
+[CI-url]: https://github.com/LIM-AeroCloud/TrackMatcher.jl/actions/workflows/CI.yml?query=branch:dev
+
+[codecov-img]: https://codecov.io/gh/LIM-AeroCloud/TrackMatcher.jl/graph/badge.svg?token=XSLSD1FHAX
+[codecov-url]: https://codecov.io/gh/LIM-AeroCloud/TrackMatcher.jl
+
+[zenodo-img]: https://zenodo.org/badge/DOI/10.5281/zenodo.6192721.svg
+[zenodo-url]: https://zenodo.org/records/6192721
