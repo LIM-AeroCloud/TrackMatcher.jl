@@ -1,14 +1,14 @@
 ### functions related to track-matching/finding intersections
 
 """
-    function find_intersections(
-        track::T where T<:PrimaryTrack,
+    find_intersections(
+        track::PrimaryTrack,
         primtracks::Vector,
         altmin::Real,
-        sat::SatData,
+        sat::SatSet,
         sectracks::Vector,
         dataset::AbstractString,
-        trackID::Union{Missing,AbstractString},
+        trackID::Union{Missing,Int,AbstractString},
         maxtimediff::Int,
         stepwidth::Real,
         Xradius::Real,
@@ -17,20 +17,21 @@
         primspan::Int,
         secspan::Int,
         expdist::Real,
+        savedir::Union{String,Bool},
         savesecondsattype::Bool,
         Float::DataType=Float32
-    )
+    ) -> Tuple{DataFrame,DataFrame,DataFrame}
 
 Using the interpolated flight or cloud `primtracks` and satellite `sectracks`,
 add new spatial and temporal coordinates of all intersections of the current primary
 track with the satellite secondary track to `Xdata`, if the overpass of the aircraft/cloud
-and the satellite at the intersection is within `maxtimediff` minutes and above
-`altmin` in meters.
+and the satellite at the intersection is within `maxtimediff` minutes and above `altmin`
+ in meters.
 Additionally, save the measured flight/cloud `track` and `sat` track data near the intersection
 (±`primspan`/±`secspan` datapoints of the intersection) in a `observations` DataFrame
 and information about the `accuracy` in another DataFrame.
 
-When `savesecondsattype` is set to true, the additional satellite data type not
+When `savesecondsattype` is set to `true`, the additional satellite data type not
 used to derive the intersections from the `SatData` is stored as well in `Intersection`.
 Satellite column data is stored over the `lidarrange` as defined by the `lidarprofile`.
 
@@ -44,7 +45,7 @@ unless the distance to the nearest measured track point exceeds the maximum
 
 All floating point numbers are saved with single precision unless otherwise
 specified by `Float`. The `dataset` and `trackID` identifiers are used for
-the identification of assicated data in the different dataframes of `Intersection`
+the identification of associated data in the different dataframes of `Intersection`
 and as flags in error messages.
 """
 function find_intersections(
@@ -114,11 +115,12 @@ end #function find_intersections
     function findoverlap(
         primtrack::PrimaryTrack,
         sectrack::SatSet,
-        maxtimediff::Int
+        maxtimediff::Int,
+        atol::Real=0.1
     ) -> Vector{Vector{DataFrame}}
 
-Find all track segments in `sectrack` that are within the time frame ± `maxtimediff`
-of the `primtrack` and within the spatial bounding box of `primtrack`.
+Find all track segments in `sectrack` that are within the time frame ± `maxtimediff` of the
+`primtrack` and within the spatial bounding box of `primtrack` and an absolute tolerance `atol`.
 """
 function findoverlap(
     primtrack::PrimaryTrack,
@@ -177,14 +179,16 @@ end #function interpolate_trackdata
 
 
 """
-    function interpolate_satdata(
+    interpolate_satdata(
         trackdata::Vector{DataFrame},
+        isat::UnitRange{Int},
         use_lon::Bool
     ) -> Vector{Any}
 
 Interpolate `trackdata` with a PCHIP polynomial and define the range of the x data
-(`min`/`max` values). X data is defined by theprevailing flight direction from the
-`use_lon` flag.
+(`min`/`max` values). X data is defined by the prevailing flight direction from the
+`use_lon` flag. Save the time index `isat` of the satellite track for later retrieval
+of the observation data.
 """
 function interpolate_satdata(
     trackdata::Vector{DataFrame},

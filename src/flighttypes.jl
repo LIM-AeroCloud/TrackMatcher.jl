@@ -22,18 +22,20 @@ By default, `Float32` is used for `T`.
 See also [`PrimaryMetadata`](@ref), [`FlightData`](@ref), [`FlightTrack`](@ref),
 [`FlightSet`](@ref), [`PrimarySet`](@ref), and [`CloudMetadata`](@ref).
 
-## id
+
+## Fields
+### id
 Database ID – integer counter for `volpe`,
 String with information about `flight_num`, `route`, and/or scheduled arrival for
 FlightAware data.
 
-## flight_num and aircraft
+### flight_num and aircraft
 Strings with aircraft identification and type.
 
-## route
+### route
 `NamedTuple` with fields for `orig`in and `dest`ination holding ICAO airport codes.
 
-## area
+### area
 `NamedTuple` with fields for latitude and Longitude range. For the longitude range,
 it is distinguished between positive and negative ranges to avoid problems with
 flights passing the date line.
@@ -46,29 +48,29 @@ Fields:
 - `wlonmin`
 - `wlonmax`
 
-## date
+### date
 `NamedTuple` with fields `start` and `stop` for start and end time of the current
 flight.
 
-## flex
+### flex
 `Tuple` of `NamedTuple`s with entries
 - `range` (`UnitRange`): flight segment between inflection points of the current flight track
 - `min` (`AbstractFloat`): minimum x value in the flight segment
 - `max` (`AbstractFloat`): maximum x value in the flight segment
 
-## use_lon
+### use_lon
 Flag (`Bool`) whether to use longitude as x data for track interpolation.
 
-## source
+### source
 String describing the database source of the current flight:
 - `"VOLPE"`
 - `"FlightAware"`
 - `"flightaware.com"`
 
-## file
+### file
 String holding the file name and path relative to the root directory.
 
-## root
+### root
 String holding the root directory path.
 
 

@@ -35,6 +35,9 @@
   track metadata to reduce struct sizes ([#58])
 - Use `Enum` instead of `Symbol` to describe the atmospheric conditions derived from the
   Feature Classification Flag (FCF) [#58]
+- Disable validity checks during construction of observation data until less restrictive.
+  Future re-implementations should only disregard single outliers not the whole column of data
+  with outliers. ([#58])
 
 ### Removed
 

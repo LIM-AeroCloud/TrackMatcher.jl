@@ -5,7 +5,7 @@
 """
     convert_floats!(data::DataFrame, T::Type{<:AbstractFloat}=Float32) -> DataFrame
 
-Transform all columns of Type `<: Union{Missing, AbstractFloat}` or `<: Vector{<:Union{Missing, AbstractFloat}}`
+Transform all columns of Type `<:Union{Missing,AbstractFloat}` or `<:Vector{<:Union{Missing,AbstractFloat}}`
 to the precision of type `T`. Returns the modified `data` DataFrame for piping.
 
 Ensures output columns have type `Union{Missing, T}` only when missing values are present.
@@ -46,13 +46,13 @@ Convert the CALIOP Profile UTC time (`t`) to a `DateTime`.
 function convert_utc(t::AbstractFloat)::DateTime
     # Extract date from Float before decimal point and convert to Date
     t, d = modf(t)
-    d, t = Date(lpad(Int(d), 8, "0"), "yyyymmdd"), round(t * 86400, digits=3)
+    d, t = Date(lpad(Int(d), 8, "0"), "yyyymmdd"), t * 86400
     d += Dates.Year(2000)
     # From overall time, calculate hours, minutes, and seconds
     h = floor(Int, t/3600)
     m = floor(Int, t - 3600h)÷60
     s = floor(Int, t - 3600h - 60m)
-    ms = round(Int, 1000 * (t - 3600h - 60m - s))
+    ms = round(Int, 1000 * (t - 3600h - 60m - s), digits=3)
 
     # Return a DateTime from date and time (h/m/s) with timezone UTC
     return DateTime(Dates.yearmonthday(d)..., h, m, s, ms)
@@ -64,7 +64,7 @@ end #function convert_utc
 """
     earthradius(lat::T<:AbstractFloat) -> Float64
 
-Calculate the Earth's radius `R` in dependence of the current `lat`itude
+Calculate the Earth's radius `R` as function of the current `lat`itude
 considering the ellipsoidal shape of the Earth due to the rotational flattening.
 """
 function earthradius(lat::T)::Float64 where T<:AbstractFloat

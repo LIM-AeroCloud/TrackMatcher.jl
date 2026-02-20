@@ -4,14 +4,14 @@
 
 """
     findfiles!(
-        rootdict::ds.OrderedDict{String,UInt16},
+        pathdict::ds.OrderedDict{String,ds.OrderedDict},
         roots::Union{AbstractString,Vector{<:AbstractString}},
         ext::Union{AbstractString,Vector{<:AbstractString}}
     ) -> Vector{@NamedTuple{root::String,files::Vector{String}}}
 
 Find all files with the given extension(s) `ext` in the given `roots` folder(s) and return a
 vector of named tuples with the root and the found files. Assign a unique ID to each new root
-in `rootdict`.
+in `pathdict`.
 """
 function findfiles!(
     pathdict::ds.OrderedDict{String,ds.OrderedDict},

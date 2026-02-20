@@ -23,16 +23,6 @@ Use modified constructor to calculate `area` and `date` range from `time` and
     ) where T<:AbstractFloat
 
 Or hand over individual fields to the unmodified constructor.
-
-    CloudMetadata{T}(
-        id::Int32,
-        date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
-        area::NamedTuple{(:latmin,:latmax,:elonmin,:elonmax,:wlonmin,:wlonmax),NTuple{6,T}},
-        flex::Tuple{Vararg{NamedTuple{(:range, :min, :max),Tuple{UnitRange{Int},T,T}}}},
-        use_lon::Bool,
-        root::UInt16,
-        file::UInt16
-    ) where T
 """
 struct CloudMetadata{T<:AbstractFloat} <: CloudTrack{T}
     id::Int32
@@ -171,9 +161,9 @@ Database for cloud track data with fields:
 # Instantiation
 
 Instantiate by giving the folder paths to all `mat` files with cloud track data
-and optional remarks.
+and optional attachments.
 
-    CloudSet{T}(folders::String...; remarks=nothing) where T
+    CloudSet{T}(folders::String...; attachments=nothing) where T
 
 Or use the unmodified constructor.
 

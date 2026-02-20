@@ -1,40 +1,38 @@
 ## ObservationSet
 
 """
-# struct CLay
+# struct CLay{T<:AbstractFloat} <: ObservationSet{T}
 
-CALIOP cloud layer `data` stored in a `DataFrame` with columns:
+CALIOP cloud layer data with fields:
+
 - `time::Vector{DateTime}` (time index)
-- `lat::Vector{AbstractFloat}` (latitude position of current time index)
-- `lon::Vector{AbstractFloat}` (longitude position of current time index)
-- `layer::Vector{NamedTuple{(:top,:base),Tuple{Vector{<:AbstractFloat},Vector{<:AbstractFloat}}}}`
-  (layer top/base heights in meters)
-- `atmos_state::Vector{Vector{Symbol}}` (symbols describing the atmospheric conditions at the intersection)
-- `OD::Vector{<:Vector{<:AbstractFloat}}` (layer optical depth)
-- `IWP::Vector{<:Vector{<:Union{Missing,<:AbstractFloat}}}` (layer ice water path)
-- `Ttop::Vector{<:Vector{<:AbstractFloat}}` (layer top temperature)
-- `Htropo::Vector{<:AbstractFloat}` (tropopause height at current time index)
+- `lat::Vector{T}` (latitude position of current time index)
+- `lon::Vector{T}` (longitude position of current time index)
+- `layer_top::Vector{Vector{T}}` (layer top heights in meters)
+- `layer_base::Vector{Vector{T}}` (layer base heights in meters)
+- `atmos_state::Vector{Vector{Enum{UInt16}}}` (atmospheric features for each layer)
+- `OD::Vector{Vector{T}}` (layer optical depth)
+- `IWP::Vector{<:Vector{Union{Missing,<:T}}}` (layer ice water path)
+- `Ttop::Vector{Vector{T}}` (layer top temperature)
+- `h_tropo::Vector{T}` (tropopause height at current time index)
 - `night::BitVector` (flag for nights (`true`))
 - `averaging::Vector{<:Vector{Int}}` (horizontal averaging in km)
 
 # Instantiation
 
-    function CLay{T}(
+    CLay{T}(
         files::Vector{String},
         timespan::NamedTuple{(:min,:max), Tuple{DateTime,DateTime}},
         lidarrange::Tuple{Real,Real}=(15_000,-Inf),
-        altmin::Real=5000
+        altmin::Real=5000,
+        saveobs::Bool=true
     ) where T
 
-Construct `CLay` from a list of file names (including directories) and a running
-MATLAB session `ms` and save data, if layers are within the bounds
-of `lidarrange` and above flight `altmin` threshold and time is within `timesapn`.
-If `T<:AbstractFloat` is not set, `Float32` will be used as default precision.
+Construct `CLay` from a list of file names (including directories) and save data, if layers
+are within the bounds of `lidarrange` and above flight level `altmin` threshold and time is
+within `timespan`. If `T<:AbstractFloat` is not set, `Float32` will be used as default precision.
 
-Or construct `CLay` by directly handing over the `DataFrame` where the names, order,
-and types of each columns are checked and attempted to correct:
-
-    CLay{T}(data::DataFrame) where T -> struct CLay
+Or construct `CLay` by directly handing over all individual fields.
 """
 struct CLay{T} <: ObservationSet{T}
     time::Vector{DateTime}
@@ -46,11 +44,11 @@ struct CLay{T} <: ObservationSet{T}
     OD::Vector{Vector{T}}
     IWP::Vector{<:Vector{<:Union{Missing,<:T}}}
     Ttop::Vector{Vector{T}}
-    Htropo::Vector{T}
+    h_tropo::Vector{T}
     night::BitVector
     averaging::Vector{Vector{Int}}
 
-    """ Unmodified constructor for `CLay` """
+    #* Unmodified constructor with checks for data consistency and limits
     function CLay{T}(
         time::Vector{DateTime},
         lat::Vector{T},
@@ -61,28 +59,25 @@ struct CLay{T} <: ObservationSet{T}
         OD::Vector{Vector{T}},
         IWP::Vector{<:Vector{<:Union{Missing,T}}},
         Ttop::Vector{Vector{T}},
-        Htropo::Vector{T},
+        h_tropo::Vector{T},
         night::BitVector,
         averaging::Vector{Vector{Int}}
     ) where T
         all(length(time) == length(prop) for prop in
-            (lat, lon, layer_top, layer_base, atmos_state, OD, IWP, Ttop, Htropo, night, averaging)) ||
+            (lat, lon, layer_top, layer_base, atmos_state, OD, IWP, Ttop, h_tropo, night, averaging)) ||
             throw(DimensionMismatch("all input vectors must have the same length in CLay data"))
         checklimits(time, DateTime(2000), Dates.now(), "time")
         checklimits(lat, T(-90), T(90), "latitude")
         checklimits(lon, T(-180), T(180), "longitude")
-        checklimits.(OD, 0, 10, "optical depth")
-        checklimits.(IWP, 0, 10000, "ice water path")
+        # checklimits.(OD, 0, 10, "optical depth")
+        # checklimits.(IWP, 0, 10000, "ice water path")
         checklimits.(Ttop, -120, 60, "layer top temperature")
-        checklimits.(Htropo, 4000, 22_000, "tropopause height")
-        new{T}(time, lat, lon, layer_top, layer_base, atmos_state, OD, IWP, Ttop, Htropo, night, averaging)
+        checklimits.(h_tropo, 4000, 22_000, "tropopause height")
+        new{T}(time, lat, lon, layer_top, layer_base, atmos_state, OD, IWP, Ttop, h_tropo   , night, averaging)
     end #constructor 1 CLay
 end #struct CLay
 
-"""
-Modified constructor of `CLay` reading data from hdf `files` using MATLAB session `ms`
-in the `lidarrange` (top to bottom), if data is above `altmin`.
-"""
+#* Main constructor used by TrackMatcher
 function CLay{T}(
     files::Vector{String},
     timeindex::Vector{UnitRange{Int}},
@@ -165,45 +160,43 @@ function CLay{T}(
         vcat(night...), vcat(averaging...))
 end #constructor 2 CLay
 
-
-"""
-    CLay{T}() where T
-
-External constructor for empty `CLay` struct.
-"""
+#* Constructor for empty CLay structs
 function CLay{T}() where T<:AbstractFloat
     CLay{T}(DateTime[], T[], T[], Vector{T}[], Vector{T}[], Vector{Enum{UInt16}}[],
         Vector{T}[], Vector{T}[], Vector{T}[], T[], BitVector(), Vector{Int}[])
 end
 
-"""
-    CLay{T}(clay::CLay) where T
-
-External `CLay` constructor for conversion of floating point precision.
-"""
+#* Constructor for type promotion from CLay with different float precision
 function CLay{T}(clay::CLay) where T<:AbstractFloat
     CLay{T}(clay.time, T.(clay.lat), T.(clay.lon), [T.(layer) for layer in clay.layer_top],
         [T.(layer) for layer in clay.layer_base], clay.atmos_state,
         [T.(OD) for OD in clay.OD],
         [df.passmissing(T).(iwp) for iwp in clay.IWP],
-        [T.(Ttop) for Ttop in clay.Ttop], T.(clay.Htropo), clay.night, clay.averaging)
+        [T.(Ttop) for Ttop in clay.Ttop], T.(clay.h_tropo), clay.night, clay.averaging)
 end
 
-""" Default CLay constructor for Float32 """
+#* Default constructor for Float32 precision
 CLay(args...; kwargs...) = CLay{Float32}(args...; kwargs...)
 
 
 """
-# struct CPro
+# struct CPro{T<:AbstractFloat} <: ObservationSet{T}
 
-CALIOP cloud profile `data` stored in a `DataFrame` with columns:
+CALIOP cloud profile data wit fields:
+
 - `time::Vector{DateTime}` (current time index)
-- `lat::Vector{AbstractFloat}` (latitude coordinate for current time index)
-- `lon::Vector{AbstractFloat}` (lonitude coordinate for current time index)
-- `atmos_state::Vector{<:Vector{<:Union{Missing,Symbol}}}`
-  (symbols describing the atmospheric conditions for every height level at current time index)
-- `EC532::Vector{<:Vector{<:Union{Missing,AbstractFloat}}}`
-  (extinction coefficient at 532nm at every height level in current time index)
+- `lat::Vector{T}` (latitude coordinate for current time index)
+- `lon::Vector{T}` (longitude coordinate for current time index)
+- `atmos_state::Vector{Vector{Enum{UInt16}}}` (atmospheric features for each height level)
+- `EC532::Vector{<:Vector{<:Union{Missing,T}}}` (extinction coefficient at 532nm)
+- `h_tropo::Vector{T}` (tropopause height at current time index)
+- `temp::Vector{<:Vector{<:Union{Missing,T}}}` (temperature)
+- `pressure::Vector{<:Vector{<:Union{Missing,T}}}` (pressure)
+- `rH::Vector{<:Vector{<:Union{Missing,T}}}` (relative humidity)
+- `IWC::Vector{<:Vector{<:Union{Missing,T}}}` (ice water content)
+- `deltap::Vector{<:Vector{<:Union{Missing,T}}}` (depolarization ratio)
+- `CADscore::Vector{<:Vector{<:Union{Missing,Int8}}}` (cloud-aerosol discrimination score)
+- `night::BitVector` (flag for nights (`true`))
 
 # Instantiation
 
@@ -214,16 +207,12 @@ CALIOP cloud profile `data` stored in a `DataFrame` with columns:
       lidarprofile::NamedTuple
     ) where T -> struct CPro
 
-Construct `CPro` from a list of file names (including directories) and a running
-MATLAB session `ms`. CPro data is only stored in the vicinity of intersections for
-the designated `timespan`. Column data is stored height-resolved as defined by the
-`lidarprofile`. If `T<:AbstractFloat` is not set, `Float32` will be used as
-default precision.
+Construct `CPro` from a list of file names (including directories). CPro data is only stored
+in the vicinity of intersections for the designated `timeindex` range. Column data is stored
+height-resolved as defined by the `lidarprofile`. If `T<:AbstractFloat` is not set, `Float32`
+will be used as default precision.
 
-Or construct `CPro` by directly handing over the `DataFrame` where the names, order,
-and types of each columns are checked and attempted to correct:
-
-    CPro{T}(data::DataFrame) where T -> struct CPro
+Or construct `CPro` by directly handing over the individual fields.
 """
 struct CPro{T} <: ObservationSet{T}
     time::Vector{DateTime}
@@ -240,7 +229,7 @@ struct CPro{T} <: ObservationSet{T}
     CADscore::Vector{<:Vector{<:Union{Missing,Int8}}}
     night::BitVector
 
-    """ unmodified constructor """
+    #* Unmodified constructor with checks for data consistency and limits
     function CPro{T}(
         time::Vector{DateTime},
         lat::Vector{T},
@@ -269,15 +258,12 @@ struct CPro{T} <: ObservationSet{T}
         # checklimits.(rH, 0, 1.5, "relative humidity")
         # checklimits.(IWC, 0, 0.54, "ice water content")
         # checklimits.(deltap, 0, 1, "depolarization ratio")
-        checklimits.(CADscore, -127, 128, "CAD score")
+        checklimits.(CADscore, -101, 110, "CAD score")
         new{T}(time, lat, lon, atmos_state, EC532, h_tropo, temp, pressure, rH, IWC, deltap, CADscore, night)
     end #constructor 1 CPro
 end #struct CPro
 
-"""
-Modified constructor of `CPro` reading data from hdf `files` for all given `sattime` indices
-and `lidarprofile` data, if data is above `altmin`.
-"""
+#* Main constructor used by TrackMatcher
 function CPro{T}(
     files::Vector{String},
     timeindex::Vector{UnitRange{Int}},
@@ -356,20 +342,11 @@ function CPro{T}(
         vcat(cad...), vcat(night...))
 end #constructor 2 CPro
 
-
-"""
-    CPro{T}() where T
-
-External constructor for empty `CPro` struct.
-"""
+#* Constructor for empty CPro structs
 CPro{T}() where T = CPro{T}(DateTime[], T[], T[], Vector{Enum{UInt16}}[], Vector{T}[], T[],
     Vector{T}[], Vector{T}[], Vector{T}[], Vector{T}[], Vector{T}[], Vector{Int8}[], BitVector())
 
-"""
-    CPro{T}(cpro::CPro) where T
-
-External `CPro` constructor for conversion of floating point precision.
-"""
+#* Constructor for type promotion from CPro with different float precision
 function CPro{T}(cpro::CPro) where T
     CPro{T}(cpro.time, T.(cpro.lat), T.(cpro.lon), cpro.atmos_state,
         [df.passmissing(T).(EC) for EC in cpro.EC532],
@@ -383,9 +360,5 @@ function CPro{T}(cpro::CPro) where T
         cpro.night)
 end
 
-"""
-    CPro(args...; kwargs...)
-
-Default CPro constructor for Float32.
-"""
+#* Default constructor for Float32 precision
 CPro(args...; kwargs...) = CPro{Float32}(args...; kwargs...)

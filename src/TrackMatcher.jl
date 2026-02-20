@@ -320,7 +320,7 @@ export DataSet, Data, MeasuredSet, ComputedSet, PrimarySet, SecondarySet, Observ
        FlightMetadata, CloudMetadata, PrimaryMetadata, SecondaryMetadata, XMetadata
 
 
-## Import functions from Julia include files
+## Source files
 include("flighttypes.jl")     # concrete types/constructors for flight data/datasets
 include("flightdata.jl")      # functions related to loading flight databases/datasets
 include("cloudtypes.jl")      # concrete types/constructors for cloud data/datasets

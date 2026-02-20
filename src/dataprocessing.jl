@@ -22,9 +22,9 @@ Base.abs(dt::Dates.CompoundPeriod) = dt > Dates.CompoundPeriod(Dates.Millisecond
         tmf::DateTime,
         tms::DateTime,
         atmos::Union{Missing,Symbol},
-        fxmeas::T,
+        fxmeas::AbstractFloat,
         ftmeas::Dates.CompoundPeriod,
-        sxmeas::T,
+        sxmeas::AbstractFloat,
         stmeas::Dates.CompoundPeriod,
         alt::Union{Missing,Real}
     ) where T
@@ -94,7 +94,7 @@ end #function addX!
         observations::DataFrame,
         accuracy::DataFrame,
         track::FlightTrack,
-        sat::SatData,
+        sat::SatSet,
         Xp::Tuple{T,T},
         Xs::Tuple{T,T},
         counter::Int,
@@ -273,10 +273,13 @@ end #function add_intersections!
 ## Data extractions from raw data
 
 """
-    find_timespan(sat::DataFrame, X::Tuple{<:AbstractFloat, <:AbstractFloat}, dataspan::Int=15)
-      -> DataFrame, Vector{Int}
+    find_timespan(
+        sat::SatSet,
+        obsindex::NamedTuple{(:file,:time),Tuple{Int,Int}},
+        dataspan::Int=15
+    ) -> DataFrame, Vector{Int}
 
-From the `sat` data in a `DataFrame` and the intersection `X` (as lat/lon pair),
+From the `sat` set data and the `obsindex` at the intersection,
 find the time indices `t` ± `dataspan` for which the distance at `t` is minimal to `X`.
 
 Return a `DataFrame` with `sat` data in the time span together with a `Vector{Int}`
@@ -377,24 +380,25 @@ end #function get_flightdata
 
 """
     get_satdata(
-        sat::SatData,
-        X::Tuple{<:AbstractFloat, <:AbstractFloat},
-        secspan::Int,
-        trackalt::Real,
+        sat::SatSet,
+        obsindex::NamedTuple{(:file,:time),Tuple{Int,Int}},
+        timespan::Int,
+        tms::DateTime,
+        trackalt::Union{Missing,Real},
         altmin::Real,
         trackID::Union{Int,String},
         lidarprofile::NamedTuple,
         lidarrange::Tuple{Real,Real},
+        saveobs::Union{String,Bool},
         savesecondtype::Bool,
         Float::DataType=Float32
     ) -> cpro::CPro, clay::CLay, feature::Symbol, ts::Int
 
-Using the `sat` data measurements within the overlap region and the MATLAB session
-`ms`, extract CALIOP cloud profile (`cpro`) and/or layer data (`clay`) together with
-the atmospheric conditions at flight level (`trackalt`) for the data point closest
-to the calculated intersection `X` ± `secspan` timesteps and above the altitude
-threshold `altmin`. In addition, return the index `ts` within `cpro`/`clay` of the
-data point closest to `X`.
+Using the `sat` set measurements within the overlap region, extract CALIOP cloud profile
+(`cpro`) and/or layer data (`clay`) together with the atmospheric conditions at flight level
+(`trackalt`) for the data point closest to the calculated intersection `X` ± `secspan` timesteps
+and above the altitude threshold `altmin`. In addition, return the index `ts` within `cpro`/`clay`
+of the data point closest to `X`.
 When `savesecondtype` is set to `false`, only the data type (`CLay`/`CPro`) in `sat`
 is saved; if set to `true`, the corresponding data type is saved if available.
 The lidar column data is saved for the height levels givin in the `lidarprofile` data
@@ -464,10 +468,9 @@ end #function get_satdata
 
 
 """
-    interpolate_time(data::DataFrame, X::Tuple{T,T}  where T<:AbstractFloat) -> DateTime
+    interpolate_time(track::PrimaryTrack, X::Tuple{T,T} where T<:AbstractFloat) -> DateTime
 
-Return the linearly interpolated time at `X` (a lat/lon coordinate pair)
-to the `data` in a DataFrame with a `time`, `lat`, and `lon` column.
+Return the linearly interpolated time at `X` (a lat/lon coordinate pair) in relation to the `track`.
 
 Time is linearly interpolated between the 2 closest points to `X`.
 """
@@ -489,17 +492,21 @@ end #function interpolate_time
 
 
 """
-    interpolate_time(data::DataFrame, X::Tuple{T,T}  where T<:AbstractFloat) -> DateTime
+    interpolate_time(
+        sat::SatSet,
+        fileindex::UnitRange{Int},
+        X::Tuple{T,T} where T<:AbstractFloat
+    ) -> DateTime
 
-Return the linearly interpolated time at `X` (a lat/lon coordinate pair)
-to the `data` in a DataFrame with a `time`, `lat`, and `lon` column.
+Return the linearly interpolated time at `X` (a lat/lon coordinate pair) in relation to the
+`sat` data. The `fileindex` points to the satellite granule near the calculated intersection `X`.
 
 Time is linearly interpolated between the 2 closest points to `X`.
 """
 function interpolate_time(
     sat::SatSet,
     fileindex::UnitRange{Int},
-    X::Tuple{T,T}  where T<:AbstractFloat
+    X::Tuple{T,T} where T<:AbstractFloat
 )
     # Compile data from relevant granules
     time, lat, lon = (vcat(getproperty.(sat.granules[fileindex], prop)...)

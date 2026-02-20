@@ -4,13 +4,14 @@
 # struct SecondaryMetadata{T<:AbstractFloat} <: SecondarySet{T}
 
 Immutable struct to hold metadata for `SatSet{T}` with fields
-
-- `files::Dict{Int,String}`
+- `granules::DataFrame`
+- `roots::ds.OrderedDict{UInt16,String}`
 - `type::Symbol`
 - `date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}`
-- `created::Union{DateTime,ZonedDateTime}`
+- `created::AbstractDateTime`
 - `loadtime::Dates.CompoundPeriod`
-- `remarks`
+- `attachments`
+
 
 ## fields
 
@@ -188,6 +189,8 @@ SatData{T}(sat::SatData) where T<:AbstractFloat = SatData{T}(
     SatTrack{T}(args...; kwargs...) where T<:AbstractFloat
 
 Alias constructor for [`SatData`](@ref). If `T` is omitted, `Float32` will be used by default.
+
+See also: [`SatData`](@ref), [`SatSet`](@ref), and [`SecondaryMetadata`](@ref)
 """
 function SatTrack end
 
@@ -199,13 +202,14 @@ SatTrack(args...; kwargs...) = SatData{Float32}(args...; kwargs...)
 # struct SatSet{T<:AbstractFloat} <: SecondarySet{T}
 
 Satellite data with fields
+
 - `granules::StructArray{SatData{T}}`
 - `metadata::SecondaryMetadata{T}`
 
 The `granules` contains data from individual satellite data files as `StructArray{SatData{T}}`
 with each `SatData{T}` storing continuous satellite track data from one file.
 
-see also [`SatTrack`](@ref), [`SatData`](@ref), and [`SecondaryMetadata`](@ref)
+See also: [`SatTrack`](@ref), [`SatData`](@ref), and [`SecondaryMetadata`](@ref)
 
 ## Instantiation
 

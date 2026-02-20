@@ -47,6 +47,7 @@ end #function get_lidarheights
         coarse::Bool = true,
         missingvalues = missing
     ) where Tv
+
 Append the vector `vec` with CALIPSO lidar data of the `variable` using the MATLAB
 session `ms` to read the variable from an hdf file already opened in `ms` outside
 of `append_lidardata!`. Information about the lidar heigths used in `vec` are stored
@@ -189,10 +190,10 @@ classification(FCF::UInt16)::Tuple{UInt16,UInt16} = FCF & 0b0111, FCF >> 9 & 0b0
 
 
 """
-    feature_classification(ftype::UInt16, fsub::UInt16) -> Symbol
+    feature_classification(ftype::UInt16, fsub::UInt16) -> Enum{UInt16}
 
-From the feature classification `ftype` and `fsub`type, return a descriptive `Symbol`
-explaining the feature classification type.
+From the feature classification `ftype` and `fsub`type, return a descriptive `Enum` with the
+human-readable feature classification.
 """
 function feature_classification(ftype::UInt16, fsub::UInt16)
     feature = SkyCondition(ftype)
@@ -214,10 +215,10 @@ end
         isat::Int,
         flightalt::Real,
         flight_num::Union{Int,String}
-    ) -> Union{Missing,Symbol}
+    ) -> Enum{UInt16}
 
 From the `CPro` cloud profile data at data point `isat` in `Intersection`
-(index in the `DataFrame` of the intersection), return a `Symbol` with a human-readable
+(index in the `DataFrame` of the intersection), return a `Enum{UInt16}` with a human-readable
 feature classification.
 
 Use the `hlevels` in the lidar column data and the `flightalt`itude to determine
@@ -259,7 +260,7 @@ end #function atmosphericinfo
     ) -> Enum{UInt16}
 
 From the `CLay` cloud layer data at data point `isat` in `Intersection`
-(index in the `DataFrame` of the intersection), return a `Symbol` with a human-readable
+(index in the `DataFrame` of the intersection), return a `Enum{UInt16}` with a human-readable
 feature classification at flight `alt`itude.
 
 `atmosphericinfo` returns a `missing` value, if no feature was found at flight level.
