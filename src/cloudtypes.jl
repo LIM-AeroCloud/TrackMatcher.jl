@@ -58,7 +58,7 @@ CloudMetadata(args...) = CloudMetadata{Float32}(args...)
 
 #* Constructor for empty CloudMetadata
 CloudMetadata{T}() where T<:AbstractFloat = CloudMetadata{T}(
-    "", (start=Dates.now(), stop=Dates.now()), (latmin=T(NaN), latmax=T(NaN),
+    Int32(0), (start=Dates.now(), stop=Dates.now()), (latmin=T(NaN), latmax=T(NaN),
     elonmin=T(NaN), elonmax=T(NaN), wlonmin=T(NaN), wlonmax=T(NaN)),
     ((range=0:0, min=T(NaN), max=T(NaN)),), false, 0x0000, 0x0000
 )

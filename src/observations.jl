@@ -73,7 +73,7 @@ struct CLay{T} <: ObservationSet{T}
         # checklimits.(IWP, 0, 10000, "ice water path")
         checklimits.(Ttop, -120, 60, "layer top temperature")
         checklimits.(h_tropo, 4000, 22_000, "tropopause height")
-        new{T}(time, lat, lon, layer_top, layer_base, atmos_state, OD, IWP, Ttop, h_tropo   , night, averaging)
+        new{T}(time, lat, lon, layer_top, layer_base, atmos_state, OD, IWP, Ttop, h_tropo, night, averaging)
     end #constructor 1 CLay
 end #struct CLay
 

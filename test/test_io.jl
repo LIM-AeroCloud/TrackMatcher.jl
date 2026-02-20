@@ -1,4 +1,4 @@
-## Define expecected results
+## Define expected results
 
 cpro_files = ["Level1/CPro1.h5", "Level1/Level2/CPro2.h5"]
 clay_files = ["Level1/CLay.h5"]

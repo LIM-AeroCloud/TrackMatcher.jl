@@ -228,7 +228,7 @@ and types of each columns are checked and attempted to correct, together with th
         metadata::XMetadata
     ) -> struct Intersection
 """
-struct XData{T} 0<: Intersection{T}
+struct XData{T} <: Intersection{T}
     data::DataFrame
     observations::DataFrame
     accuracy::DataFrame

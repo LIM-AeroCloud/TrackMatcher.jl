@@ -13,7 +13,7 @@
         H = [missing, missing, missing]
     )
     t_pre2010 = 60612.03728585648
-    t_poost2010 = 190102.00791336806
+    t_post2010 = 190102.00791336806
     @testset "floats" begin
         @test typeof.(eachcol(TrackMatcher.convert_floats!(df_empty, Float32))) ==
             [Vector{String}, Vector{Int64}, Vector{Float32}, Vector{Float32},
@@ -24,7 +24,7 @@
     end
     @testset "UTC" begin
         @test TrackMatcher.convert_utc(t_pre2010) == DateTime(2006,6,12,0,53,41,498)
-        @test TrackMatcher.convert_utc(t_poost2010) == DateTime(2019,1,2,0,11,23,715)
+        @test TrackMatcher.convert_utc(t_post2010) == DateTime(2019,1,2,0,11,23,715)
     end
     @testset "earth radius" begin
         @test TrackMatcher.earthradius(Float32(0.)) ≈ 6.378137e6 atol=0.5
