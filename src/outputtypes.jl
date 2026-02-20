@@ -559,7 +559,7 @@ function Data{T}(
     ))
 
     # Instantiate
-    new{T}(tracks, intersections)
+    DataFrames{T}(tracks, intersections)
 end
 
 #* Default constructor for `Data` with single floating point precision
@@ -567,9 +567,9 @@ Data(args...; kwargs...) = Data{Float32}(args...; kwargs...)
 
 #* Constructor for type promotion from `Data` with different float precision
 Data{T}(data::Data) where T = Data{T}(
-    FlightSet{T}(data.flight),
-    CloudSet{T}(data.cloud),
-    SatSet{T}(data.sat),
+    FlightSet{T}(data.trackdata.flight),
+    CloudSet{T}(data.trackdata.cloud),
+    SatSet{T}(data.trackdata.sat),
     (flight = Intersection{T}(data.intersection.flight),
         cloud = Intersection{T}(data.intersection.cloud))
 )

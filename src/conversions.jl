@@ -46,13 +46,13 @@ Convert the CALIOP Profile UTC time (`t`) to a `DateTime`.
 function convert_utc(t::AbstractFloat)::DateTime
     # Extract date from Float before decimal point and convert to Date
     t, d = modf(t)
-    d, t = Date(lpad(Int(d), 8, "0"), "yyyymmdd"), t * 86400
+    d, t = Date(lpad(Int(d), 8, "0"), "yyyymmdd"), round(86400t, digits=3)
     d += Dates.Year(2000)
     # From overall time, calculate hours, minutes, and seconds
     h = floor(Int, t/3600)
     m = floor(Int, t - 3600h)÷60
     s = floor(Int, t - 3600h - 60m)
-    ms = round(Int, 1000 * (t - 3600h - 60m - s), digits=3)
+    ms = round(Int, 1000 * (t - 3600h - 60m - s))
 
     # Return a DateTime from date and time (h/m/s) with timezone UTC
     return DateTime(Dates.yearmonthday(d)..., h, m, s, ms)
