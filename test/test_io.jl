@@ -1,8 +1,9 @@
 ## Define expected results
 
-cpro_files = ["Level1/CPro1.h5", "Level1/Level2/CPro2.h5"]
-clay_files = ["Level1/CLay.h5"]
-mixed_files = ["Level1/CLay.h5", "Level1/CPro1.h5", "Level1/Level2/CPro2.h5"]
+cpro_files = [joinpath("Level1", "CPro1.h5"), joinpath("Level1", "Level2", "CPro2.h5")]
+clay_files = [joinpath("Level1", "CLay.h5")]
+mixed_files = [joinpath("Level1", "CLay.h5"), joinpath("Level1", "CPro1.h5"),
+    joinpath("Level1", "Level2", "CPro2.h5")]
 empty_files = String[]
 
 
@@ -28,10 +29,10 @@ end
 ## Testsets
 
 @testset "read satellite data" begin
-    @test TrackMatcher.scandir("data/correct", ".h5") == mixed_files
-    @test TrackMatcher.scandir("data/correct", [".h5"]) == mixed_files
-    @test TrackMatcher.scandir("data/correct", [".h5", ".hdf"]) == mixed_files
-    @test isempty(TrackMatcher.scandir("data/no_satdata/", ".h5"))
+    @test TrackMatcher.scandir(joinpath("data", "correct"), ".h5") == mixed_files
+    @test TrackMatcher.scandir(joinpath("data", "correct"), [".h5"]) == mixed_files
+    @test TrackMatcher.scandir(joinpath("data", "correct"), [".h5", ".hdf"]) == mixed_files
+    @test isempty(TrackMatcher.scandir(joinpath("data", "no_satdata"), ".h5"))
     @test @test_logs(
         (:info, "satellite data type auto-detected as CPro"),
         (:warn, "the given folder contains 1 non-CPro files which will be ignored"),
