@@ -2,7 +2,7 @@ mini_cpro, mini_clay = ["CPro_01.h5", "CPro_02.h5"], ["CLay_01.h5", "CLay_02.h5"
 @testset "SatSet" begin
     @testset "CPro" begin
         mktempdir() do root
-            src = joinpath("test", "data", "caliop", "cpro")
+            src = joinpath(@__DIR__, "data", "caliop", "cpro")
             cp.(joinpath.(src, mini_cpro), joinpath.(root, mini_cpro))
             sat =SatSet(root)
             @test length(sat.granules) == 2
@@ -22,7 +22,7 @@ mini_cpro, mini_clay = ["CPro_01.h5", "CPro_02.h5"], ["CLay_01.h5", "CLay_02.h5"
     end
     @testset "CLay" begin
         mktempdir() do root
-            src = joinpath("test", "data", "caliop", "clay")
+            src = joinpath(@__DIR__, "data", "caliop", "clay")
             cp.(joinpath.(src, mini_clay), joinpath.(root, mini_clay))
             sat =SatSet(root)
             @test length(sat.granules) == 2
