@@ -29,10 +29,10 @@ end
 ## Testsets
 
 @testset "read satellite data" begin
-    @test TrackMatcher.scandir(joinpath("data", "correct"), ".h5") == mixed_files
-    @test TrackMatcher.scandir(joinpath("data", "correct"), [".h5"]) == mixed_files
-    @test TrackMatcher.scandir(joinpath("data", "correct"), [".h5", ".hdf"]) == mixed_files
-    @test isempty(TrackMatcher.scandir(joinpath("data", "no_satdata"), ".h5"))
+    @test TrackMatcher.scandir(joinpath("data", "caliop", "correct"), ".h5") == mixed_files
+    @test TrackMatcher.scandir(joinpath("data", "caliop", "correct"), [".h5"]) == mixed_files
+    @test TrackMatcher.scandir(joinpath("data", "caliop", "correct"), [".h5", ".hdf"]) == mixed_files
+    @test isempty(TrackMatcher.scandir(joinpath("data", "caliop", "no_satdata"), ".h5"))
     @test @test_logs(
         (:info, "satellite data type auto-detected as CPro"),
         (:warn, "the given folder contains 1 non-CPro files which will be ignored"),

@@ -269,8 +269,7 @@ function SatSet{T}(
     # Loop over found files and load data
     granules = StructArray{SatData{T}}(undef, 0)
     metadata = DataFrame(file = String[], root = UInt16[], tstart = DateTime[], tstop = DateTime[],
-    latmin = T[], latmax = T[], elonmin = T[], elonmax = T[], wlonmin = T[], wlonmax = T[]
-    )
+        latmin = T[], latmax = T[], elonmin = T[], elonmax = T[], wlonmin = T[], wlonmax = T[])
     roots = ds.OrderedDict{String,UInt16}()
     total_files = sum(length(data.files) for data in paths)
     progress = pm.Progress(total_files; desc="Loading satellite data... ")
