@@ -36,6 +36,14 @@ function convert_floats!(data::DataFrame, T::Type{<:AbstractFloat}=Float32)::Dat
 end
 
 
+"""
+    cast_missing(::Type{T}, v) where T -> Vector{Union{Missing, T}}
+
+Convert all elements of vector `v` to type `T`, preserving `missing` values.
+"""
+cast_missing(::Type{T}, v) where T = Union{Missing,T}[ismissing(x) ? missing : T(x) for x in v]
+
+
 ## Time format conversion of satellite data
 
 """
