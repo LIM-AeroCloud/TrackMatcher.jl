@@ -96,8 +96,8 @@ function CLay{T}(
     # Loop over files
     for (i, file) in enumerate(files)
         # Read hdf file
-        h5.h5open(file, "r") do fid
-            try
+        try
+            h5.h5open(file, "r") do fid
                 utc[i] = convert_utc.(read(fid, "Profile_UTC_Time")[2,:][timeindex[i]])
                 lat[i] = read(fid, "Latitude")[2,:][timeindex[i]]
                 lon[i] = read(fid, "Longitude")[2,:][timeindex[i]]
@@ -110,10 +110,10 @@ function CLay{T}(
                 h_tropo[i] = 1000read(fid, "Tropopause_Height")[timeindex[i]]
                 night[i] = Bool.(read(fid, "Day_Night_Flag")[timeindex[i]])
                 averaging[i] = read(fid, "Horizontal_Averaging")[timeindex[i]]
-            catch
-                @error "ReadError: layer observations could not be read from file, skipping" file
-                return CLay{T}()
             end
+        catch
+            @error "ReadError: layer observations could not be read from file, skipping" file
+            return CLay{T}()
         end
 
         # Loop over data and convert to TrackMatcher format
@@ -271,8 +271,8 @@ function CPro{T}(
     # Loop over files with cloud profile data
     for (i, file) in enumerate(files)
         ## Retrieve cloud profile data; assumes faulty files are filtered by SatData
-        h5.h5open(file, "r") do fid
-            try
+        try
+            h5.h5open(file, "r") do fid
                 utc[i] = convert_utc.(read(fid, "Profile_UTC_Time")[2,timeindex[i]])
                 lat[i] = read(fid, "Latitude")[2,timeindex[i]]
                 lon[i] = read(fid, "Longitude")[2,timeindex[i]]
@@ -294,10 +294,10 @@ function CPro{T}(
                     coarse=false, missingvalues = -127)[timeindex[i]]
                 h_tropo[i] = 1000read(fid, "Tropopause_Height")[timeindex[i]]
                 night[i] = Bool.(read(fid, "Day_Night_Flag")[timeindex[i]])
-            catch
-                @error "ReadError: profile observations could not be read from file, skipping" file
-                return CPro{T}()
             end
+        catch
+            @error "ReadError: profile observations could not be read from file, skipping" file
+            return CPro{T}()
         end
     end #loop over files
 

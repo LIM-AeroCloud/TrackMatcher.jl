@@ -202,6 +202,14 @@ end
             nested_missing_aware_approx(cpro64.IWC, cpro.IWC)
         @test cpro64.deltap isa Vector{<:Vector{<:Union{Missing,Float64}}} &&
             nested_missing_aware_approx(cpro64.deltap, cpro.deltap)
+        sat = @test_logs(
+            (:error, "ReadError: profile observations could not be read from file, skipping"),
+            CPro([joinpath(@__DIR__, "data", "caliop", "incorrect", "CPro.h5")], timeindex, lidarprofile)
+        )
+        @test isempty(sat.time) && isempty(sat.lat) && isempty(sat.lon) && isempty(sat.atmos_state) &&
+            isempty(sat.EC532) && isempty(sat.h_tropo) && isempty(sat.temp) &&
+            isempty(sat.pressure) && isempty(sat.rH) && isempty(sat.IWC) &&
+            isempty(sat.deltap) && isempty(sat.CADscore) && isempty(sat.night)
     end
     @testset "CLay" begin
         clay = CLay([joinpath(@__DIR__, "data", "caliop", "clay", "CLay_23.h5")], timeindex, (15_000, -Inf))
@@ -233,5 +241,13 @@ end
             nested_missing_aware_approx(clay64.IWP, clay.IWP)
         @test clay64.Ttop ≈ clay.Ttop && clay64.Ttop isa Vector{Vector{Float64}}
         @test clay64.h_tropo ≈ clay.h_tropo && clay64.h_tropo isa Vector{Float64}
+        sat = @test_logs(
+            (:error, "ReadError: layer observations could not be read from file, skipping"),
+            CLay([joinpath(@__DIR__, "data", "caliop", "incorrect", "CLay.h5")], timeindex, (15_000, -Inf))
+        )
+        @test isempty(sat.time) && isempty(sat.lat) && isempty(sat.lon) && isempty(sat.layer_top) &&
+            isempty(sat.layer_base) && isempty(sat.atmos_state) && isempty(sat.OD) &&
+            isempty(sat.IWP) && isempty(sat.Ttop) && isempty(sat.h_tropo) &&
+            isempty(sat.night) && isempty(sat.averaging)
     end
 end
