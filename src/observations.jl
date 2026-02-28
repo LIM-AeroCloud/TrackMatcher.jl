@@ -16,7 +16,7 @@ CALIOP cloud layer data with fields:
 - `Ttop::Vector{Vector{T}}` (layer top temperature)
 - `h_tropo::Vector{T}` (tropopause height at current time index)
 - `night::BitVector` (flag for nights (`true`))
-- `averaging::Vector{<:Vector{Int}}` (horizontal averaging in km)
+- `averaging::Vector{Int8}` (horizontal averaging in km)
 
 # Instantiation
 
@@ -109,7 +109,7 @@ function CLay{T}(
                 LTT = read(fid, "Layer_Top_Temperature")[:,timeindex[i]]'
                 h_tropo[i] = 1000read(fid, "Tropopause_Height")[timeindex[i]]
                 night[i] = Bool.(read(fid, "Day_Night_Flag")[timeindex[i]])
-                averaging[i] = read(fid, "Horizontal_Averaging")[timeindex[i]]
+                averaging[i] = Int8.(read(fid, "Horizontal_Averaging")[timeindex[i]])
             end
         catch
             @error "ReadError: layer observations could not be read from file, skipping" file

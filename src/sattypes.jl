@@ -317,8 +317,8 @@ end
 
 #* Constructor for emtpy SatSet
 SatSet{T}() where T<:AbstractFloat = SatSet{T}(
-  StructArray{SatData{T}}(undef, 0),
-  SecondaryMetadata{T}()
+    StructArray{SatData{T}}(undef, 0),
+    SecondaryMetadata{T}()
 )
 
 #* Constructor for default Float32 SatSet
@@ -326,7 +326,7 @@ SatSet(args...; kwargs...) = SatSet{Float32}(args...; kwargs...)
 
 #* Constructor for floating point type promotion
 SatSet{T}(sat::SatSet) where T<:AbstractFloat = SatSet{T}(
-  SatData{T}.(sat.granules), SecondaryMetadata{T}(sat.metadata)
+    SatData{T}.(sat.granules), SecondaryMetadata{T}(sat.metadata)
 )
 
 
