@@ -7,6 +7,8 @@
 - Setup tests ([#55])
 - Add `HDF5` and `StructArrays` as dependency ([#51], [#58])
 - Add method `checklimits` to check array fields of `SatData` are within expected limits ([#51])
+- Setup code coverage for _TrackMatcher_ and add badges for the CI status and code coverage
+  to README ([#64])
 
 ### Changed
 
@@ -27,8 +29,7 @@
   and making use of DataFrames functions for grouping and transforming data ([#58])
 - Refactor primary flight and cloud data and datasets to use StructArrays and optimize load times ([#58])
   - Rename `dbID` in `FlightData` to `id` and `flightID` to `flight_num` for more consistency
-    in the naming scheme
-  and memory usage ([#58])
+    in the naming scheme and memory usage ([#58])
 - Refine the `XData` struct and the calculation of intersection points ([#51], [#58])
 - Refine file handling and save root paths and file paths/names separately ([#58])
 - Use look-up dictionaries in the set metadata and reduced Strings or `UInt16` indices in the

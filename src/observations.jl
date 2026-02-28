@@ -16,7 +16,7 @@ CALIOP cloud layer data with fields:
 - `Ttop::Vector{Vector{T}}` (layer top temperature)
 - `h_tropo::Vector{T}` (tropopause height at current time index)
 - `night::BitVector` (flag for nights (`true`))
-- `averaging::Vector{<:Vector{Int}}` (horizontal averaging in km)
+- `averaging::Vector{Int8}` (horizontal averaging in km)
 
 # Instantiation
 
@@ -46,22 +46,11 @@ struct CLay{T} <: ObservationSet{T}
     Ttop::Vector{Vector{T}}
     h_tropo::Vector{T}
     night::BitVector
-    averaging::Vector{Vector{Int}}
+    averaging::Vector{Int8}
 
     #* Unmodified constructor with checks for data consistency and limits
     function CLay{T}(
-        time::Vector{DateTime},
-        lat::Vector{T},
-        lon::Vector{T},
-        layer_top::Vector{Vector{T}},
-        layer_base::Vector{Vector{T}},
-        atmos_state::Vector{Vector{Enum{UInt16}}},
-        OD::Vector{Vector{T}},
-        IWP::Vector{<:Vector{<:Union{Missing,T}}},
-        Ttop::Vector{Vector{T}},
-        h_tropo::Vector{T},
-        night::BitVector,
-        averaging::Vector{Vector{Int}}
+        time, lat, lon, layer_top, layer_base, atmos_state, OD, IWP, Ttop, h_tropo, night, averaging
     ) where T
         all(length(time) == length(prop) for prop in
             (lat, lon, layer_top, layer_base, atmos_state, OD, IWP, Ttop, h_tropo, night, averaging)) ||
@@ -72,7 +61,7 @@ struct CLay{T} <: ObservationSet{T}
         # checklimits.(OD, 0, 10, "optical depth")
         # checklimits.(IWP, 0, 10000, "ice water path")
         checklimits.(Ttop, -120, 60, "layer top temperature")
-        checklimits.(h_tropo, 4000, 22_000, "tropopause height")
+        checklimits(h_tropo, 4000, 22_000, "tropopause height")
         new{T}(time, lat, lon, layer_top, layer_base, atmos_state, OD, IWP, Ttop, h_tropo, night, averaging)
     end #constructor 1 CLay
 end #struct CLay
@@ -101,30 +90,30 @@ function CLay{T}(
     Ttop = Vector{Vector{Vector{T}}}(undef,length(files))
     h_tropo = Vector{Vector{T}}(undef, length(files))
     night = Vector{BitVector}(undef, length(files))
-    averaging = Vector{Vector{Int}}(undef,length(files))
+    averaging = Vector{Vector{Int8}}(undef,length(files))
     # Initialise variables for HDF5 reading to make them known outside try-catch block
     ltop, lbase, FCF, FOD, IWPath, LTT = nothing, nothing, nothing, nothing, nothing, nothing
     # Loop over files
     for (i, file) in enumerate(files)
         # Read hdf file
-        h5.h5open(file, "r") do fid
-            try
+        try
+            h5.h5open(file, "r") do fid
                 utc[i] = convert_utc.(read(fid, "Profile_UTC_Time")[2,:][timeindex[i]])
                 lat[i] = read(fid, "Latitude")[2,:][timeindex[i]]
                 lon[i] = read(fid, "Longitude")[2,:][timeindex[i]]
-                ltop = 1000read(fid, "Layer_Top_Altitude")[timeindex[i],:]
-                lbase = 1000read(fid, "Layer_Base_Altitude")[timeindex[i],:]
-                FCF = read(fid, "Atmospheric_Volume_Description")[timeindex[i],:]
-                FOD = read(fid, "Feature_Optical_Depth_532")[timeindex[i],:]
-                IWPath = read(fid, "Ice_Water_Path")[timeindex[i],:]
-                LTT = read(fid, "Layer_Top_Temperature")[timeindex[i],:]
+                ltop = 1000read(fid, "Layer_Top_Altitude")[:,timeindex[i]]'
+                lbase = 1000read(fid, "Layer_Base_Altitude")[:,timeindex[i]]'
+                FCF = read(fid, "Feature_Classification_Flags")[:,timeindex[i]]'
+                FOD = read(fid, "Feature_Optical_Depth_532")[:,timeindex[i]]'
+                IWPath = read(fid, "Ice_Water_Path")[:,timeindex[i]]'
+                LTT = read(fid, "Layer_Top_Temperature")[:,timeindex[i]]'
                 h_tropo[i] = 1000read(fid, "Tropopause_Height")[timeindex[i]]
-                night[i] = Bool.(read(fid, "Day_Night_Flag")[timeindex[i],:])
-                averaging[i] = read(fid, "Horizontal_Averaging")[timeindex[i],:]
-            catch
-                @error "ReadError: layer observations could not be read from file, skipping" file
-                return CLay{T}()
+                night[i] = Bool.(read(fid, "Day_Night_Flag")[timeindex[i]])
+                averaging[i] = Int8.(read(fid, "Horizontal_Averaging")[timeindex[i]])
             end
+        catch
+            @error "ReadError: layer observations could not be read from file, skipping" file
+            return CLay{T}()
         end
 
         # Loop over data and convert to TrackMatcher format
@@ -163,7 +152,7 @@ end #constructor 2 CLay
 #* Constructor for empty CLay structs
 function CLay{T}() where T<:AbstractFloat
     CLay{T}(DateTime[], T[], T[], Vector{T}[], Vector{T}[], Vector{Enum{UInt16}}[],
-        Vector{T}[], Vector{T}[], Vector{T}[], T[], BitVector(), Vector{Int}[])
+        Vector{T}[], Vector{T}[], Vector{T}[], T[], BitVector(), Int8[])
 end
 
 #* Constructor for type promotion from CLay with different float precision
@@ -171,7 +160,7 @@ function CLay{T}(clay::CLay) where T<:AbstractFloat
     CLay{T}(clay.time, T.(clay.lat), T.(clay.lon), [T.(layer) for layer in clay.layer_top],
         [T.(layer) for layer in clay.layer_base], clay.atmos_state,
         [T.(OD) for OD in clay.OD],
-        [df.passmissing(T).(iwp) for iwp in clay.IWP],
+        [cast_missing(T, iwp) for iwp in clay.IWP],
         [T.(Ttop) for Ttop in clay.Ttop], T.(clay.h_tropo), clay.night, clay.averaging)
 end
 
@@ -231,19 +220,7 @@ struct CPro{T} <: ObservationSet{T}
 
     #* Unmodified constructor with checks for data consistency and limits
     function CPro{T}(
-        time::Vector{DateTime},
-        lat::Vector{T},
-        lon::Vector{T},
-        atmos_state::Vector{Vector{Enum{UInt16}}},
-        EC532::Vector{<:Vector{<:Union{Missing,T}}},
-        h_tropo::Vector{T},
-        temp::Vector{<:Vector{<:Union{Missing,T}}},
-        pressure::Vector{<:Vector{<:Union{Missing,T}}},
-        rH::Vector{<:Vector{<:Union{Missing,T}}},
-        IWC::Vector{<:Vector{<:Union{Missing,T}}},
-        deltap::Vector{<:Vector{<:Union{Missing,T}}},
-        CADscore::Vector{<:Vector{<:Union{Missing,Int8}}},
-        night::BitVector
+        time, lat, lon, atmos_state, EC532, h_tropo, temp, pressure, rH, IWC, deltap, CADscore, night
     ) where T
         all(length(time) == length(prop) for prop in
             (lat, lon, atmos_state, EC532, h_tropo, temp, pressure, rH, IWC, deltap, CADscore, night)) ||
@@ -294,8 +271,8 @@ function CPro{T}(
     # Loop over files with cloud profile data
     for (i, file) in enumerate(files)
         ## Retrieve cloud profile data; assumes faulty files are filtered by SatData
-        h5.h5open(file, "r") do fid
-            try
+        try
+            h5.h5open(file, "r") do fid
                 utc[i] = convert_utc.(read(fid, "Profile_UTC_Time")[2,timeindex[i]])
                 lat[i] = read(fid, "Latitude")[2,timeindex[i]]
                 lon[i] = read(fid, "Longitude")[2,timeindex[i]]
@@ -317,10 +294,10 @@ function CPro{T}(
                     coarse=false, missingvalues = -127)[timeindex[i]]
                 h_tropo[i] = 1000read(fid, "Tropopause_Height")[timeindex[i]]
                 night[i] = Bool.(read(fid, "Day_Night_Flag")[timeindex[i]])
-            catch
-                @error "ReadError: profile observations could not be read from file, skipping" file
-                return CPro{T}()
             end
+        catch
+            @error "ReadError: profile observations could not be read from file, skipping" file
+            return CPro{T}()
         end
     end #loop over files
 
@@ -349,14 +326,14 @@ CPro{T}() where T = CPro{T}(DateTime[], T[], T[], Vector{Enum{UInt16}}[], Vector
 #* Constructor for type promotion from CPro with different float precision
 function CPro{T}(cpro::CPro) where T
     CPro{T}(cpro.time, T.(cpro.lat), T.(cpro.lon), cpro.atmos_state,
-        [df.passmissing(T).(EC) for EC in cpro.EC532],
+    [cast_missing(T, EC) for EC in cpro.EC532],
         T.(cpro.h_tropo),
-        [df.passmissing(T).(temp) for temp in cpro.temp],
-        [df.passmissing(T).(pres) for pres in cpro.pressure],
-        [df.passmissing(T).(rh) for rh in cpro.rH],
-        [df.passmissing(T).(iwc) for iwc in cpro.IWC],
-        [df.passmissing(T).(dp) for dp in cpro.deltap],
-        [df.passmissing(Int8).(cad) for cad in cpro.CADscore],
+    [cast_missing(T, temp) for temp in cpro.temp],
+    [cast_missing(T, pres) for pres in cpro.pressure],
+    [cast_missing(T, rh) for rh in cpro.rH],
+    [cast_missing(T, iwc) for iwc in cpro.IWC],
+    [cast_missing(T, dp) for dp in cpro.deltap],
+    [cast_missing(Int8, cad) for cad in cpro.CADscore],
         cpro.night)
 end
 

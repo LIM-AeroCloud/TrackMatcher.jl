@@ -178,7 +178,7 @@ end #constructor 2 SatData
 SatData{T}() where T<:AbstractFloat = SatData{T}(DateTime[], T[], T[])
 
 #* Constructor for default Float32 SatData
-SatData(args...; kwargs...) = SatData{Float32}(args...; kwargs...)
+SatData(args...) = SatData{Float32}(args...)
 
 #* Constructor for floating point type promotion
 SatData{T}(sat::SatData) where T<:AbstractFloat = SatData{T}(
@@ -186,7 +186,7 @@ SatData{T}(sat::SatData) where T<:AbstractFloat = SatData{T}(
 )
 
 """
-    SatTrack{T}(args...; kwargs...) where T<:AbstractFloat
+    SatTrack{T}(args...) where T<:AbstractFloat
 
 Alias constructor for [`SatData`](@ref). If `T` is omitted, `Float32` will be used by default.
 
@@ -194,8 +194,8 @@ See also: [`SatData`](@ref), [`SatSet`](@ref), and [`SecondaryMetadata`](@ref)
 """
 function SatTrack end
 
-SatTrack{T}(args...; kwargs...) where T<:AbstractFloat = SatData{T}(args...; kwargs...)
-SatTrack(args...; kwargs...) = SatData{Float32}(args...; kwargs...)
+SatTrack{T}(args...) where T<:AbstractFloat = SatData{T}(args...)
+SatTrack(args...) = SatData{Float32}(args...)
 
 
 """
@@ -269,8 +269,7 @@ function SatSet{T}(
     # Loop over found files and load data
     granules = StructArray{SatData{T}}(undef, 0)
     metadata = DataFrame(file = String[], root = UInt16[], tstart = DateTime[], tstop = DateTime[],
-    latmin = T[], latmax = T[], elonmin = T[], elonmax = T[], wlonmin = T[], wlonmax = T[]
-    )
+        latmin = T[], latmax = T[], elonmin = T[], elonmax = T[], wlonmin = T[], wlonmax = T[])
     roots = ds.OrderedDict{String,UInt16}()
     total_files = sum(length(data.files) for data in paths)
     progress = pm.Progress(total_files; desc="Loading satellite data... ")
@@ -291,6 +290,7 @@ function SatSet{T}(
                 push!(granules, granule)
             catch e
                 @warn "read error; data skipped" file exception=(e, catch_backtrace())
+                roots[root] in metadata.root || delete!(roots, root)
             end
             pm.next!(progress)
         end
@@ -299,8 +299,8 @@ function SatSet{T}(
     # Return SatSet constructor
     tend = Dates.now()
     if isempty(metadata)
-        @warn "No satellite data files successfully loaded"
-        date = (start = Date(9999), stop = Date(9999))
+        @warn "no satellite data files successfully loaded"
+        date = (start = DateTime(9999), stop = DateTime(9999))
     else
         date = (start = minimum(metadata.tstart), stop = maximum(metadata.tstop))
     end
@@ -317,8 +317,8 @@ end
 
 #* Constructor for emtpy SatSet
 SatSet{T}() where T<:AbstractFloat = SatSet{T}(
-  StructArray{SatData{T}}(undef, 0),
-  SecondaryMetadata{T}()
+    StructArray{SatData{T}}(undef, 0),
+    SecondaryMetadata{T}()
 )
 
 #* Constructor for default Float32 SatSet
@@ -326,8 +326,10 @@ SatSet(args...; kwargs...) = SatSet{Float32}(args...; kwargs...)
 
 #* Constructor for floating point type promotion
 SatSet{T}(sat::SatSet) where T<:AbstractFloat = SatSet{T}(
-  SatData{T}.(sat.granules), SecondaryMetadata{T}(sat.metadata)
+    SatData{T}.(sat.granules), SecondaryMetadata{T}(sat.metadata)
 )
 
 
-## stucts for observations
+## Alias constructors for SatSet
+SecondarySet{T}(args...; kwargs...) where T<:AbstractFloat = SatSet{T}(args...; kwargs...)
+SecondarySet(args...; kwargs...) = SatSet{Float32}(args...; kwargs...)
