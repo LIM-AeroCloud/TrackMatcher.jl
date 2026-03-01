@@ -15,27 +15,30 @@ otherwise specified by `Float`.
 """
 function get_lidarheights(lidarrange::Tuple{Real,Real}, Float::DataType=Float32)
     # Read CPro lidar altitude profile
-    hfile = normpath(@__DIR__, "../data/CPro_Lidar_Altitudes_m.dat")
+    hfile = normpath(@__DIR__, "..", "data", "CPro_Lidar_Altitudes_m.dat")
     hprofile = CSV.read(hfile, DataFrame, copycols = false, types=Float)
     # Consider only levels between max/min given in lidarrange
     itop = findfirst(hprofile.CPro .≤ lidarrange[1])
     ibottom = findlast(hprofile.CPro .≥ lidarrange[2])
     levels = try hprofile.CPro[itop:ibottom]
     catch
-      AbstractFloat[]
+      Float[]
     end
 
     # add extralayers for region with double precision
     h30m = findlast(levels.≥8300)
-    hfine = try hfine = [(levels[i] + levels[i+1])/2 for i = h30m:length(levels)-1]
-        sort([levels; hfine; levels[end]-30], rev=true)
+    h30m = isnothing(h30m) ? 1 : h30m
+    hfine = try
+        hfine = [(levels[i] + levels[i+1])/2 for i = h30m:length(levels)-1]
+        sort([levels; hfine; levels[end] + (levels[end] - levels[end-1])/2], rev=true)
     catch
-        AbstractFloat[]
+        Float[]
     end
 
     # Return original and refined altitude profiles and important indices
     return (coarse = levels, fine = hfine, itop = isnothing(itop) ? 0 : itop,
-        ibottom = isnothing(ibottom) ? 0 : ibottom, i30 = isnothing(h30m) ? 0 : h30m)
+        ibottom = isnothing(ibottom) ? 0 : ibottom, i30 = h30m,
+        maxtop = first(hprofile.CPro), maxbottom = last(hprofile.CPro))
 end #function get_lidarheights
 
 
@@ -67,18 +70,13 @@ function get_lidarcolumn(
     # Convert var to type t
     Tv ≠ T && (var = T.(var))
     # Validate lidarprofile indices
-    if lidarprofile.ibottom <= 0
-        throw(ArgumentError("Invalid lidar height range: ibottom = $(lidarprofile.ibottom). " *
-            "Check that the lidar range (top, bottom) captures valid altitude levels. " *
-            "For example, use (15_000, -Inf) to include all data from 15km down to ground level."))
+    if lidarprofile.ibottom ≤ 0 || lidarprofile.itop == 0
+        throw(ArgumentError("invalid lidar height range\n" *
+            "selected values must overlap with $(lidarprofile.maxtop) — $(lidarprofile.maxbottom)"))
     end
     if lidarprofile.itop > lidarprofile.ibottom
-        throw(ArgumentError("Invalid lidar height range: itop ($(lidarprofile.itop)) > ibottom ($(lidarprofile.ibottom)). " *
-            "The altitude range may be empty or inverted."))
-    end
-    if !coarse && lidarprofile.i30 <= 0
-        throw(ArgumentError("Invalid lidar height range for fine resolution (coarse=false): i30 = $(lidarprofile.i30). " *
-            "The 30m transition altitude may not exist in the specified range."))
+        throw(ArgumentError("invalid lidar height range: itop ($(lidarprofile.itop)) > ibottom ($(lidarprofile.ibottom)); " *
+            "the altitude range may be inverted"))
     end
     # Determine number of profiles (last dimension for HDF5 data)
     nprofiles = ndims(var) == 2 ? size(var, 2) : size(var, 3)

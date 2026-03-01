@@ -9,6 +9,11 @@
 - Add method `checklimits` to check array fields of `SatData` are within expected limits ([#51])
 - Setup code coverage for _TrackMatcher_ and add badges for the CI status and code coverage
   to README ([#64])
+- Improved error handling for lidar heights retrieval ([#75])
+  - exact calculation of last fine-grained level height (~29.94m) instead of 30m approximation
+  - Set `i30` to `1` instead of `0` for a chosen height range below 8.3km to allow the calculation
+    of all fine-grained levels instead of throwing an error
+  - Add error handling to `get_lidarcolumn` to throw a descriptive error for wrong user input
 
 ### Changed
 
