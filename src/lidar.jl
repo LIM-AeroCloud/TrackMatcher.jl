@@ -83,7 +83,10 @@ function get_lidarcolumn(
     # Initialise vector to store all row vectors and loop over profiles
     row = Vector{Vector{Union{Missing,T}}}(undef, nprofiles)
     for i = 1:nprofiles
-        row[i] = if ndims(var) == 2 && coarse && ismissing(missingvalues)
+        row[i] = if ndims(var) == 2 && !coarse
+            throw(ArgumentError("invalid input: 2D array provided for fine resolution heights; " *
+                "set coarse to true to resolve"))
+        elseif ndims(var) == 2 && coarse && ismissing(missingvalues)
             # 2D array: Save column vector for coarse heights without transforming missing values
             var[lidarprofile.itop:lidarprofile.ibottom, i]
         elseif ndims(var) == 2 && coarse
