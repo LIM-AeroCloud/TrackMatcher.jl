@@ -269,6 +269,22 @@ end
             isempty(sat.EC532) && isempty(sat.h_tropo) && isempty(sat.temp) &&
             isempty(sat.pressure) && isempty(sat.rH) && isempty(sat.IWC) &&
             isempty(sat.deltap) && isempty(sat.CADscore) && isempty(sat.night)
+
+        @test_throws "all per-time-step profile vectors must have consistent lengths in CPro data" CPro{Float32}(
+            [DateTime(2020, 1, 1)],
+            Float32[0],
+            Float32[0],
+            [Enum{UInt16}[TrackMatcher.invalid, TrackMatcher.clear]],
+            [Union{Missing,Float32}[1]],
+            Float32[10_000],
+            [Union{Missing,Float32}[1, 1]],
+            [Union{Missing,Float32}[800, 800]],
+            [Union{Missing,Float32}[0.5, 0.5]],
+            [Union{Missing,Float32}[0.1, 0.1]],
+            [Union{Missing,Float32}[0.2, 0.2]],
+            [Union{Missing,Int8}[10, 11]],
+            BitVector([true])
+        )
     end
     @testset "CLay" begin
         clay = CLay([joinpath(@__DIR__, "data", "caliop", "clay", "CLay_23.h5")], timeindex, (15_000, -Inf))
@@ -308,5 +324,20 @@ end
             isempty(sat.layer_base) && isempty(sat.atmos_state) && isempty(sat.OD) &&
             isempty(sat.IWP) && isempty(sat.Ttop) && isempty(sat.h_tropo) &&
             isempty(sat.night) && isempty(sat.averaging)
+
+        @test_throws "all per-time-step layer vectors must have the same length in CLay data" CLay{Float32}(
+            [DateTime(2020, 1, 1)],
+            Float32[0],
+            Float32[0],
+            [Float32[7_000, 8_000]],
+            [Float32[6_500]],
+            [Enum{UInt16}[TrackMatcher.cloud, TrackMatcher.ci]],
+            [Float32[0.1, 0.1]],
+            [Union{Missing,Float32}[1, 1]],
+            [Float32[-40, -39]],
+            Float32[10_000],
+            BitVector([true]),
+            Int8[5]
+        )
     end
 end
