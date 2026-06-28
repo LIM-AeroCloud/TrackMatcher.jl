@@ -14,6 +14,7 @@ Height levels in fiels `coarse` and `fine` are saved in single precision unless
 otherwise specified by `Float`.
 """
 function get_lidarheights(lidarrange::Tuple{Real,Real}, Float::DataType=Float32)
+    threshold_finegrid = 8300.
     # Read CPro lidar altitude profile
     hfile = normpath(@__DIR__, "..", "data", "CPro_Lidar_Altitudes_m.dat")
     hprofile = CSV.read(hfile, DataFrame, copycols = false, types=Float)
@@ -30,18 +31,35 @@ function get_lidarheights(lidarrange::Tuple{Real,Real}, Float::DataType=Float32)
     top = findlast(hprofile.CPro .≥ min(lidarrange[1], hprofile.CPro[1]))
     bottom = findfirst(≤(max(lidarrange[2], hprofile.CPro[end])), hprofile.CPro)
     coarse = hprofile.CPro[top:bottom]
-    # bottom = length(coarse)
-    top, bottom
-    # add extralayers for region with double precision
-    h30m = findlast(coarse.≥8300)
+    # add extralayers for fine-grained region
+    h30m = findlast(coarse.≥threshold_finegrid)
     h30m = isnothing(h30m) ? 1 : h30m
+    # ℹ increase index to 1 below the range, if the lidar range is completely above the fine grid
+    if lidarrange[2] > threshold_finegrid
+        h30m += 1
+    end
     fine = [(coarse[i] + coarse[i+1])/2 for i = h30m:length(coarse)-1]
-    length(fine) > 1 && (fine = [fine; coarse[end] + (coarse[end] - coarse[end-1])/2])
-    fine = [coarse[1:h30m-1]; vec(permutedims(hcat(coarse[h30m:end], fine)))]
+    if length(fine) > 1
+        fine = [fine; coarse[end] + (coarse[end] - coarse[end-1])/2]
+        fine = vec(permutedims(hcat(coarse[h30m:end], fine)))
+    end
+    # Linearize array
+    fine = [coarse[1:h30m-1]; fine]
 
     # Get all necessary indices for the fine-grained array splicing
     ftop = length(fine) ≥ 2 && fine[2] ≥ lidarrange[1] ? 2 : 1
-    fbottom = length(fine) ≥ 2 && fine[end-2] ≤ lidarrange[2] ? 2 : 1
+    if length(fine) ≥ 2 && fine[end-2] ≤ lidarrange[2]
+        # Omit the last row, if the fine-grained array has an additional
+        # in-between value above the lower bound
+        fbottom = 2
+    elseif fine[end] < threshold_finegrid
+        # Standard case: omit the fine-grained value, if the last value above the threshold
+        # is shared with the coarse array
+        fbottom = 1
+    else
+        # Omit nothing, if all values are above the fine grid
+        fbottom = 0
+    end
     fine = fine[ftop:end-fbottom]
 
     # Return original and refined altitude profiles and important indices
