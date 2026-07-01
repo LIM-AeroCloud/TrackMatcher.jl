@@ -44,6 +44,12 @@
 - Disable validity checks during construction of observation data until less restrictive.
   Future re-implementations should only disregard single outliers not the whole column of data
   with outliers. ([#58])
+- Simplify retrieval of lidar column data ([#75])
+  - refactor lidar.jl
+  - use more generous boudaries including the first value outside each threshold for more exact
+    calculations at the edges (technically **breaking**)
+  - revised return value of `get_lidarheights`
+- Use flight number for error handling in `CLay` method of `atmosphericinfo` ([#75])
 
 ### Removed
 

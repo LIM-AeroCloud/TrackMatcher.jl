@@ -205,25 +205,29 @@ end
 
 """
     atmosphericinfo(
-        sat::CPro,
-        hlevels::Vector{<:AbstractFloat},
+        sat::Union{CPro, CLay},
+        [hlevels::Vector{<:AbstractFloat},]
         isat::Int,
         flightalt::Union{Missing,Real},
         flight_num::Union{Int,String}
     ) -> Enum{UInt16}
 
-From the `CPro` cloud profile data at data point `isat` in `Intersection`
+From the `CPro` or `CLay` cloud profile data at data point `isat` in `Intersection`
 (index in the `DataFrame` of the intersection), return a `Enum{UInt16}` with a human-readable
 feature classification.
 
-Use the `hlevels` in the lidar column data and the `flightalt`itude to determine
+For `CPro` data, use the `hlevels` in the lidar column data and the `flightalt`itude to determine
 the atmospheric conditions (`feature`) at flight level at the intersection.
+For `CLay` data, only the `flightalt`itude and the `sat` data is used to determine the
+atmospheric conditions at flight level.
 
 `atmosphericinfo` returns `invalid` if `flightalt` is missing, no suitable lidar level
 is found near flight altitude, or the feature array cannot be accessed.
 
-`flight_num` is used in warning/error messages to identify the source of retrieval issues.
+`flight_num` is used in warnings to identify the source of retrieval issues.
 """
+function atmosphericinfo end
+
 function atmosphericinfo(
     sat::CPro,
     hlevels::Vector{<:AbstractFloat},
@@ -249,32 +253,19 @@ function atmosphericinfo(
     end
 end #function atmosphericinfo
 
-
-"""
-    atmosphericinfo(
-        sat::CLay,
-        alt::Union{Missing,Real},
-        isat::Int
-    ) -> Enum{UInt16}
-
-From the `CLay` cloud layer data at data point `isat` in `Intersection`
-(index in the `DataFrame` of the intersection), return a `Enum{UInt16}` with a human-readable
-feature classification at flight `alt`itude.
-
-`atmosphericinfo` returns `invalid` if `alt` is missing, no feature was found at flight
-level, or layer data could not be accessed.
-"""
 function atmosphericinfo(
     sat::CLay,
+    isat::Int,
     alt::Union{Missing,Real},
-    isat::Int
+    flight_num::Union{Int,String}
 )::Enum{UInt16}
     ismissing(alt) && return invalid
     top = get(sat.layer_top, isat, nothing)
     base = get(sat.layer_base, isat, nothing)
     state = get(sat.atmos_state, isat, nothing)
     if isnothing(top) || isnothing(base) || isnothing(state)
-        @error "failed to retrieve atmospheric state at altitude $alt; setting to 'invalid'"
+        @error("failed to retrieve atmospheric state for flight $(flight_num) at altitude $alt; "*
+            "setting to 'invalid'")
         return invalid
     end
 
