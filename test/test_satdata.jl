@@ -59,11 +59,11 @@ and clean `files` to match `satfiles`.
 Returns `true` if both tests pass, `false` otherwise.
 """
 function test_sat_datafiles(files, type, satfiles, expected_type=type)::Bool
-    success = false
+    success = true
     input_files = copy(files)
     sattype = TrackMatcher.sat_datafiles!(input_files, type)
-    success |= sattype == expected_type
-    success |= input_files == satfiles
+    success &= sattype == expected_type
+    success &= input_files == satfiles
     return success
 end
 

@@ -6,9 +6,11 @@
 Return a `NamedTuple` with the following entries in the `lidarrange` (top, bottom):
 - `coarse`: altitude levels of the CALIOP lidar data as defined in the metadata of the hdf files
 - `fine`: altitude levels of CALIOP lidar data with 30m intervals below 8.3km
-- `itop`: index in the original data array of the first selected top height
-- `ibottom`: index in the original data array of the last selected bottom height
-- `i30`: vector index of the first altitude level with 30m intervals
+- `i.top`: index in the original data array of the first selected top height
+- `i.bottom`: index in the original data array of the last selected bottom height
+- `i.f.top`: start index for the fine-grained array
+- `i.f.bottom`: skip end range for the fine-grained array
+- `i.f.h30m`: vector index of the first altitude level with 30m intervals
 
 Height levels in fiels `coarse` and `fine` are saved in single precision unless
 otherwise specified by `Float`.
@@ -48,7 +50,7 @@ function get_lidarheights(lidarrange::Tuple{Real,Real}, Float::DataType=Float32)
 
     # Get all necessary indices for the fine-grained array splicing
     ftop = length(fine) ≥ 2 && fine[2] ≥ lidarrange[1] ? 2 : 1
-    if length(fine) ≥ 2 && fine[end-2] ≤ lidarrange[2]
+    if length(fine) > 2 && fine[end-2] ≤ lidarrange[2]
         # Omit the last row, if the fine-grained array has an additional
         # in-between value above the lower bound
         fbottom = 2
