@@ -6,36 +6,67 @@
 Return a `NamedTuple` with the following entries in the `lidarrange` (top, bottom):
 - `coarse`: altitude levels of the CALIOP lidar data as defined in the metadata of the hdf files
 - `fine`: altitude levels of CALIOP lidar data with 30m intervals below 8.3km
-- `itop`: index in the original data array of the first selected top height
-- `ibottom`: index in the original data array of the last selected bottom height
-- `i30`: vector index of the first altitude level with 30m intervals
+- `i.top`: index in the original data array of the first selected top height
+- `i.bottom`: index in the original data array of the last selected bottom height
+- `i.f.top`: start index for the fine-grained array
+- `i.f.bottom`: skip end range for the fine-grained array
+- `i.f.h30m`: vector index of the first altitude level with 30m intervals
 
 Height levels in fiels `coarse` and `fine` are saved in single precision unless
 otherwise specified by `Float`.
 """
 function get_lidarheights(lidarrange::Tuple{Real,Real}, Float::DataType=Float32)
+    threshold_finegrid = 8300.
     # Read CPro lidar altitude profile
-    hfile = normpath(@__DIR__, "../data/CPro_Lidar_Altitudes_m.dat")
+    hfile = normpath(@__DIR__, "..", "data", "CPro_Lidar_Altitudes_m.dat")
     hprofile = CSV.read(hfile, DataFrame, copycols = false, types=Float)
-    # Consider only levels between max/min given in lidarrange
-    itop = findfirst(hprofile.CPro .≤ lidarrange[1])
-    ibottom = findlast(hprofile.CPro .≥ lidarrange[2])
-    levels = try hprofile.CPro[itop:ibottom]
-    catch
-      AbstractFloat[]
+    # Validate lidarprofile indices
+    if lidarrange[1] < lidarrange[2]
+        throw(ArgumentError("invalid lidar height range\naltitude bounds are inverted"))
     end
+    if lidarrange[1] < hprofile.CPro[end] || lidarrange[2] > hprofile.CPro[1]
+        throw(ArgumentError("invalid lidar height range\nselected values must overlap with " *
+            "$(hprofile.CPro[1]) — $(hprofile.CPro[end])"))
+    end
+    # Find starting point at the top of the atmosphere
+    # ℹ min/max in top/bottom search ensure find results and graceful error handling of swapped lidarrange values
+    top = findlast(hprofile.CPro .≥ min(lidarrange[1], hprofile.CPro[1]))
+    bottom = findfirst(≤(max(lidarrange[2], hprofile.CPro[end])), hprofile.CPro)
+    coarse = hprofile.CPro[top:bottom]
+    # add extralayers for fine-grained region
+    h30m = findlast(coarse.≥threshold_finegrid)
+    h30m = isnothing(h30m) ? 1 : h30m
+    # ℹ increase index to 1 below the range, if the lidar range is completely above the fine grid
+    if lidarrange[2] > threshold_finegrid
+        h30m += 1
+    end
+    fine = [(coarse[i] + coarse[i+1])/2 for i = h30m:length(coarse)-1]
+    if length(fine) > 1
+        fine = [fine; coarse[end] + (coarse[end] - coarse[end-1])/2]
+        fine = vec(permutedims(hcat(coarse[h30m:end], fine)))
+    end
+    # Linearize array
+    fine = [coarse[1:h30m-1]; fine]
 
-    # add extralayers for region with double precision
-    h30m = findlast(levels.≥8300)
-    hfine = try hfine = [(levels[i] + levels[i+1])/2 for i = h30m:length(levels)-1]
-        sort([levels; hfine; levels[end]-30], rev=true)
-    catch
-        AbstractFloat[]
+    # Get all necessary indices for the fine-grained array splicing
+    ftop = length(fine) ≥ 2 && fine[2] ≥ lidarrange[1] ? 2 : 1
+    if length(fine) > 2 && fine[end-2] ≤ lidarrange[2]
+        # Omit the last row, if the fine-grained array has an additional
+        # in-between value above the lower bound
+        fbottom = 2
+    elseif fine[end] < threshold_finegrid
+        # Standard case: omit the fine-grained value, if the last value above the threshold
+        # is shared with the coarse array
+        fbottom = 1
+    else
+        # Omit nothing, if all values are above the fine grid
+        fbottom = 0
     end
+    fine = fine[ftop:end-fbottom]
 
     # Return original and refined altitude profiles and important indices
-    return (coarse = levels, fine = hfine, itop = isnothing(itop) ? 0 : itop,
-        ibottom = isnothing(ibottom) ? 0 : ibottom, i30 = isnothing(h30m) ? 0 : h30m)
+    f = (; top = ftop, bottom = fbottom, h30m)
+    return (; coarse, fine, i = (; top, bottom, f))
 end #function get_lidarheights
 
 
@@ -59,69 +90,35 @@ argument and are replaced by `missing` in `vec`.
 """
 function get_lidarcolumn(
     T::DataType,
-    var::Array{Tv},
+    var::Array,
     lidarprofile::NamedTuple;
     coarse::Bool = true,
     missingvalues = missing
-) where Tv
-    # Convert var to type t
-    Tv ≠ T && (var = T.(var))
-    # Validate lidarprofile indices
-    if lidarprofile.ibottom <= 0
-        throw(ArgumentError("Invalid lidar height range: ibottom = $(lidarprofile.ibottom). " *
-            "Check that the lidar range (top, bottom) captures valid altitude levels. " *
-            "For example, use (15_000, -Inf) to include all data from 15km down to ground level."))
-    end
-    if lidarprofile.itop > lidarprofile.ibottom
-        throw(ArgumentError("Invalid lidar height range: itop ($(lidarprofile.itop)) > ibottom ($(lidarprofile.ibottom)). " *
-            "The altitude range may be empty or inverted."))
-    end
-    if !coarse && lidarprofile.i30 <= 0
-        throw(ArgumentError("Invalid lidar height range for fine resolution (coarse=false): i30 = $(lidarprofile.i30). " *
-            "The 30m transition altitude may not exist in the specified range."))
-    end
+)
+    # Convert input variable to array of union type Missing and T
+    var = convert(Array{Union{Missing,T}, ndims(var)}, var)
     # Determine number of profiles (last dimension for HDF5 data)
-    nprofiles = ndims(var) == 2 ? size(var, 2) : size(var, 3)
+    nprofiles = size(var)[end]
     # Initialise vector to store all row vectors and loop over profiles
     row = Vector{Vector{Union{Missing,T}}}(undef, nprofiles)
     for i = 1:nprofiles
-        row[i] = if ndims(var) == 2 && coarse && ismissing(missingvalues)
-            # 2D array: Save column vector for coarse heights without transforming missing values
-            var[lidarprofile.itop:lidarprofile.ibottom, i]
-        elseif ndims(var) == 2 && coarse
-            # 2D array: Save column vector for coarse heights after transforming missing values
-            v = convert(Vector{Union{Missing,T}}, var[lidarprofile.itop:lidarprofile.ibottom, i])
-            v[v.==missingvalues] .= missing
-            v
-        elseif coarse && ismissing(missingvalues)
-            # 3D array: Save column vector for coarse heights without transforming missing values
-            var[1, lidarprofile.itop:lidarprofile.ibottom, i]
+        row[i] = if ndims(var) == 2 && !coarse
+            throw(ArgumentError("invalid input: 2D array provided for fine resolution heights; " *
+                "set coarse to true to resolve"))
         elseif coarse
-            # 3D array: Save column vector for coarse heights after transforming missing values
-            v = convert(Vector{Union{Missing,T}}, var[1, lidarprofile.itop:lidarprofile.ibottom, i])
-            v[v.==missingvalues] .= missing
-            v
-        elseif ismissing(missingvalues)
-            # 3D array: Save fine resolution heights without transforming missing values
-            v = Vector{T}(undef,length(lidarprofile.fine))
-            v[1:lidarprofile.i30-1] = var[1, lidarprofile.itop:lidarprofile.itop+lidarprofile.i30-2, i]
-            v[lidarprofile.i30:2:end] = var[1, lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom, i]
-            v[lidarprofile.i30+1:2:end] = var[2, lidarprofile.itop+lidarprofile.i30-1:lidarprofile.ibottom, i]
-            v
+            # Save coarse data and transform missing values
+            v = ndims(var) == 2 ? var[lidarprofile.i.top:lidarprofile.i.bottom, i] :
+                var[1, lidarprofile.i.top:lidarprofile.i.bottom, i]
+            ismissing(missingvalues) ? v : replace!(v, missingvalues => missing)
         else
-            # 3D array: Save fine resolution heights after transforming missing values
-            v1 = convert(Vector{Union{Missing,T}}, var[1, lidarprofile.itop:lidarprofile.ibottom, i])
-            v2 = convert(Vector{Union{Missing,T}}, var[2, lidarprofile.itop:lidarprofile.ibottom, i])
-            v1[v1.==missingvalues] .= missing
-            v2[v2.==missingvalues] .= missing
-            v = Vector{Union{Missing,T}}(undef,length(lidarprofile.fine))
-            v[1:lidarprofile.i30-1] = v1[1:lidarprofile.i30-1]
-            v[lidarprofile.i30:2:end] = v1[lidarprofile.i30:end]
-            v[lidarprofile.i30+1:2:end] = v2[lidarprofile.i30:end]
-            v
+            # 3D array: Save fine resolution heights with optional missing-value transformation
+            v = var[:, lidarprofile.i.top:lidarprofile.i.bottom, i]
+            !ismissing(missingvalues) && replace!(v, missingvalues => missing)
+            v = [v[1,1:lidarprofile.i.f.h30m-1];
+                vec(permutedims(hcat(v[1,lidarprofile.i.f.h30m:end], v[2,lidarprofile.i.f.h30m:end])))]
+            v[lidarprofile.i.f.top:end-lidarprofile.i.f.bottom]
         end
     end
-
     return row
 end #function get_lidarcolumn
 
@@ -210,24 +207,29 @@ end
 
 """
     atmosphericinfo(
-        sat::CPro,
-        hlevels::Vector{<:AbstractFloat},
+        sat::Union{CPro, CLay},
+        [hlevels::Vector{<:AbstractFloat},]
         isat::Int,
-        flightalt::Real,
+        flightalt::Union{Missing,Real},
         flight_num::Union{Int,String}
     ) -> Enum{UInt16}
 
-From the `CPro` cloud profile data at data point `isat` in `Intersection`
+From the `CPro` or `CLay` cloud profile data at data point `isat` in `Intersection`
 (index in the `DataFrame` of the intersection), return a `Enum{UInt16}` with a human-readable
 feature classification.
 
-Use the `hlevels` in the lidar column data and the `flightalt`itude to determine
+For `CPro` data, use the `hlevels` in the lidar column data and the `flightalt`itude to determine
 the atmospheric conditions (`feature`) at flight level at the intersection.
+For `CLay` data, only the `flightalt`itude and the `sat` data is used to determine the
+atmospheric conditions at flight level.
 
-`atmosphericinfo` returns a `missing` value, if no height level overlap between the
-flight altitude and the lidar levels was found or the feature array couldn't be accessed.
-On errors, `flight_num` will be returned to identify the source of the error.
+`atmosphericinfo` returns `invalid` if `flightalt` is missing, no suitable lidar level
+is found near flight altitude, or the feature array cannot be accessed.
+
+`flight_num` is used in warnings to identify the source of retrieval issues.
 """
+function atmosphericinfo end
+
 function atmosphericinfo(
     sat::CPro,
     hlevels::Vector{<:AbstractFloat},
@@ -236,51 +238,44 @@ function atmosphericinfo(
     flight_num::Union{Int,String}
 )::Enum{UInt16}
     ismissing(flightalt) && return invalid
+    isempty(hlevels) && return invalid
     i = argmin(abs.(hlevels .- flightalt))
     if abs(hlevels[i] - flightalt) > 60
         println(); @warn string("insufficient altitudes for lidar data saved; ",
         "invalid used for feature in intersections of flight $(flight_num)")
         invalid
     else
-        try sat.atmos_state[isat][i]
-        catch
+        state = get(sat.atmos_state, isat, Enum{UInt16}[])
+        feature = get(state, i, invalid)
+        if feature == invalid && (isat ∉ eachindex(sat.atmos_state) || i ∉ eachindex(state))
             @error "failed to retrieve atmospheric state for flight $(flight_num) "*
                 "at altitude $(hlevels[i]); setting to 'invalid'"
-            invalid
         end
+        feature
     end
 end #function atmosphericinfo
 
-
-"""
-    atmosphericinfo(
-        sat::CLay,
-        alt::AbstractFloat,
-        isat::Int
-    ) -> Enum{UInt16}
-
-From the `CLay` cloud layer data at data point `isat` in `Intersection`
-(index in the `DataFrame` of the intersection), return a `Enum{UInt16}` with a human-readable
-feature classification at flight `alt`itude.
-
-`atmosphericinfo` returns a `missing` value, if no feature was found at flight level.
-"""
 function atmosphericinfo(
     sat::CLay,
+    isat::Int,
     alt::Union{Missing,Real},
-    isat::Int
+    flight_num::Union{Int,String}
 )::Enum{UInt16}
     ismissing(alt) && return invalid
-    top, base = sat[isat, [:layer_top, :layer_base]]
-    feature = try
-        for i = 1:length(top)
-            if base[i] ≤ alt ≤ top[i]
-                return sat.atmos_state[isat][i]
-            end
-        end
-    catch
-        @error "failed to retrieve atmospheric state at altitude $alt; setting to 'invalid'"
+    top = get(sat.layer_top, isat, nothing)
+    base = get(sat.layer_base, isat, nothing)
+    state = get(sat.atmos_state, isat, nothing)
+    if isnothing(top) || isnothing(base) || isnothing(state)
+        @error("failed to retrieve atmospheric state for flight $(flight_num) at altitude $alt; "*
+            "setting to 'invalid'")
         return invalid
     end
-    isnothing(feature) && return invalid
+
+    for i in eachindex(top)
+        if base[i] ≤ alt ≤ top[i]
+            return state[i]
+        end
+    end
+
+    invalid
 end #function atmosphericinfo

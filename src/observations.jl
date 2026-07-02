@@ -55,6 +55,9 @@ struct CLay{T} <: ObservationSet{T}
         all(length(time) == length(prop) for prop in
             (lat, lon, layer_top, layer_base, atmos_state, OD, IWP, Ttop, h_tropo, night, averaging)) ||
             throw(DimensionMismatch("all input vectors must have the same length in CLay data"))
+        all(i -> length(layer_top[i]) == length(layer_base[i]) == length(atmos_state[i]) ==
+            length(OD[i]) == length(IWP[i]) == length(Ttop[i]), eachindex(layer_top)) ||
+            throw(DimensionMismatch("all per-time-step layer vectors must have the same length in CLay data"))
         checklimits(time, DateTime(2000), Dates.now(), "time")
         checklimits(lat, T(-90), T(90), "latitude")
         checklimits(lon, T(-180), T(180), "longitude")
@@ -225,6 +228,10 @@ struct CPro{T} <: ObservationSet{T}
         all(length(time) == length(prop) for prop in
             (lat, lon, atmos_state, EC532, h_tropo, temp, pressure, rH, IWC, deltap, CADscore, night)) ||
             throw(DimensionMismatch("all input vectors must have the same length in CPro data"))
+        all(i -> length(atmos_state[i]) == length(CADscore[i]) &&
+            length(EC532[i]) == length(temp[i]) == length(pressure[i]) ==
+            length(rH[i]) == length(IWC[i]) == length(deltap[i]), eachindex(atmos_state)) ||
+            throw(DimensionMismatch("all per-time-step profile vectors must have consistent lengths in CPro data"))
         checklimits(time, DateTime(2000), Dates.now(), "time")
         checklimits(lat, T(-90), T(90), "latitude")
         checklimits(lon, T(-180), T(180), "longitude")

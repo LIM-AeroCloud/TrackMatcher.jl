@@ -317,7 +317,10 @@ export DataSet, Data, MeasuredSet, ComputedSet, PrimarySet, SecondarySet, Observ
        FlightSet, CloudSet, SatSet, PrimaryTrack, SecondaryTrack,
        FlightTrack, CloudTrack, SatTrack, FlightData, CloudData, SatData,
        CLay, CPro, Intersection, XData, #APro, ALay,
-       FlightMetadata, CloudMetadata, PrimaryMetadata, SecondaryMetadata, XMetadata
+       FlightMetadata, CloudMetadata, PrimaryMetadata, SecondaryMetadata, XMetadata,
+       AerosolType, CloudType, SkyCondition, invalid, clear, cloud, aerosol, stratospheric,
+       surface, subsurface, no_signal, undetermined, marine, dust, polluted, remote, polluted_dust,
+       smoke, other, low_trasparent, low_opaque, transition_sc, cu, ac, as, ci, cb
 
 
 ## Source files

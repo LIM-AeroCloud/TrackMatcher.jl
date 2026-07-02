@@ -460,7 +460,7 @@ function get_satdata(
     atmos = if contains(string(sat.metadata.type), "CPro")
         atmosphericinfo(cpro, lidarprofile.fine, ts, trackalt, trackID)
     else
-        atmosphericinfo(clay, trackalt, ts)
+        atmosphericinfo(clay, ts, trackalt, trackID)
     end
     # Return observations
     return cpro, clay, atmos, ts

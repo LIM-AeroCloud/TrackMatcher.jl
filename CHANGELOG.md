@@ -9,6 +9,11 @@
 - Add method `checklimits` to check array fields of `SatData` are within expected limits ([#51])
 - Setup code coverage for _TrackMatcher_ and add badges for the CI status and code coverage
   to README ([#64])
+- Improved error handling for lidar heights retrieval ([#75])
+  - exact calculation of last fine-grained level height (~29.94m) instead of 30m approximation
+  - Set `i.f.h30m` to `1` instead of `0` for a chosen height range below 8.3km to allow the calculation
+    of all fine-grained levels instead of throwing an error
+  - Add error handling to `get_lidarcolumn` to throw a descriptive error for wrong user input
 
 ### Changed
 
@@ -39,6 +44,12 @@
 - Disable validity checks during construction of observation data until less restrictive.
   Future re-implementations should only disregard single outliers not the whole column of data
   with outliers. ([#58])
+- Simplify retrieval of lidar column data ([#75])
+  - refactor lidar.jl
+  - use more generous boundaries including the first value outside each threshold for more exact
+    calculations at the edges (technically **breaking**)
+  - revised return value of `get_lidarheights`
+- Use flight number for error handling in `CLay` method of `atmosphericinfo` ([#75])
 
 ### Removed
 
