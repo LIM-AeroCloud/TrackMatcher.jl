@@ -36,7 +36,7 @@ function load_volpe(
             types = Dict("FLIGHT_ID" => Int, "LATITUDE" => Float, "LONGITUDE" => Float,
             "ALTITUDE" => Float, "SPEED" => Float, "SEGMENT_YEAR" => Int,
             "SEGMENT_MONTH" => Int, "SEGMENT_DAY" => Int, "SEGMENT_HOUR" => Int,
-            "SEGMENT_MIN" => Int, "SEGMENT_SEC" => Int), select = [1:11;16])
+            "SEGMENT_MIN" => Int, "SEGMENT_SEC" => Int), select = [1;3:11;16])
         # Prepare and filter data
         df.transform!(flightdata,
             [:SEGMENT_YEAR, :SEGMENT_MONTH, :SEGMENT_DAY,

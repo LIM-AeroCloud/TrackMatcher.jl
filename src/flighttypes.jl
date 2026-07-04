@@ -192,8 +192,11 @@ struct PrimaryMetadata{T<:AbstractFloat} <: PrimarySet{T}
 end #struct PrimaryMetadata
 
 #* Constructor for empty PrimaryMetadata
-PrimaryMetadata{T}() where T<:AbstractFloat = PrimaryMetadata{T}(0, (start=Dates.now(), stop=Dates.now()),
-    ds.OrderedDict{String,AbstractDict}(), Dates.now(), Dates.CompoundPeriod(), nothing)
+PrimaryMetadata{T}() where T<:AbstractFloat = begin
+    t0 = Dates.now()
+    PrimaryMetadata{T}(0, (start=t0, stop=t0), ds.OrderedDict{String,AbstractDict}(),
+        t0, Dates.CompoundPeriod(), nothing)
+end
 
 #* Constructor for default Float32 PrimaryMetadata
 PrimaryMetadata(args...) = PrimaryMetadata{Float32}(args...)
@@ -334,6 +337,9 @@ FlightTrack(args...; kwargs...) = FlightData{Float32}(args...; kwargs...)
 
 #* Alias constructor for FlightData with type promotion
 FlightTrack{T}(args...; kwargs...) where T<:AbstractFloat = FlightData{T}(args...; kwargs...)
+
+#* Alias constructor for FlightData with type promotion from another FlightData
+FlightTrack{T}(track::FlightData) where T<:AbstractFloat = FlightData{T}(track)
 
 
 ## Struct for sets of flight tracks
@@ -484,13 +490,8 @@ FlightSet{T}(flights::FlightSet) where T<:AbstractFloat = FlightSet{T}(
 )
 
 """
-    PrimarySet{T}(
-        volpe::Vector{FlightData{T}},
-        flightaware::Vector{FlightData{T}},
-        webdata::Vector{FlightData{T}},
-        metadata::PrimaryMetadata{T}
-    ) where T<:AbstractFloat
-    PrimarySet{T}(; kwargs...) where T<:AbstractFloat
+    PrimarySet(; kwargs...)
+    PrimarySet{T}(; kwargs...) where T<:AbstractFloat = FlightSet{T}(; kwargs...)
     PrimarySet{T}(tracks::FlightSet) where T<:AbstractFloat
 
     PrimarySet{T}(tracks::StructArray{CloudData{T}}, metadata::PrimaryMetadata{T}) where T<:AbstractFloat
@@ -503,16 +504,11 @@ and [`PrimaryMetadata`](@ref).
 """
 function PrimarySet end
 
-PrimarySet{T}(
-    volpe::Vector{FlightData{T}},
-    flightaware::Vector{FlightData{T}},
-    webdata::Vector{FlightData{T}},
-    metadata::PrimaryMetadata{T}
-) where T<:AbstractFloat = FlightSet{T}(volpe, flightaware, webdata, metadata)
-
 #* Alias constructor for default Float32 PrimarySet
-PrimarySet{T}(; kwargs...) where T<:AbstractFloat =
-    FlightSet{T}(; kwargs...)
+PrimarySet(; kwargs...) = FlightSet{Float32}(; kwargs...)
+
+#* Alias constructor for other defined floating point precisions
+PrimarySet{T}(; kwargs...) where T<:AbstractFloat = FlightSet{T}(; kwargs...)
 
 #* Alias constructor for type promotion of FlightSet
 PrimarySet{T}(tracks::FlightSet) where T<:AbstractFloat = FlightSet{T}(tracks)

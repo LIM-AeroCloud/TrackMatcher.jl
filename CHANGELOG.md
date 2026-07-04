@@ -83,7 +83,7 @@
 
 ## [v0.5.3] - 2022-02-20
 
-# Added
+### Added
 
 - Add raw data and scripts for result plots in paper in folder paperplots
 
