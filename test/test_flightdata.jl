@@ -4,6 +4,7 @@
         flight64 = FlightSet{Float64}(volpe=joinpath(@__DIR__, "..", "test", "data", "volpe"))
         flight16 = FlightSet{Float16}(flight64)
         flight_empty = FlightSet()
+        flight_nothing = FlightSet(volpe=joinpath(@__DIR__, "..", "test", "data", "caliop", "clay"))
         @testset "data integrity" begin
             @test length(flight.volpe) == 13
             @test isempty(flight.flightaware)
@@ -16,6 +17,11 @@
             @test flight.volpe.alt isa Vector{<:Vector{<:Union{Missing,Float32}}}
             @test isempty(flight_empty.volpe) && isempty(flight_empty.flightaware) &&
                 isempty(flight_empty.webdata)
+            @test flight_empty.metadata.date.start == flight_empty.metadata.date.stop ==
+                flight_empty.metadata.created
+            @test isempty(flight_nothing.volpe)
+            @test flight_nothing.metadata.date.start == flight_nothing.metadata.date.stop ==
+                DateTime(flight_nothing.metadata.created)
         end
         @testset "data precision" begin
             @test flight64.volpe.time isa Vector{<:Vector{DateTime}}
@@ -30,19 +36,27 @@
             @test all(flight.volpe.alt[1] .≈ flight64.volpe.alt[1])
         end
         @testset "constructors" begin
+            # Define datasets
             primary = PrimarySet(volpe=joinpath(@__DIR__, "..", "test", "data", "volpe"))
             primary64 = PrimarySet{Float64}(volpe=joinpath(@__DIR__, "..", "test", "data", "volpe"))
             flightprimary = PrimarySet{Float64}(flight)
             alt_atol = 2e-3
             approx_vec(v1, v2; atol=1e-5) = all(((ismissing(x) || ismissing(y)) ?
                 x === y : isapprox(x, y; atol=atol, rtol=0)) for (x, y) in zip(v1, v2))
-            fields = []
+            fields, fields64 = [], []
             for field in fieldnames(FlightData)
                 push!(fields, getproperty(flight.volpe[1], field))
+                push!(fields64, getproperty(flight64.volpe[1], field))
             end
             track = FlightTrack(fields...)
-            track64 = FlightTrack{Float64}(track)
+            track64 = FlightTrack{Float64}(fields64...)
             track_converted = FlightTrack{Float64}(track)
+            track_empty = FlightTrack()
+            flighttrack = FlightData(fields...)
+            primmeta = PrimaryMetadata()
+            flightmeta = FlightMetadata()
+
+            # Test constructors and datasets
             @test primary isa FlightSet{Float32}
             @test primary64 isa FlightSet{Float64}
             @test flightprimary isa FlightSet{Float64}
@@ -73,6 +87,18 @@
             @test approx_vec(track_converted.lat, flight64.volpe.lat[1])
             @test approx_vec(track_converted.lon, flight64.volpe.lon[1])
             @test approx_vec(track_converted.alt, flight64.volpe.alt[1]; atol=alt_atol)
+            @test track_empty isa FlightData{Float32}
+            @test isempty(track_empty.time) && isempty(track_empty.lat) &&
+                isempty(track_empty.lon) && isempty(track_empty.alt)
+            @test flighttrack isa FlightData{Float32}
+            @test flighttrack.lat == flight.volpe.lat[1]
+            @test flighttrack.lon == flight.volpe.lon[1]
+            @test flighttrack.alt == flight.volpe.alt[1]
+            @test flighttrack.lat isa Vector{Float32} && flighttrack.lon isa Vector{Float32} &&
+                flighttrack.alt isa Vector{<:Union{Missing,Float32}}
+            @test primmeta isa PrimaryMetadata{Float32}
+            @test flightmeta isa FlightMetadata{Float32}
+            @test isempty(flightmeta.id)
         end
     end
 end
