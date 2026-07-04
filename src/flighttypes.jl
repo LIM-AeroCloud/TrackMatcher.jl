@@ -335,6 +335,9 @@ FlightTrack(args...; kwargs...) = FlightData{Float32}(args...; kwargs...)
 #* Alias constructor for FlightData with type promotion
 FlightTrack{T}(args...; kwargs...) where T<:AbstractFloat = FlightData{T}(args...; kwargs...)
 
+#* Alias constructor for FlightData with type promotion from another FlightData
+FlightTrack{T}(track::FlightData) where T<:AbstractFloat = FlightData{T}(track)
+
 
 ## Struct for sets of flight tracks
 
@@ -511,6 +514,9 @@ PrimarySet{T}(
 ) where T<:AbstractFloat = FlightSet{T}(volpe, flightaware, webdata, metadata)
 
 #* Alias constructor for default Float32 PrimarySet
+PrimarySet(; kwargs...) where T<:AbstractFloat = FlightSet{Float32}(; kwargs...)
+
+#* Alias constructor for other defined floating point precisions
 PrimarySet{T}(; kwargs...) where T<:AbstractFloat =
     FlightSet{T}(; kwargs...)
 
