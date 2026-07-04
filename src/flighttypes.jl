@@ -338,9 +338,6 @@ FlightTrack{T}(args...; kwargs...) where T<:AbstractFloat = FlightData{T}(args..
 #* Alias constructor for FlightData with type promotion from another FlightData
 FlightTrack{T}(track::FlightData) where T<:AbstractFloat = FlightData{T}(track)
 
-#* Alias constructor for empty FlightData
-FlightTrack{T}() where T<:AbstractFloat = FlightData{T}()
-
 
 ## Struct for sets of flight tracks
 
