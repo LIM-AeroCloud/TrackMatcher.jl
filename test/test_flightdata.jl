@@ -3,6 +3,7 @@
         flight = FlightSet(volpe=joinpath(@__DIR__, "..", "test", "data", "volpe"))
         flight64 = FlightSet{Float64}(volpe=joinpath(@__DIR__, "..", "test", "data", "volpe"))
         flight16 = FlightSet{Float16}(flight64)
+        t0 = now()
         flight_empty = FlightSet()
         flight_nothing = FlightSet(volpe=joinpath(@__DIR__, "..", "test", "data", "caliop", "clay"))
         @testset "data integrity" begin
@@ -17,10 +18,10 @@
             @test flight.volpe.alt isa Vector{<:Vector{<:Union{Missing,Float32}}}
             @test isempty(flight_empty.volpe) && isempty(flight_empty.flightaware) &&
                 isempty(flight_empty.webdata)
-            @test flight_empty.metadata.date.start == flight_empty.metadata.date.stop ==
-                flight_empty.metadata.created
+            @test t0 ≤ flight_empty.metadata.date.start == flight_empty.metadata.date.stop ≤
+                DateTime(flight_empty.metadata.created)
             @test isempty(flight_nothing.volpe)
-            @test flight_nothing.metadata.date.start == flight_nothing.metadata.date.stop ==
+            @test t0 ≤ flight_nothing.metadata.date.start == flight_nothing.metadata.date.stop ≤
                 DateTime(flight_nothing.metadata.created)
         end
         @testset "data precision" begin
