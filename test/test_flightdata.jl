@@ -102,4 +102,22 @@
             @test isempty(flightmeta.id)
         end
     end
+    @testset "FlightAware" begin
+        flight_old = FlightSet(flightaware=joinpath(@__DIR__, "..", "test", "data", "archive", "old"))
+        flight_new = FlightSet(flightaware=joinpath(@__DIR__, "..", "test", "data", "archive", "new"))
+        @test length(flight_old.flightaware) == 9
+        @test isempty(flight_old.volpe)
+        @test isempty(flight_old.webdata)
+        @test minimum(skipmissing([flight_old.flightaware.alt...;])) ≥ 5000
+        @test length(flight_new.flightaware) == 3
+        @test isempty(flight_new.volpe)
+        @test isempty(flight_new.webdata)
+        @test minimum(skipmissing([flight_new.flightaware.alt...;])) ≥ 5000
+        @test flight_old.flightaware.lat isa Vector{<:Vector{Float32}} &&
+            flight_old.flightaware.lon isa Vector{<:Vector{Float32}} &&
+            flight_old.flightaware.alt isa Vector{<:Vector{<:Union{Missing,Float32}}}
+        @test flight_new.flightaware.lat isa Vector{<:Vector{Float32}} &&
+            flight_new.flightaware.lon isa Vector{<:Vector{Float32}} &&
+            flight_new.flightaware.alt isa Vector{<:Vector{<:Union{Missing,Float32}}}
+    end
 end
