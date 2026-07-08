@@ -219,6 +219,12 @@ function load_webdata(
 
         # Set to 2 days prior to allow corrections for timezone diffences in the next step
         date += Dates.Day(2)
+
+        # DEBUG
+        println("DEBUG: Processing file: $file")
+        println("DEBUG: Parsed date from filename: $date")
+        println("DEBUG: First few time entries (day abbr): $(flight.time[1:min(3, length(flight.time))])")
+
         ### Convert times to datetime and extract heading and climbing rate
         # Initialise vectors
         lat = Float[]
@@ -244,8 +250,14 @@ function load_webdata(
                 continue
             end
             # Derive date from day of week and filename
+            day_count = 0
             while Dates.dayabbr(date) ≠ flight.time[i][1:3]
                 date -= Dates.Day(1)
+                day_count += 1
+            end
+            # DEBUG: print matching info for first entry only
+            if i == length(flight[!,1])
+                println("DEBUG: Time entry day abbr: $(flight.time[i][1:3]), Matching date: $date (decremented by $day_count days)")
             end
             # Derive time from time string
             t = Time(flight.time[i][5:end], "I:M:S p")
@@ -261,6 +273,16 @@ function load_webdata(
 
         # Skip data with all data points below the altitude threshold or missing
         isempty(altitude) && continue
+
+        # DEBUG: print final date range
+        if !isempty(flighttime)
+            println("DEBUG: Final date range: $(flighttime[end]) to $(flighttime[1])")
+            println("DEBUG: Timezone object: $timezone")
+            println("DEBUG: First entry as ZonedDateTime: $(flighttime[1])")
+            println("DEBUG: First entry hour: $(hour(flighttime[1]))")
+            println("DEBUG: First entry as DateTime (direct): $(DateTime(flighttime[1]))")
+        end
+
         # Restore original order
         reverse!(flighttime)
         reverse!(altitude)

@@ -137,19 +137,29 @@
             )
         end
         # Test data integrity and metadata
-        @test length(web.webdata) == 1
-        @test isempty(web.volpe) && isempty(web.flightaware)
-        @test length(webok.webdata) == 2
-        @test minimum(skipmissing([webok.webdata.alt...;])) ≥ 5000
-        @test webok.webdata.lat isa Vector{<:Vector{Float32}} &&
-            webok.webdata.lon isa Vector{<:Vector{Float32}} &&
-            webok.webdata.alt isa Vector{<:Vector{<:Union{Missing,Float32}}}
-        @test webok.webdata.lat isa Vector{<:Vector{Float32}} &&
-            webok.webdata.lon isa Vector{<:Vector{Float32}} &&
-            webok.webdata.alt isa Vector{<:Vector{<:Union{Missing,Float32}}}
-        @test web.webdata.metadata[1].flight_num == "ABC123"
-        @test web.webdata.metadata[1].route.orig == "ABCD" && web.webdata.metadata[1].route.dest == "EFGH"
-        @test web.webdata.metadata[1].date.start == DateTime(2010, 6, 6, 7, 40, 40) &&
-            web.webdata.metadata[1].date.stop == DateTime(2010, 6, 6, 12, 36, 29)
+        @testset "data integrity and metadata" begin
+            @test length(web.webdata) == 1
+            @test isempty(web.volpe) && isempty(web.flightaware)
+            @test length(webok.webdata) == 2
+            @test minimum(skipmissing([webok.webdata.alt...;])) ≥ 5000
+            @test webok.webdata.lat isa Vector{<:Vector{Float32}} &&
+                webok.webdata.lon isa Vector{<:Vector{Float32}} &&
+                webok.webdata.alt isa Vector{<:Vector{<:Union{Missing,Float32}}}
+            @test webok.webdata.lat isa Vector{<:Vector{Float32}} &&
+                webok.webdata.lon isa Vector{<:Vector{Float32}} &&
+                webok.webdata.alt isa Vector{<:Vector{<:Union{Missing,Float32}}}
+            @test web.webdata.metadata[1].flight_num == "ABC123"
+            @test web.webdata.metadata[1].route.orig == "ABCD" && web.webdata.metadata[1].route.dest == "EFGH"
+
+            # Debug: print actual dates
+            println("Expected start: DateTime(2010, 6, 6, 7, 40, 40)")
+            println("Actual start: $(web.webdata.metadata[1].date.start)")
+            println("Expected stop: DateTime(2010, 6, 6, 12, 36, 29)")
+            println("Actual stop: $(web.webdata.metadata[1].date.stop)")
+
+            @test web.webdata.metadata[1].date.start == DateTime(2010, 6, 6, 7, 40, 40) &&
+                web.webdata.metadata[1].date.stop == DateTime(2010, 6, 6, 12, 36, 29)
+        end
     end
+    # TODO test loading of all data together
 end
