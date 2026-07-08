@@ -1,0 +1,382 @@
+
+Time (CEST)	Latitude	Longitude	Course	kts	mph	feet	Rate	Reporting Facility
+Time (CEST)	Latitude	Longitude	Course	kts	mph	feet	Rate	Reporting Facility
+Sun 09:31:54 AM    Departure (OGG) @ Saturday 09:31:54 PM HST			 FlightAware ADS-B (OGG / PHOG)
+Sun 09:31:54 AM	20.9197	-156.4174	? 19°	167	192	1,100	 Level	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:32:13 AM	20.9351	-156.4112	? 24°	186	214	1,700	1,543 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:32:29 AM	20.9464	-156.4055	? 26°	208	239	2,000	1,500 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:32:46 AM	20.9629	-156.3964	? 28°	226	260	2,525	1,714 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:33:04 AM	20.9799	-156.3861	? 38°	247	284	3,000	1,958 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:33:22 AM	20.9926	-156.3688	? 66°	250	288	3,700	2,200 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:33:49 AM	20.9988	-156.3348	? 82°	262	302	4,650	2,132 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:34:19 AM	21.0034	-156.2958	? 83°	272	313	5,725	2,262 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:34:50 AM	21.0084	-156.2544	? 82°	275	316	6,950	2,489 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:35:06 AM	21.0112	-156.2318	? 82°	279	321	7,675	2,348 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:35:36 AM	21.0165	-156.1914	? 82°	283	326	8,750	2,175 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:36:06 AM	21.0222	-156.1472	? 82°	287	330	9,850	1,675 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:36:36 AM	21.0277	-156.1041	? 82°	309	356	10,425	934 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:37:07 AM	21.0338	-156.0557	? 82°	337	388	10,800	1,082 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:37:37 AM	21.0400	-156.0064	? 82°	347	399	11,525	1,697 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:38:08 AM	21.0471	-155.9509	? 82°	352	405	12,525	1,820 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:38:38 AM	21.0531	-155.9027	? 82°	356	410	13,375	1,790 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:39:10 AM	21.0604	-155.8449	? 82°	358	412	14,375	1,911 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:39:40 AM	21.0671	-155.7918	? 82°	363	418	15,350	1,825 Climbing	 FlightAware ADS-B (MUE / PHMU)
+Sun 09:40:10 AM	21.0738	-155.7378	? 82°	367	422	16,200	1,675 Climbing	 FlightAware ADS-B (MUE / PHMU)
+Sun 09:40:40 AM	21.0805	-155.6839	? 82°	370	426	17,025	1,650 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:41:10 AM	21.0874	-155.6289	? 82°	374	430	17,850	1,600 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:41:40 AM	21.0943	-155.5750	? 83°	382	440	18,625	1,675 Climbing	 FlightAware ADS-B (HNM / PHHN)
+Sun 09:42:10 AM	21.1013	-155.5180	? 82°	387	445	19,525	1,525 Climbing	 FlightAware ADS-B (MUE / PHMU)
+Sun 09:42:40 AM	21.1085	-155.4596	? 83°	399	459	20,150	1,300 Climbing	 FlightAware ADS-B (MUE / PHMU)
+Sun 09:43:10 AM	21.1159	-155.4006	? 83°	408	470	20,825	1,475 Climbing	 FlightAware ADS-B (MUE / PHMU)
+Sun 09:43:40 AM	21.1233	-155.3398	? 83°	413	475	21,625	1,475 Climbing	 FlightAware ADS-B (MUE / PHMU)
+Sun 09:44:10 AM	21.1310	-155.2779	? 83°	420	483	22,300	1,400 Climbing	 FlightAware ADS-B (MUE / PHMU)
+Sun 09:44:40 AM	21.1385	-155.2161	? 83°	425	489	23,025	1,475 Climbing	 FlightAware ADS-B (MUE / PHMU)
+Sun 09:45:10 AM	21.1463	-155.1529	? 83°	430	495	23,775	1,450 Climbing	 FlightAware ADS-B (MUE / PHMU)
+Sun 09:45:40 AM	21.1538	-155.0911	? 83°	433	498	24,475	1,426 Climbing	 FlightAware ADS-B (MUE / PHMU)
+Sun 09:46:11 AM	21.1619	-155.0245	? 83°	435	501	25,225	1,328 Climbing	 FlightAware ADS-B (MUE / PHMU)
+Sun 09:46:41 AM	21.1696	-154.9601	? 83°	440	506	25,825	1,230 Climbing	 FlightAware ADS-B (MUE / PHMU)
+Sun 09:47:12 AM	21.1777	-154.8933	? 83°	444	511	26,475	1,169 Climbing	 FlightAware ADS-B (ITO / PHTO)
+Sun 09:47:49 AM	21.1874	-154.8116	? 83°	451	519	27,150	1,187 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:48:19 AM	21.1954	-154.7449	? 83°	455	524	27,800	1,217 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:48:58 AM	21.2060	-154.6547	? 83°	464	534	28,550	1,196 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:49:28 AM	21.2139	-154.5883	? 83°	468	539	29,175	1,250 Climbing	 FlightAware ADS-B (ITO / PHTO)
+Sun 09:49:58 AM	21.2221	-154.5172	? 83°	472	543	29,800	1,200 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:50:28 AM	21.2304	-154.4479	? 83°	476	548	30,375	1,107 Climbing	 FlightAware ADS-B (ITO / PHTO)
+Sun 09:50:59 AM	21.2386	-154.3765	? 83°	480	552	30,925	1,095 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:51:31 AM	21.2474	-154.2997	? 83°	484	557	31,525	1,295 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:52:05 AM	21.2568	-154.2184	? 83°	483	556	32,350	1,299 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:52:38 AM	21.2654	-154.1430	? 83°	485	558	32,975	577 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:53:10 AM	21.2745	-154.0625	? 83°	489	563	32,975	 Level	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:53:57 AM	21.2870	-153.9523	? 83°	488	562	32,975	 Level	 FlightAware ADS-B (ITO / PHTO)
+Sun 09:54:27 AM	21.2951	-153.8805	? 83°	486	559	32,975	 Level	 FlightAware ADS-B (ITO / PHTO)
+Sun 09:54:59 AM	21.3035	-153.8048	? 83°	483	556	32,975	 Level	 FlightAware ADS-B (ITO / PHTO)
+Sun 09:55:34 AM	21.3128	-153.7217	? 83°	482	555	32,975	-21 Descending	 FlightAware ADS-B (MUE / PHMU)
+Sun 09:56:09 AM	21.3219	-153.6394	? 83°	481	554	32,950	 Level	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:57:08 AM	21.3372	-153.5003	? 83°	480	552	32,975	14 Climbing	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:57:58 AM	21.3500	-153.3822	? 83°	480	552	32,975	 Level	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:58:31 AM	21.3588	-153.3010	? 83°	480	552	32,975	 Level	 FlightAware ADS-B (OGG / PHOG)
+Sun 09:59:03 AM	21.3665	-153.2291	? 83°	479	551	32,975	 Level	 FlightAware ADS-B (OGG / PHOG)
+Sun 10:01:22 AM	21.4019	-152.8995	? 84°	479	551	32,975	 Level	 FlightAware ADS-B (OGG / PHOG)
+Sun 10:02:02 AM	21.4115	-152.8085	? 84°	479	551	32,975	 Level	 FlightAware ADS-B (OGG / PHOG)
+Sun 10:02:44 AM	21.4221	-152.7084	? 84°	479	551	32,975	 Level	 FlightAware ADS-B (OGG / PHOG)
+Sun 10:03:32 AM	21.4341	-152.5933	? 84°	480	552	32,975	 Level	 FlightAware ADS-B (OGG / PHOG)
+Sun 10:04:18 AM	21.4453	-152.4859	? 84°	481	554	32,975	 Level	 FlightAware ADS-B (OGG / PHOG)
+Sun 10:05:00 AM	21.4557	-152.3854	? 84°	481	554	32,975	 Level	 FlightAware ADS-B (OGG / PHOG)
+Sun 10:05:55 AM	21.4691	-152.2540	? 84°	482	555	32,975	 Level	 FlightAware ADS-B (ITO / PHTO)
+Sun 10:06:50 AM	21.4827	-152.1218	? 84°	483	556	32,975	11 Climbing	 FlightAware ADS-B (ITO / PHTO)
+Sun 10:08:09 AM	21.4833	-151.9333	? 84°	490	564	33,000	 Level	 Honolulu Center
+Sun 10:08:35 AM	21.5076	-151.8732	? 84°	486	559	32,975	 Level	 FlightAware ADS-B (OGG / PHOG)
+Sun 10:10:24 AM	21.5167	-151.6167	? 84°	540	621	33,000	9 Climbing	 Honolulu Center
+Sun 10:11:24 AM	21.5333	-151.4833	? 82°	490	564	33,000	 Level	 Honolulu Center
+Sun 10:13:50 AM	21.6777	-151.1801	? 63°				 Level	 FlightAware Approximate
+Sun 10:21:10 AM	22.1047	-150.2627	? 63°				 Level	 FlightAware Approximate
+Sun 10:22:38 AM	22.1900	-150.0781	? 64°				 Level	 FlightAware Approximate
+Sun 10:24:01 AM	22.2701	-149.9034	? 64°				 Level	 FlightAware Approximate
+Sun 10:25:22 AM	22.3481	-149.7324	? 64°				 Level	 FlightAware Approximate
+Sun 10:26:51 AM	22.4336	-149.5443	? 64°				 Level	 FlightAware Approximate
+Sun 10:28:13 AM	22.5122	-149.3709	? 64°				 Level	 FlightAware Approximate
+Sun 10:29:38 AM	22.5935	-149.1913	? 64°				 Level	 FlightAware Approximate
+Sun 10:31:01 AM	22.6727	-149.0154	? 64°				 Level	 FlightAware Approximate
+Sun 10:32:23 AM	22.7508	-148.8413	? 64°				 Level	 FlightAware Approximate
+Sun 10:33:48 AM	22.8315	-148.6607	? 64°				 Level	 FlightAware Approximate
+Sun 10:35:03 AM	22.9026	-148.5017	? 64°				 Level	 FlightAware Approximate
+Sun 10:36:33 AM	22.9876	-148.3107	? 64°				 Level	 FlightAware Approximate
+Sun 10:37:58 AM	23.0678	-148.1301	? 64°				 Level	 FlightAware Approximate
+Sun 10:39:18 AM	23.1430	-147.9595	? 64°				 Level	 FlightAware Approximate
+Sun 10:40:39 AM	23.2189	-147.7872	? 64°				 Level	 FlightAware Approximate
+Sun 10:42:02 AM	23.2966	-147.6097	? 64°				 Level	 FlightAware Approximate
+Sun 10:43:30 AM	23.3787	-147.4218	? 65°				 Level	 FlightAware Approximate
+Sun 10:44:56 AM	23.4587	-147.2379	? 65°				 Level	 FlightAware Approximate
+Sun 10:46:14 AM	23.5311	-147.0708	? 65°				 Level	 FlightAware Approximate
+Sun 10:47:38 AM	23.6088	-146.8907	? 65°				 Level	 FlightAware Approximate
+Sun 10:49:06 AM	23.6900	-146.7019	? 65°				 Level	 FlightAware Approximate
+Sun 10:50:29 AM	23.7664	-146.5234	? 65°				 Level	 FlightAware Approximate
+Sun 10:51:48 AM	23.8389	-146.3528	? 65°				 Level	 FlightAware Approximate
+Sun 10:53:13 AM	23.9167	-146.1697	? 65°				 Level	 FlightAware Approximate
+Sun 10:54:38 AM	23.9943	-145.9865	? 65°				 Level	 FlightAware Approximate
+Sun 10:55:56 AM	24.0653	-145.8174	? 65°				 Level	 FlightAware Approximate
+Sun 10:57:19 AM	24.1407	-145.6374	? 65°				 Level	 FlightAware Approximate
+Sun 10:58:44 AM	24.2177	-145.4529	? 65°				 Level	 FlightAware Approximate
+Sun 11:00:09 AM	24.2945	-145.2687	? 65°				 Level	 FlightAware Approximate
+Sun 11:01:30 AM	24.3674	-145.0931	? 66°				 Level	 FlightAware Approximate
+Sun 11:01:36 AM	24.4167	-144.9833	? 66°	487	560	33,000	 Level	 Oakland Oceanic
+Sun 11:04:10 AM	24.6483	-144.4176	? 66°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:05:39 AM	24.7303	-144.2158	? 66°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:06:59 AM	24.8037	-144.0342	? 66°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:08:25 AM	24.8824	-143.8388	? 66°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:09:49 AM	24.9590	-143.6476	? 66°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:11:11 AM	25.0336	-143.4608	? 66°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:12:34 AM	25.1088	-143.2714	? 66°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:14:02 AM	25.1883	-143.0704	? 66°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:15:25 AM	25.2630	-142.8806	? 67°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:16:40 AM	25.3303	-142.7089	? 67°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:18:11 AM	25.4117	-142.5003	? 67°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:19:29 AM	25.4813	-142.3212	? 67°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:21:00 AM	25.5621	-142.1121	? 67°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:22:24 AM	25.6365	-141.9188	? 67°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:23:48 AM	25.7107	-141.7252	? 67°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:25:11 AM	25.7837	-141.5337	? 67°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:26:36 AM	25.8581	-141.3374	? 67°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:27:58 AM	25.9297	-141.1478	? 67°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:29:22 AM	26.0028	-140.9533	? 67°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:30:42 AM	26.0722	-140.7678	? 67°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:32:08 AM	26.1465	-140.5682	? 68°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:33:26 AM	26.2137	-140.3869	? 68°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:34:55 AM	26.2901	-140.1798	? 68°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:36:17 AM	26.3601	-139.9888	? 68°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:37:42 AM	26.4325	-139.7905	? 68°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:39:03 AM	26.5012	-139.6013	? 68°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:40:18 AM	26.5647	-139.4259	? 68°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:41:51 AM	26.6430	-139.2082	? 68°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:43:15 AM	26.7135	-139.0113	? 68°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:44:38 AM	26.7828	-138.8165	? 68°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:46:05 AM	26.8552	-138.6120	? 68°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:47:27 AM	26.9232	-138.4191	? 68°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:48:48 AM	26.9901	-138.2283	? 69°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:50:16 AM	27.0632	-138.0182	? 69°	487	560	33,000	 Level	 FlightAware Transoceanic
+Sun 11:50:52 AM	27.0000	-138.2000	? 69°	494	568	33,000	 Level	 Oakland Oceanic
+Sun 11:53:00 AM	27.1988	-137.6251	? 69°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 11:54:27 AM	27.2703	-137.4162	? 69°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 11:55:39 AM	27.3292	-137.2431	? 69°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 11:57:10 AM	27.4034	-137.0240	? 69°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 11:58:38 AM	27.4748	-136.8119	? 69°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 11:59:48 AM	27.5314	-136.6430	? 69°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:01:22 PM	27.6070	-136.4159	? 69°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:02:47 PM	27.6751	-136.2103	? 70°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:04:11 PM	27.7421	-136.0068	? 70°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:05:35 PM	27.8088	-135.8031	? 70°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:06:51 PM	27.8689	-135.6186	? 70°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:08:21 PM	27.9397	-135.3998	? 70°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:09:40 PM	28.0016	-135.2076	? 70°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:11:00 PM	28.0640	-135.0126	? 70°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:12:21 PM	28.1269	-134.8151	? 70°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:13:49 PM	28.1949	-134.6001	? 70°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:15:12 PM	28.2587	-134.3971	? 70°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:16:37 PM	28.3238	-134.1890	? 71°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:17:58 PM	28.3855	-133.9905	? 71°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:19:21 PM	28.4484	-133.7868	? 71°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:20:48 PM	28.5140	-133.5730	? 71°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:22:10 PM	28.5756	-133.3713	? 71°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:23:29 PM	28.6346	-133.1767	? 71°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:24:53 PM	28.6971	-132.9695	? 71°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:26:21 PM	28.7621	-132.7523	? 71°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:27:46 PM	28.8247	-132.5422	? 71°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:29:06 PM	28.8833	-132.3442	? 71°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:30:32 PM	28.9459	-132.1311	? 71°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:32:04 PM	29.0125	-131.9029	? 72°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:33:29 PM	29.0737	-131.6918	? 72°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:34:50 PM	29.1318	-131.4904	? 72°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:36:09 PM	29.1881	-131.2937	? 72°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:37:44 PM	29.2554	-131.0569	? 72°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:39:13 PM	29.3192	-130.8313	? 72°	494	568	33,000	 Level	 FlightAware Transoceanic
+Sun 12:40:08 PM	29.2667	-131.0167	? 72°	505	581	33,000	 Level	 Oakland Oceanic
+Sun 12:41:57 PM	29.4360	-130.4134	? 72°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 12:43:26 PM	29.4989	-130.1862	? 72°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 12:44:55 PM	29.5614	-129.9587	? 73°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 12:46:14 PM	29.6166	-129.7566	? 73°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 12:47:41 PM	29.6770	-129.5337	? 73°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 12:49:09 PM	29.7377	-129.3080	? 73°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 12:50:37 PM	29.7980	-129.0820	? 73°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 12:51:59 PM	29.8539	-128.8712	? 73°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 12:53:23 PM	29.9107	-128.6550	? 73°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 12:54:49 PM	29.9686	-128.4334	? 73°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 12:56:13 PM	30.0247	-128.2167	? 73°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 12:57:41 PM	30.0832	-127.9894	? 74°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 12:59:06 PM	30.1393	-127.7696	? 74°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 01:00:32 PM	30.1957	-127.5470	? 74°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 01:01:55 PM	30.2497	-127.3319	? 74°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 01:03:15 PM	30.3015	-127.1244	? 74°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 01:04:47 PM	30.3606	-126.8854	? 74°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 01:06:14 PM	30.4161	-126.6592	? 74°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 01:07:39 PM	30.4699	-126.4379	? 74°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 01:09:06 PM	30.5247	-126.2112	? 74°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 01:10:31 PM	30.5778	-125.9894	? 75°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 01:11:54 PM	30.6293	-125.7726	? 75°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 01:13:23 PM	30.6841	-125.5399	? 75°	505	581	33,000	 Level	 FlightAware Transoceanic
+Sun 01:14:43 PM	30.7330	-125.3305	? 75°	505	581	33,000	-12 Descending	 FlightAware Transoceanic
+Sun 01:15:31 PM	30.7842	-125.1331	? 75°	507	583	32,975	-19 Descending	 FlightAware ADS-B (KSBA)
+Sun 01:16:01 PM	30.8021	-125.0556	? 75°	507	583	32,975	 Level	 FlightAware ADS-B (KSBA)
+Sun 01:16:32 PM	30.8206	-124.9757	? 75°	508	585	32,975	 Level	 FlightAware ADS-B (KSBA)
+Sun 01:19:05 PM	30.9046	-124.5966	? 75°				 Level	 FlightAware Approximate
+Sun 01:20:32 PM	30.9519	-124.3810	? 76°				 Level	 FlightAware Approximate
+Sun 01:21:59 PM	30.9988	-124.1648	? 76°				 Level	 FlightAware Approximate
+Sun 01:23:23 PM	31.0437	-123.9560	? 76°				 Level	 FlightAware Approximate
+Sun 01:24:50 PM	31.0900	-123.7393	? 76°				 Level	 FlightAware Approximate
+Sun 01:26:14 PM	31.1351	-123.5295	? 74°				 Level	 FlightAware Approximate
+Sun 01:26:36 PM	31.1747	-123.3799	? 77°	509	586	32,975	 Level	 FlightAware ADS-B (KSAN)
+Sun 01:27:11 PM	31.1938	-123.2860	? 77°	509	586	32,975	 Level	 FlightAware ADS-B (KSAN)
+Sun 01:27:52 PM	31.2159	-123.1779	? 77°	509	586	32,975	 Level	 FlightAware ADS-B (KSAN)
+Sun 01:29:10 PM	31.2669	-122.9717	? 66°	509	586	32,975	9 Climbing	 FlightAware ADS-B (KSAN)
+Sun 01:30:31 PM	31.3469	-122.7808	? 66°	509	586	33,000	 Level	 Los Angeles Center
+Sun 01:31:15 PM	31.4066	-122.6813	? 60°	509	586	32,975	-20 Descending	 FlightAware ADS-B (KSZP)
+Sun 01:31:45 PM	31.4464	-122.6006	? 60°	508	585	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:32:15 PM	31.4825	-122.5276	? 60°	508	585	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:32:45 PM	31.5175	-122.4567	? 60°	508	585	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:33:15 PM	31.5531	-122.3848	? 60°	507	583	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:33:46 PM	31.5886	-122.3122	? 60°	507	583	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:34:24 PM	31.6324	-122.2231	? 60°	507	583	32,975	 Level	 FlightAware ADS-B (KSAN)
+Sun 01:34:55 PM	31.6693	-122.1477	? 60°	507	583	32,975	 Level	 FlightAware ADS-B (KSNA)
+Sun 01:35:25 PM	31.7048	-122.0750	? 60°	507	583	32,975	 Level	 FlightAware ADS-B (KOXR)
+Sun 01:35:56 PM	31.7395	-122.0039	? 60°	505	581	32,975	 Level	 FlightAware ADS-B (KSBA)
+Sun 01:36:26 PM	31.7766	-121.9278	? 60°	505	581	32,975	 Level	 FlightAware ADS-B (KNKX)
+Sun 01:36:57 PM	31.8111	-121.8564	? 60°	504	580	32,975	 Level	 FlightAware ADS-B (KPOC)
+Sun 01:37:27 PM	31.8459	-121.7847	? 61°	503	579	32,975	 Level	 FlightAware ADS-B (KPOC)
+Sun 01:37:58 PM	31.8811	-121.7119	? 61°	503	579	32,975	 Level	 FlightAware ADS-B (KSNA)
+Sun 01:38:33 PM	31.9225	-121.6262	? 61°	503	579	32,975	 Level	 FlightAware ADS-B (KSNA)
+Sun 01:39:03 PM	31.9559	-121.5562	? 61°	503	579	32,975	 Level	 FlightAware ADS-B (KPOC)
+Sun 01:39:33 PM	31.9901	-121.4841	? 61°	502	578	32,975	 Level	 FlightAware ADS-B (KSNA)
+Sun 01:40:04 PM	32.0238	-121.4130	? 61°	502	578	32,975	 Level	 FlightAware ADS-B (KTOA)
+Sun 01:40:34 PM	32.0589	-121.3385	? 61°	502	578	32,975	 Level	 FlightAware ADS-B (KWHP)
+Sun 01:41:04 PM	32.0916	-121.2693	? 61°	502	578	32,975	 Level	 FlightAware ADS-B (ESE / MMES)
+Sun 01:41:34 PM	32.1266	-121.1953	? 61°	502	578	32,975	 Level	 FlightAware ADS-B (KSEE)
+Sun 01:42:04 PM	32.1599	-121.1244	? 61°	502	578	32,975	 Level	 FlightAware ADS-B (KCMA)
+Sun 01:42:34 PM	32.1944	-121.0508	? 61°	501	577	32,975	 Level	 FlightAware ADS-B (KSMO)
+Sun 01:43:04 PM	32.2266	-120.9820	? 61°	501	577	32,975	 Level	 FlightAware ADS-B (ESE / MMES)
+Sun 01:43:34 PM	32.2605	-120.9097	? 61°	501	577	32,975	 Level	 FlightAware ADS-B (ESE / MMES)
+Sun 01:44:04 PM	32.2941	-120.8378	? 61°	501	577	32,975	 Level	 FlightAware ADS-B (KVNY)
+Sun 01:44:35 PM	32.3278	-120.7655	? 61°	500	575	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:45:05 PM	32.3623	-120.6912	? 61°	500	575	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:45:35 PM	32.3961	-120.6182	? 61°	500	575	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:46:05 PM	32.4284	-120.5487	? 61°	500	575	32,975	 Level	 FlightAware ADS-B (KSNA)
+Sun 01:46:36 PM	32.4627	-120.4744	? 61°	499	574	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:47:06 PM	32.4960	-120.4019	? 61°	499	574	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:47:36 PM	32.5295	-120.3295	? 62°	499	574	32,975	 Level	 FlightAware ADS-B (KSNA)
+Sun 01:48:06 PM	32.5624	-120.2578	? 62°	500	575	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:48:36 PM	32.5959	-120.1846	? 62°	501	577	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:49:06 PM	32.6290	-120.1122	? 62°	501	577	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:49:36 PM	32.6618	-120.0403	? 62°	501	577	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:50:06 PM	32.6949	-119.9676	? 62°	502	578	32,975	 Level	 FlightAware ADS-B (KVNY)
+Sun 01:50:36 PM	32.7283	-119.8945	? 62°	502	578	32,975	 Level	 FlightAware ADS-B (KVNY)
+Sun 01:51:06 PM	32.7614	-119.8212	? 62°	502	578	32,975	 Level	 FlightAware ADS-B (KVNY)
+Sun 01:51:36 PM	32.7937	-119.7498	? 62°	502	578	32,975	 Level	 FlightAware ADS-B (KSMO)
+Sun 01:52:06 PM	32.8272	-119.6758	? 62°	502	578	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:52:36 PM	32.8601	-119.6028	? 62°	503	579	32,975	 Level	 FlightAware ADS-B (KSZP)
+Sun 01:53:06 PM	32.8922	-119.5311	? 62°	503	579	32,975	 Level	 FlightAware ADS-B (TIJ / MMTJ)
+Sun 01:53:36 PM	32.9253	-119.4577	? 62°	503	579	32,975	 Level	 FlightAware ADS-B (TIJ / MMTJ)
+Sun 01:54:07 PM	32.9612	-119.3774	? 62°	503	579	32,975	 Level	 FlightAware ADS-B (KEMT)
+Sun 01:54:37 PM	32.9933	-119.3057	? 62°	503	579	32,975	 Level	 FlightAware ADS-B (KBUR)
+Sun 01:55:08 PM	33.0254	-119.2338	? 62°	503	579	32,975	 Level	 FlightAware ADS-B (ESE / MMES)
+Sun 01:55:38 PM	33.0596	-119.1569	? 62°	504	580	32,975	 Level	 FlightAware ADS-B (KEMT)
+Sun 01:56:08 PM	33.0915	-119.0848	? 62°	504	580	32,975	-25 Descending	 FlightAware ADS-B (KSLI)
+Sun 01:56:38 PM	33.1243	-119.0109	? 62°	504	580	32,950	 Level	 FlightAware ADS-B (ESE / MMES)
+Sun 01:57:08 PM	33.1569	-118.9373	? 62°	504	580	32,975	25 Climbing	 FlightAware ADS-B (KSLI)
+Sun 01:57:38 PM	33.1891	-118.8640	? 62°	504	580	32,975	 Level	 FlightAware ADS-B (KSLI)
+Sun 01:58:08 PM	33.2220	-118.7897	? 62°	505	581	32,975	 Level	 FlightAware ADS-B (KHHR)
+Sun 01:58:38 PM	33.2548	-118.7152	? 62°	505	581	32,975	 Level	 FlightAware ADS-B (KRNM)
+Sun 01:59:08 PM	33.2870	-118.6415	? 63°	505	581	32,975	 Level	 FlightAware ADS-B (KBUR)
+Sun 01:59:38 PM	33.3191	-118.5679	? 63°	505	581	32,975	 Level	 FlightAware ADS-B (KSEE)
+Sun 02:00:08 PM	33.3526	-118.4913	? 63°	505	581	32,975	 Level	 FlightAware ADS-B
+Sun 02:00:35 PM	33.3756	-118.4242	? 74°	499	574	32,975	 Level	 FlightAware ADS-B (KEMT)
+Sun 02:00:57 PM	33.3843	-118.3640	? 86°	492	566	32,975	 Level	 FlightAware ADS-B (KSNA)
+Sun 02:01:27 PM	33.3859	-118.2841	? 90°	491	565	32,975	 Level	 FlightAware ADS-B (KNKX)
+Sun 02:01:57 PM	33.3854	-118.2035	? 91°	491	565	32,975	 Level	 FlightAware ADS-B (KSBD)
+Sun 02:02:27 PM	33.3847	-118.1209	? 91°	491	565	32,975	 Level	 FlightAware ADS-B (KNKX)
+Sun 02:02:57 PM	33.3842	-118.0402	? 90°	492	566	32,975	 Level	 FlightAware ADS-B (KFUL)
+Sun 02:03:28 PM	33.3840	-117.9559	? 90°	493	567	32,975	 Level	 FlightAware ADS-B (KPOC)
+Sun 02:03:58 PM	33.3838	-117.8715	? 90°	493	567	32,975	 Level	 FlightAware ADS-B (KEKM)
+Sun 02:04:28 PM	33.3838	-117.7925	? 90°	494	568	32,975	 Level	 FlightAware ADS-B (KSMO)
+Sun 02:04:58 PM	33.3837	-117.7079	? 90°	495	570	32,975	 Level	 FlightAware ADS-B (KSNA)
+Sun 02:05:28 PM	33.3835	-117.6277	? 90°	495	570	32,975	 Level	 FlightAware ADS-B (KFUL)
+Sun 02:06:00 PM	33.3833	-117.5403	? 90°	494	568	32,975	 Level	 FlightAware ADS-B (KRIV)
+Sun 02:06:30 PM	33.3830	-117.4580	? 90°	494	568	32,975	 Level	 FlightAware ADS-B (KSNA)
+Sun 02:07:00 PM	33.3825	-117.3733	? 91°	494	568	32,975	 Level	 FlightAware ADS-B (KEKM)
+Sun 02:07:30 PM	33.3820	-117.2949	? 91°	494	568	32,975	 Level	 FlightAware ADS-B (KRIR)
+Sun 02:08:00 PM	33.3815	-117.2120	? 91°	494	568	32,975	 Level	 FlightAware ADS-B (KSNA)
+Sun 02:08:30 PM	33.3807	-117.1318	? 91°	493	567	32,975	 Level	 FlightAware ADS-B (KRNM)
+Sun 02:09:00 PM	33.3800	-117.0478	? 91°	493	567	32,975	 Level	 FlightAware ADS-B (KNFG)
+Sun 02:09:31 PM	33.3794	-116.9673	? 91°	493	567	32,975	 Level	 FlightAware ADS-B (KFUL)
+Sun 02:10:01 PM	33.3785	-116.8835	? 91°	493	567	32,975	 Level	 FlightAware ADS-B (KRAL)
+Sun 02:10:31 PM	33.3776	-116.8030	? 91°	493	567	32,975	 Level	 FlightAware ADS-B (KFUL)
+Sun 02:11:01 PM	33.3768	-116.7212	? 91°	495	570	32,975	 Level	 FlightAware ADS-B (KRIV)
+Sun 02:11:31 PM	33.3758	-116.6360	? 91°	495	570	32,975	 Level	 FlightAware ADS-B (KSNA)
+Sun 02:12:01 PM	33.3749	-116.5562	? 91°	495	570	32,975	 Level	 FlightAware ADS-B (KCRQ)
+Sun 02:12:31 PM	33.3739	-116.4738	? 91°	492	566	32,975	 Level	 FlightAware ADS-B (KSNA)
+Sun 02:13:02 PM	33.3727	-116.3904	? 91°	490	564	32,975	-25 Descending	 FlightAware ADS-B (KCRQ)
+Sun 02:13:32 PM	33.3715	-116.3119	? 91°	490	564	32,950	 Level	 FlightAware ADS-B (KREI)
+Sun 02:14:02 PM	33.3703	-116.2266	? 91°	489	563	32,975	25 Climbing	 FlightAware ADS-B (KSNA)
+Sun 02:14:32 PM	33.3691	-116.1475	? 91°	487	560	32,975	 Level	 FlightAware ADS-B (KRIV)
+Sun 02:15:02 PM	33.3677	-116.0641	? 91°	487	560	32,975	 Level	 FlightAware ADS-B (KSNA)
+Sun 02:15:32 PM	33.3663	-115.9863	? 91°	486	559	32,975	 Level	 FlightAware ADS-B (KRIV)
+Sun 02:16:02 PM	33.3649	-115.9058	? 91°	485	558	32,975	 Level	 FlightAware ADS-B (KREI)
+Sun 02:16:32 PM	33.3634	-115.8244	? 91°	485	558	32,975	 Level	 FlightAware ADS-B (KNKX)
+Sun 02:17:02 PM	33.3621	-115.7446	? 91°	485	558	32,975	 Level	 FlightAware ADS-B (KLGB)
+Sun 02:17:32 PM	33.3603	-115.6645	? 91°	485	558	32,975	 Level	 FlightAware ADS-B (KRIV)
+Sun 02:18:03 PM	33.3588	-115.5820	? 91°	484	557	32,975	 Level	 FlightAware ADS-B (KTRM)
+Sun 02:18:33 PM	33.3572	-115.5063	? 92°	482	555	32,975	 Level	 FlightAware ADS-B (KLGB)
+Sun 02:19:03 PM	33.3553	-115.4227	? 92°	481	554	32,975	 Level	 FlightAware ADS-B (KPHX)
+Sun 02:19:33 PM	33.3536	-115.3427	? 92°	480	552	32,975	 Level	 FlightAware ADS-B (KTRM)
+Sun 02:20:03 PM	33.3518	-115.2643	? 92°	481	554	32,975	 Level	 FlightAware ADS-B (KPHX)
+Sun 02:20:34 PM	33.3498	-115.1802	? 92°	483	556	32,975	 Level	 FlightAware ADS-B (KSDL)
+Sun 02:21:04 PM	33.3478	-115.1017	? 92°	484	557	32,975	 Level	 FlightAware ADS-B (KPHX)
+Sun 02:21:34 PM	33.3459	-115.0215	? 92°	485	558	32,975	 Level	 FlightAware ADS-B (KPHX)
+Sun 02:22:04 PM	33.3438	-114.9417	? 92°	485	558	32,975	 Level	 FlightAware ADS-B (KPHX)
+Sun 02:22:34 PM	33.3418	-114.8599	? 92°	485	558	32,975	 Level	 FlightAware ADS-B (KFFZ)
+Sun 02:23:04 PM	33.3395	-114.7807	? 92°	484	557	32,975	 Level	 FlightAware ADS-B (KPHX)
+Sun 02:23:34 PM	33.3373	-114.7000	? 92°	484	557	32,975	 Level	 FlightAware ADS-B (KPHX)
+Sun 02:24:04 PM	33.3351	-114.6199	? 92°	484	557	32,975	 Level	 FlightAware ADS-B (KPHX)
+Sun 02:24:34 PM	33.3329	-114.5392	? 92°	484	557	32,975	-225 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:25:04 PM	33.3305	-114.4585	? 92°	484	557	32,750	-875 Descending	 FlightAware ADS-B (KHII)
+Sun 02:25:34 PM	33.3280	-114.3792	? 92°	487	560	32,100	-1,250 Descending	 FlightAware ADS-B (KFFZ)
+Sun 02:26:04 PM	33.3256	-114.2996	? 92°	490	564	31,500	-1,075 Descending	 FlightAware ADS-B (KTUS)
+Sun 02:26:34 PM	33.3230	-114.2173	? 92°	489	563	31,025	-825 Descending	 FlightAware ADS-B (KCHD)
+Sun 02:27:04 PM	33.3203	-114.1349	? 92°	486	559	30,675	-750 Descending	 FlightAware ADS-B (KHII)
+Sun 02:27:34 PM	33.3178	-114.0560	? 92°	483	556	30,275	-825 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:28:04 PM	33.3152	-113.9764	? 92°	482	555	29,850	-825 Descending	 FlightAware ADS-B (PPE / MMPE)
+Sun 02:28:34 PM	33.3124	-113.8932	? 92°	480	552	29,450	-836 Descending	 FlightAware ADS-B (KCHD)
+Sun 02:29:05 PM	33.3095	-113.8113	? 92°	475	547	29,000	-1,402 Descending	 FlightAware ADS-B
+Sun 02:29:35 PM	33.3069	-113.7360	? 92°	468	539	28,025	-2,050 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:30:05 PM	33.3042	-113.6604	? 93°	463	533	26,950	-2,125 Descending	 FlightAware ADS-B (KHII)
+Sun 02:30:35 PM	33.3014	-113.5852	? 93°	457	526	25,900	-2,150 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:31:05 PM	33.2985	-113.5072	? 93°	450	518	24,800	-2,150 Descending	 FlightAware ADS-B (KIWA)
+Sun 02:31:35 PM	33.2958	-113.4342	? 93°	444	511	23,750	-2,150 Descending	 FlightAware ADS-B (KSDL)
+Sun 02:32:05 PM	33.2929	-113.3614	? 93°	437	503	22,650	-2,150 Descending	 FlightAware ADS-B (KSDL)
+Sun 02:32:35 PM	33.2903	-113.2912	? 93°	430	495	21,600	-2,075 Descending	 FlightAware ADS-B (KPAN)
+Sun 02:33:05 PM	33.2874	-113.2198	? 93°	423	487	20,575	-2,125 Descending	 FlightAware ADS-B (KLUF)
+Sun 02:33:35 PM	33.2846	-113.1494	? 93°	417	480	19,475	-1,550 Descending	 FlightAware ADS-B (KSDL)
+Sun 02:34:05 PM	33.2820	-113.0818	? 92°	393	452	19,025	-725 Descending	 FlightAware ADS-B (KDVT)
+Sun 02:34:35 PM	33.2817	-113.0215	? 89°	366	421	18,750	-775 Descending	 FlightAware ADS-B (KIWA)
+Sun 02:35:05 PM	33.2829	-112.9578	? 89°	370	426	18,250	-975 Descending	 FlightAware ADS-B (KDVT)
+Sun 02:35:35 PM	33.2842	-112.8986	? 88°	372	428	17,775	-1,000 Descending	 FlightAware ADS-B (KDVT)
+Sun 02:36:05 PM	33.2861	-112.8351	? 88°	363	418	17,250	-1,028 Descending	 FlightAware ADS-B (KCHD)
+Sun 02:36:29 PM	33.2889	-112.7882	? 85°	354	407	16,850	-1,167 Descending	 FlightAware ADS-B (KGYR)
+Sun 02:36:59 PM	33.2941	-112.7295	? 84°	349	402	16,200	-1,250 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:37:29 PM	33.2992	-112.6753	? 84°	342	394	15,600	-1,200 Descending	 FlightAware ADS-B (KDVT)
+Sun 02:37:59 PM	33.3044	-112.6198	? 84°	335	386	15,000	-1,200 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:38:29 PM	33.3095	-112.5646	? 84°	328	377	14,400	-1,225 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:38:59 PM	33.3145	-112.5093	? 84°	320	368	13,775	-1,180 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:39:30 PM	33.3193	-112.4562	? 84°	312	359	13,200	-1,107 Descending	 FlightAware ADS-B (KGYR)
+Sun 02:40:00 PM	33.3239	-112.4068	? 84°	304	350	12,650	-1,100 Descending	 FlightAware ADS-B (KSDL)
+Sun 02:40:30 PM	33.3286	-112.3560	? 84°	297	342	12,100	-1,200 Descending	 FlightAware ADS-B (KGYR)
+Sun 02:41:00 PM	33.3330	-112.3076	? 84°	294	338	11,450	-1,325 Descending	 FlightAware ADS-B (KGYR)
+Sun 02:41:30 PM	33.3375	-112.2589	? 84°	298	343	10,775	-1,350 Descending	 FlightAware ADS-B (KGYR)
+Sun 02:42:00 PM	33.3416	-112.2114	? 84°	294	338	10,100	-1,175 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:42:30 PM	33.3461	-112.1639	? 84°	285	328	9,600	-900 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:43:00 PM	33.3502	-112.1167	? 84°	271	312	9,200	-621 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:43:28 PM	33.3533	-112.0758	? 88°	252	290	9,000	-648 Descending	 FlightAware ADS-B (KDVT)
+Sun 02:43:44 PM	33.3535	-112.0537	? 91°	247	284	8,725	-1,109 Descending	 FlightAware ADS-B (KSDL)
+Sun 02:44:14 PM	33.3529	-112.0148	? 91°	236	272	8,150	-1,425 Descending	 FlightAware ADS-B
+Sun 02:44:44 PM	33.3524	-111.9758	? 91°	235	270	7,300	-1,675 Descending	 FlightAware ADS-B
+Sun 02:45:14 PM	33.3519	-111.9375	? 91°	236	272	6,475	-1,675 Descending	 FlightAware ADS-B (KFFZ)
+Sun 02:45:44 PM	33.3514	-111.8968	? 91°	237	273	5,625	-1,275 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:46:14 PM	33.3509	-111.8597	? 91°	225	259	5,200	-702 Descending	 FlightAware ADS-B (KIWA)
+Sun 02:46:31 PM	33.3511	-111.8394	? 80°	216	249	5,075	-545 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:46:47 PM	33.3589	-111.8213	? 45°	212	244	4,900	-794 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:47:05 PM	33.3747	-111.8137	? 5°	210	242	4,625	-958 Descending	 FlightAware ADS-B (KGYR)
+Sun 02:47:23 PM	33.3928	-111.8133	? 360°	210	242	4,325	-857 Descending	 FlightAware ADS-B (KCHD)
+Sun 02:47:40 PM	33.4089	-111.8133	? 0°	203	234	4,125	-706 Descending	 FlightAware ADS-B (KGYR)
+Sun 02:47:57 PM	33.4235	-111.8159	? 341°	197	227	3,925	-771 Descending	 FlightAware ADS-B (KSDL)
+Sun 02:48:15 PM	33.4382	-111.8243	? 324°	189	217	3,675	-875 Descending	 FlightAware ADS-B (KHMT)
+Sun 02:48:33 PM	33.4474	-111.8377	? 285°	181	208	3,400	-1,042 Descending	 FlightAware ADS-B (KSDL)
+Sun 02:48:51 PM	33.4470	-111.8561	? 267°	176	203	3,050	-1,015 Descending	 FlightAware ADS-B (KSDL)
+Sun 02:49:07 PM	33.4470	-111.8710	? 271°	170	196	2,825	-783 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:49:37 PM	33.4470	-111.8971	? 270°	147	169	2,450	-725 Descending	 FlightAware ADS-B (KSDL)
+Sun 02:50:07 PM	33.4470	-111.9200	? 270°	137	158	2,100	-717 Descending	 FlightAware ADS-B
+Sun 02:50:23 PM	33.4472	-111.9332	? 271°	138	159	1,900	-656 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:50:39 PM	33.4472	-111.9437	? 270°	131	151	1,750	-609 Descending	 FlightAware ADS-B (KSDL)
+Sun 02:50:55 PM	33.4472	-111.9553	? 270°	131	151	1,575	-656 Descending	 FlightAware ADS-B (KLUF)
+Sun 02:51:00 PM    Arrival (PHX) @ Sunday 05:51:00 AM MST			 Airline
+Sun 02:51:11 PM	33.4472	-111.9675	? 270°	135	155	1,400	-703 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:51:27 PM	33.4473	-111.9802	? 270°	140	161	1,200	-516 Descending	 FlightAware ADS-B (KPHX)
+Sun 02:51:43 PM	33.4474	-111.9914	? 270°	123	142	1,125	-281 Descending	 FlightAware ADS-B (KPHX)
+Taxi Time: 7 minutes			
+Sun 02:58:00 PM    Gate Arrival (PHX) @ Sunday 05:58:00 AM MST			 Airline

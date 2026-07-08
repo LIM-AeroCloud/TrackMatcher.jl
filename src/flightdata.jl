@@ -175,15 +175,23 @@ function load_webdata(
     # Loop over files with online data
     prog = pm.Progress(nlength, desc = "load web data...")
     for path in paths, file in path.files
+        # Check file name format
+        if !occursin(r"^[A-Za-z0-9]{3,}_\d{2}-[A-Za-z]{3}-\d{4}_[A-Za-z]{4}-[A-Za-z]{4}$",
+            splitext(basename(file))[1])
+            println()
+            println()
+            @error "Invalid file name format. Data skipped." file
+            continue
+        end
         # Read flight data
         flight = try CSV.read(joinpath(path.root, file), DataFrame, delim=delim, ignoreemptyrows=true,
             normalizenames=true, silencewarnings=true, ntasks=1, copycols=false,
             types=Dict(:Latitude => Float, :Longitude => Float, :feet => String, :kts => Float,
             :Course => String, :Rate => String), drop = ["mph", "Reporting_Facility"], stringtype=String)
-        catch err
+        catch
             println()
             println()
-            @error "Error reading file. Try to specify column delimiter. Data skipped." file exception=(err, catch_backtrace())
+            @error "Error reading file. Try to specify column delimiter. Data skipped." file
             continue
         end
         # Convert knots to m/s
