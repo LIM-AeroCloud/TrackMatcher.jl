@@ -5,6 +5,7 @@
 ### Added
 
 - Setup tests ([#55])
+- Improve data checks, error handling and logging for loading webdata ([#67])
 - Add `HDF5` and `StructArrays` as dependency ([#51], [#58])
 - Add method `checklimits` to check array fields of `SatData` are within expected limits ([#51])
 - Setup code coverage for _TrackMatcher_ and add badges for the CI status and code coverage
@@ -62,6 +63,8 @@
 
 - Fixed errors in UTC time conversion by rounding the converted seconds of the day from the 
   fraction of the day to 3 digits
+- Fix and issue that did not load flight webdata with the given time zone but always used the
+  local time zone ([#67])
 - `earthradius` now always return `Float64` instead of the input precision to ensure correct
   results and no overflow for `Float16`
 - Fixed compilation warnings by removing duplicate constructor for empty `FlightSet`
