@@ -126,6 +126,8 @@
         @testset "error handling and logs" begin
             # Test that loading files with incorrect names produces warnings and skips data
             web = @test_logs(
+                (:error, r"Unable to parse date. Data skipped."),
+                (:error, r"Unknown file format"),
                 (:warn, r"Unknown time zone."),
                 (:warn, r"Unknown time zone format"),
                 (:error, r"Invalid file name format. Data skipped."),

@@ -189,8 +189,7 @@ function load_webdata(
             types=Dict(:Latitude => Float, :Longitude => Float, :feet => String, :kts => Float,
             :Course => String, :Rate => String), drop = ["mph", "Reporting_Facility"], stringtype=String)
         catch
-            println()
-            println()
+            println('\n')
             @error "Error reading file. Try to specify column delimiter. Data skipped." file
             continue
         end
@@ -198,9 +197,8 @@ function load_webdata(
         flight.kts = knot2mps.(flight.kts)
         if length(names(flight)) ≠ 7 || names(flight)[2:7] ≠
             ["Latitude", "Longitude", "Course", "kts", "feet", "Rate"]
-            println()
-            println()
-            @warn "Unknown file format.\nTry to specify column delimiter. Data skipped." file
+            println('\n')
+            @error "Unknown file format.\nTry to specify column delimiter. Data skipped." file
             continue
         end
         tzone = string(names(flight)[1])
@@ -354,19 +352,14 @@ function get_date_time_route(filename::String, tzone::String)
         tz.localzone()
     end
     # Retrieve date and metadata from filename
-    flight_num, datestr, course = try match(r"(.*?)_(.*?)_(.*)", filename).captures
-    catch
-        println()
-        println()
-        @warn "Flight ID, date, and course not found. Data skipped." file
-        return missing, missing, missing, missing, missing
-    end
+    # ℹ Error handling for wrong file name format is done in load_webdata
+    flight_num, datestr, course = match(r"(.*?)_(.*?)_(.*)", filename).captures
     orig, dest = match(r"(.*)[-|_](.*)", course).captures
     date = try Dates.Date(datestr, "d-u-y", locale="english")
     catch
         println()
         println()
-        @warn "Unable to parse date. Data skipped." file
+        @error "Unable to parse date. Data skipped." filename
         return missing, missing, missing, missing, missing
     end
 
