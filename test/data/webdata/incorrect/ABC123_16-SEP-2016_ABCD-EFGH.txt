@@ -1,0 +1,6 @@
+
+Time (FOO)	Latitude	Longitude	Course	kts	mph	feet	Rate	Reporting Facility	Foo
+Sat 02:21:25 AM    Departure (OGG) @ Friday 02:21:25 PM HST			 FlightAware ADS-B (OGG / PHOG)
+Sat 02:21:25 AM	20.9058	-156.4243	? 32�	146	168	725	 Level	 FlightAware ADS-B (OGG / PHOG)	bar
+Sat 02:21:41 AM	20.9154	-156.4188	? 26�	157	181	1,450	1,843 Climbing	 FlightAware ADS-B (OGG /
+PHOG)		bar

@@ -175,31 +175,36 @@ function load_webdata(
     # Loop over files with online data
     prog = pm.Progress(nlength, desc = "load web data...")
     for path in paths, file in path.files
+        # Check file name format
+        if !occursin(r"^[A-Za-z0-9]{3,}_\d{2}-[A-Za-z]{3}-\d{4}_[A-Za-z]{4}-[A-Za-z]{4}$",
+            splitext(basename(file))[1])
+            println()
+            println()
+            @error "Invalid file name format. Data skipped." file
+            continue
+        end
         # Read flight data
         flight = try CSV.read(joinpath(path.root, file), DataFrame, delim=delim, ignoreemptyrows=true,
             normalizenames=true, silencewarnings=true, ntasks=1, copycols=false,
             types=Dict(:Latitude => Float, :Longitude => Float, :feet => String, :kts => Float,
             :Course => String, :Rate => String), drop = ["mph", "Reporting_Facility"], stringtype=String)
-        catch err
-            println()
-            println()
-            @error "Error reading file. Try to specify column delimiter. Data skipped." file exception=(err, catch_backtrace())
+        catch
+            println('\n')
+            @error "Error reading file. Try to specify column delimiter. Data skipped." file
             continue
         end
         # Convert knots to m/s
         flight.kts = knot2mps.(flight.kts)
         if length(names(flight)) ≠ 7 || names(flight)[2:7] ≠
             ["Latitude", "Longitude", "Course", "kts", "feet", "Rate"]
-            println()
-            println()
-            @warn "Unknown file format.\nTry to specify column delimiter. Data skipped." file
+            println('\n')
+            @error "Unknown file format.\nTry to specify column delimiter. Data skipped." file
             continue
-        else
-            tzone = string(names(flight)[1])
-            df.rename!(flight, 1 => :time)
-            df.rename!(flight, :Latitude => :lat, :Longitude => :lon, :Course => :heading,
-                :kts => :speed, :feet => :alt, :Rate => :climb)
         end
+        tzone = string(names(flight)[1])
+        df.rename!(flight, 1 => :time)
+        df.rename!(flight, :Latitude => :lat, :Longitude => :lon, :Course => :heading,
+            :kts => :speed, :feet => :alt, :Rate => :climb)
 
         ### Get timezone from input data or use local time for undefined timezones
         # Define timezones as UTC offset to avoid conflicts during
@@ -208,9 +213,10 @@ function load_webdata(
         # Get time zone, data and flight metadata from file name and header of time column
         filename = splitext(basename(file))[1]
         date, timezone, flight_num, orig, dest = get_date_time_route(filename, tzone)
-
+        ismissing(date) && continue
         # Set to 2 days prior to allow corrections for timezone diffences in the next step
         date += Dates.Day(2)
+
         ### Convert times to datetime and extract heading and climbing rate
         # Initialise vectors
         lat = Float[]
@@ -253,6 +259,7 @@ function load_webdata(
 
         # Skip data with all data points below the altitude threshold or missing
         isempty(altitude) && continue
+
         # Restore original order
         reverse!(flighttime)
         reverse!(altitude)
@@ -322,21 +329,37 @@ function get_date_time_route(filename::String, tzone::String)
 
     # Time is the first column and has to be addressed as flight[!,1] in the code
     # due to different column names, in which the timezone is included
-    timezone = zonedict[tzone]
-    # Retrieve date and metadata from filename
-    flight_num, datestr, course = try match(r"(.*?)_(.*?)_(.*)", filename).captures
-    catch
+    timezone = split(tzone, "_")
+    if length(timezone) ≠ 3 || lowercase(timezone[1]) ≠ "time" || !isempty(timezone[3])
         println()
         println()
-        @warn "Flight ID, date, and course not found. Data skipped." file
-        return missing, missing, missing, missing, missing
+        @warn "Unknown time zone format, expected 'Time_<TZ>_', got '$tzone'. Trying to recover"
+        timezone = ["", "", ""]
+        for tz in keys(zonedict)
+            if occursin(tz, tzone)
+                timezone[2] = tz
+                break
+            end
+        end
     end
+    timezone = timezone[2]
+    timezone = if haskey(zonedict, timezone)
+        zonedict[timezone]
+    else
+        println()
+        println()
+        @warn "Unknown time zone. Extend the timezone dictionary. Using local time." timezone filename
+        tz.localzone()
+    end
+    # Retrieve date and metadata from filename
+    # ℹ Error handling for wrong file name format is done in load_webdata
+    flight_num, datestr, course = match(r"(.*?)_(.*?)_(.*)", filename).captures
     orig, dest = match(r"(.*)[-|_](.*)", course).captures
     date = try Dates.Date(datestr, "d-u-y", locale="english")
     catch
         println()
         println()
-        @warn "Unable to parse date. Data skipped." file
+        @error "Unable to parse date. Data skipped." filename
         return missing, missing, missing, missing, missing
     end
 

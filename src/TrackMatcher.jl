@@ -218,9 +218,10 @@ logg.global_logger(logger)
 
 
 ## Define time zones for FlightAware online data
-zonedict = ds.DefaultDict{String,tz.TimeZone}(tz.localzone())
-zonedict["_CET_"] = tz.tz"+0100"
-zonedict["_CEST_"] = tz.tz"+0200"
+zonedict = Dict{String,tz.TimeZone}(
+    "CET" => tz.tz"+0100",
+    "CEST" => tz.tz"+0200"
+)
 
 
 ## Define type tree of abstract types

@@ -1,11 +1,11 @@
 @testset "flight data" begin
     @testset "VOLPE" begin
-        flight = FlightSet(volpe=joinpath(@__DIR__, "..", "test", "data", "volpe"))
-        flight64 = FlightSet{Float64}(volpe=joinpath(@__DIR__, "..", "test", "data", "volpe"))
+        flight = FlightSet(volpe=joinpath(@__DIR__, "data", "volpe"))
+        flight64 = FlightSet{Float64}(volpe=joinpath(@__DIR__, "data", "volpe"))
         flight16 = FlightSet{Float16}(flight64)
         t0 = now()
         flight_empty = FlightSet()
-        flight_nothing = FlightSet(volpe=joinpath(@__DIR__, "..", "test", "data", "caliop", "clay"))
+        flight_nothing = FlightSet(volpe=joinpath(@__DIR__, "data", "caliop", "clay"))
         @testset "data integrity" begin
             @test length(flight.volpe) == 13
             @test isempty(flight.flightaware)
@@ -38,8 +38,8 @@
         end
         @testset "constructors" begin
             # Define datasets
-            primary = PrimarySet(volpe=joinpath(@__DIR__, "..", "test", "data", "volpe"))
-            primary64 = PrimarySet{Float64}(volpe=joinpath(@__DIR__, "..", "test", "data", "volpe"))
+            primary = PrimarySet(volpe=joinpath(@__DIR__, "data", "volpe"))
+            primary64 = PrimarySet{Float64}(volpe=joinpath(@__DIR__, "data", "volpe"))
             flightprimary = PrimarySet{Float64}(flight)
             alt_atol = 2e-3
             approx_vec(v1, v2; atol=1e-5) = all(((ismissing(x) || ismissing(y)) ?
@@ -103,8 +103,8 @@
         end
     end
     @testset "FlightAware" begin
-        flight_old = FlightSet(flightaware=joinpath(@__DIR__, "..", "test", "data", "archive", "old"))
-        flight_new = FlightSet(flightaware=joinpath(@__DIR__, "..", "test", "data", "archive", "new"))
+        flight_old = FlightSet(flightaware=joinpath(@__DIR__, "data", "archive", "old"))
+        flight_new = FlightSet(flightaware=joinpath(@__DIR__, "data", "archive", "new"))
         @test length(flight_old.flightaware) == 9
         @test isempty(flight_old.volpe)
         @test isempty(flight_old.webdata)
@@ -120,4 +120,53 @@
             flight_new.flightaware.lon isa Vector{<:Vector{Float32}} &&
             flight_new.flightaware.alt isa Vector{<:Vector{<:Union{Missing,Float32}}}
     end
+    @testset "web data" begin
+        # Load web data
+        web, webok = nothing, nothing
+        @testset "error handling and logs" begin
+            # Test that loading files with incorrect names produces warnings and skips data
+            web = @test_logs(
+                (:error, r"Unable to parse date. Data skipped."),
+                (:error, r"Unknown file format"),
+                (:warn, r"Unknown time zone."),
+                (:warn, r"Unknown time zone format"),
+                (:error, r"Invalid file name format. Data skipped."),
+                (:error, r"Error reading file. Try to specify column delimiter. Data skipped."),
+                (:info, r"FlightSet loaded"),
+                FlightSet(webdata=joinpath(@__DIR__, "data", "webdata"))
+            )
+            webok = @test_logs(
+                (:info, r"FlightSet loaded"),
+                FlightSet(webdata=joinpath(@__DIR__, "data", "webdata", "ok"), delim='\t')
+            )
+        end
+        # Test data integrity and metadata
+        @testset "data integrity and metadata" begin
+            @test length(web.webdata) == 4
+            @test isempty(web.volpe) && isempty(web.flightaware)
+            @test length(webok.webdata) == 3
+            @test minimum(skipmissing([webok.webdata.alt...;])) ≥ 5000
+            @test webok.webdata.lat isa Vector{<:Vector{Float32}} &&
+                webok.webdata.lon isa Vector{<:Vector{Float32}} &&
+                webok.webdata.alt isa Vector{<:Vector{<:Union{Missing,Float32}}}
+            @test webok.webdata.lat isa Vector{<:Vector{Float32}} &&
+                webok.webdata.lon isa Vector{<:Vector{Float32}} &&
+                webok.webdata.alt isa Vector{<:Vector{<:Union{Missing,Float32}}}
+            @test web.webdata.metadata[1].flight_num == "ABC123"
+            @test web.webdata.metadata[1].route.orig == "ABCD" && web.webdata.metadata[1].route.dest == "EFGH"
+
+            @test webok.webdata.metadata[1].date.start == DateTime(2010, 6, 6, 7, 40, 40) &&
+                webok.webdata.metadata[1].date.stop == DateTime(2010, 6, 6, 12, 36, 29)
+            @test web.webdata.metadata[1].date.start ==
+                DateTime(ZonedDateTime(2016, 09, 24, 2, 28, 41, localzone()), UTC) &&
+                web.webdata.metadata[1].date.stop ==
+                DateTime(ZonedDateTime(2016, 09, 24, 7, 27, 07, localzone()), UTC)
+        end
+    end
+    flight = FlightSet(
+        volpe=joinpath(@__DIR__, "data", "volpe"),
+        flightaware=joinpath(@__DIR__, "data", "archive", "new"),
+        webdata=joinpath(@__DIR__, "data", "webdata", "ok"), delim='\t'
+    )
+    @test length(flight.volpe) == 13 && length(flight.flightaware) == 3 && length(flight.webdata) == 3
 end
