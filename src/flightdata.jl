@@ -202,12 +202,11 @@ function load_webdata(
             println()
             @warn "Unknown file format.\nTry to specify column delimiter. Data skipped." file
             continue
-        else
-            tzone = string(names(flight)[1])
-            df.rename!(flight, 1 => :time)
-            df.rename!(flight, :Latitude => :lat, :Longitude => :lon, :Course => :heading,
-                :kts => :speed, :feet => :alt, :Rate => :climb)
         end
+        tzone = string(names(flight)[1])
+        df.rename!(flight, 1 => :time)
+        df.rename!(flight, :Latitude => :lat, :Longitude => :lon, :Course => :heading,
+            :kts => :speed, :feet => :alt, :Rate => :climb)
 
         ### Get timezone from input data or use local time for undefined timezones
         # Define timezones as UTC offset to avoid conflicts during
@@ -216,14 +215,9 @@ function load_webdata(
         # Get time zone, data and flight metadata from file name and header of time column
         filename = splitext(basename(file))[1]
         date, timezone, flight_num, orig, dest = get_date_time_route(filename, tzone)
-
+        ismissing(date) && continue
         # Set to 2 days prior to allow corrections for timezone diffences in the next step
         date += Dates.Day(2)
-
-        # DEBUG
-        println("DEBUG: Processing file: $file")
-        println("DEBUG: Parsed date from filename: $date")
-        println("DEBUG: First few time entries (day abbr): $(flight.time[1:min(3, length(flight.time))])")
 
         ### Convert times to datetime and extract heading and climbing rate
         # Initialise vectors
@@ -250,14 +244,8 @@ function load_webdata(
                 continue
             end
             # Derive date from day of week and filename
-            day_count = 0
             while Dates.dayabbr(date) ≠ flight.time[i][1:3]
                 date -= Dates.Day(1)
-                day_count += 1
-            end
-            # DEBUG: print matching info for first entry only
-            if i == length(flight[!,1])
-                println("DEBUG: Time entry day abbr: $(flight.time[i][1:3]), Matching date: $date (decremented by $day_count days)")
             end
             # Derive time from time string
             t = Time(flight.time[i][5:end], "I:M:S p")
@@ -273,15 +261,6 @@ function load_webdata(
 
         # Skip data with all data points below the altitude threshold or missing
         isempty(altitude) && continue
-
-        # DEBUG: print final date range
-        if !isempty(flighttime)
-            println("DEBUG: Final date range: $(flighttime[end]) to $(flighttime[1])")
-            println("DEBUG: Timezone object: $timezone")
-            println("DEBUG: First entry as ZonedDateTime: $(flighttime[1])")
-            println("DEBUG: First entry hour: $(hour(flighttime[1]))")
-            println("DEBUG: First entry as DateTime (direct): $(DateTime(flighttime[1]))")
-        end
 
         # Restore original order
         reverse!(flighttime)
@@ -352,7 +331,28 @@ function get_date_time_route(filename::String, tzone::String)
 
     # Time is the first column and has to be addressed as flight[!,1] in the code
     # due to different column names, in which the timezone is included
-    timezone = zonedict[tzone]
+    timezone = split(tzone, "_")
+    if length(timezone) ≠ 3 || lowercase(timezone[1]) ≠ "time" || !isempty(timezone[3])
+        println()
+        println()
+        @warn "Unknown time zone format, expected 'Time_<TZ>_', got '$tzone'. Trying to recover"
+        timezone = ["", "", ""]
+        for tz in keys(zonedict)
+            if occursin(tz, tzone)
+                timezone[2] = tz
+                break
+            end
+        end
+    end
+    timezone = timezone[2]
+    timezone = if haskey(zonedict, timezone)
+        zonedict[timezone]
+    else
+        println()
+        println()
+        @warn "Unknown time zone. Extend the timezone dictionary. Using local time." timezone filename
+        tz.localzone()
+    end
     # Retrieve date and metadata from filename
     flight_num, datestr, course = try match(r"(.*?)_(.*?)_(.*)", filename).captures
     catch

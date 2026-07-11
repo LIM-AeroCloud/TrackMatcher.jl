@@ -126,6 +126,8 @@
         @testset "error handling and logs" begin
             # Test that loading files with incorrect names produces warnings and skips data
             web = @test_logs(
+                (:warn, r"Unknown time zone."),
+                (:warn, r"Unknown time zone format"),
                 (:error, r"Invalid file name format. Data skipped."),
                 (:error, r"Error reading file. Try to specify column delimiter. Data skipped."),
                 (:info, r"FlightSet loaded"),
@@ -138,9 +140,9 @@
         end
         # Test data integrity and metadata
         @testset "data integrity and metadata" begin
-            @test length(web.webdata) == 1
+            @test length(web.webdata) == 4
             @test isempty(web.volpe) && isempty(web.flightaware)
-            @test length(webok.webdata) == 2
+            @test length(webok.webdata) == 3
             @test minimum(skipmissing([webok.webdata.alt...;])) ≥ 5000
             @test webok.webdata.lat isa Vector{<:Vector{Float32}} &&
                 webok.webdata.lon isa Vector{<:Vector{Float32}} &&
@@ -151,15 +153,16 @@
             @test web.webdata.metadata[1].flight_num == "ABC123"
             @test web.webdata.metadata[1].route.orig == "ABCD" && web.webdata.metadata[1].route.dest == "EFGH"
 
-            # Debug: print actual dates
-            println("Expected start: DateTime(2010, 6, 6, 7, 40, 40)")
-            println("Actual start: $(web.webdata.metadata[1].date.start)")
-            println("Expected stop: DateTime(2010, 6, 6, 12, 36, 29)")
-            println("Actual stop: $(web.webdata.metadata[1].date.stop)")
-
-            @test web.webdata.metadata[1].date.start == DateTime(2010, 6, 6, 7, 40, 40) &&
-                web.webdata.metadata[1].date.stop == DateTime(2010, 6, 6, 12, 36, 29)
+            @test webok.webdata.metadata[1].date.start == DateTime(2010, 6, 6, 7, 40, 40) &&
+                webok.webdata.metadata[1].date.stop == DateTime(2010, 6, 6, 12, 36, 29)
+            @test web.webdata.metadata[1].date.start == Dates.DateTime(2016, 09, 24, 0, 28, 41) &&
+                web.webdata.metadata[1].date.stop == Dates.DateTime(2016, 09, 24, 5, 27, 07)
         end
     end
-    # TODO test loading of all data together
+    flight = FlightSet(
+        volpe=joinpath(@__DIR__, "data", "volpe"),
+        flightaware=joinpath(@__DIR__, "data", "archive", "new"),
+        webdata=joinpath(@__DIR__, "data", "webdata", "ok"), delim='\t'
+    )
+    @test length(flight.volpe) == 13 && length(flight.flightaware) == 3 && length(flight.webdata) == 3
 end
