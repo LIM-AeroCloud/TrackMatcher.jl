@@ -155,8 +155,10 @@
 
             @test webok.webdata.metadata[1].date.start == DateTime(2010, 6, 6, 7, 40, 40) &&
                 webok.webdata.metadata[1].date.stop == DateTime(2010, 6, 6, 12, 36, 29)
-            @test web.webdata.metadata[1].date.start == Dates.DateTime(2016, 09, 24, 0, 28, 41) &&
-                web.webdata.metadata[1].date.stop == Dates.DateTime(2016, 09, 24, 5, 27, 07)
+            @test web.webdata.metadata[1].date.start ==
+                DateTime(ZonedDateTime(2016, 09, 24, 2, 28, 41, localzone()), UTC) &&
+                web.webdata.metadata[1].date.stop ==
+                DateTime(ZonedDateTime(2016, 09, 24, 7, 27, 07, localzone()), UTC)
         end
     end
     flight = FlightSet(

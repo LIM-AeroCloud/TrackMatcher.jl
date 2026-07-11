@@ -1,5 +1,5 @@
 using Test, TrackMatcher
-using Dates, DataFrames, StructArrays, HDF5, CSV
+using Dates, TimeZones, DataFrames, StructArrays, HDF5, CSV
 
 include("test_flightdata.jl")
 include("test_satdata.jl")
