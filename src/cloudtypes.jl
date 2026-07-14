@@ -193,6 +193,7 @@ function CloudSet{T}(
 
     #* Load cloud tracks from mat files into TrackMatcher in Julia format
     tracks = load_cloudtracks(paths, pathdict, structname, T)
+    isempty(tracks) && return CloudSet{T}()
     # Calculate load time
     tend = Dates.now()
     tc = tz.ZonedDateTime(tend, tz.localzone())
@@ -215,7 +216,7 @@ function CloudSet{T}(
 end #modified constructor 2
 
 #* Constructor for empty CloudSet
-CloudSet{T}() where T<:AbstractFloat = CloudSet{T}(CloudData{T}[], PrimaryMetadata{T}())
+CloudSet{T}() where T<:AbstractFloat = CloudSet{T}(StructArray{CloudData{T}}(undef, 0), PrimaryMetadata{T}())
 
 #* Default constructor for type promotion to Float32
 CloudSet(args...; kwargs...) = CloudSet{Float32}(args...; kwargs...)
@@ -232,3 +233,7 @@ PrimarySet{T}(tracks::StructArray{CloudData{T}}, metadata::PrimaryMetadata{T}) w
 
 PrimarySet{T}(folders::String...; kwargs...) where T<:AbstractFloat =
     CloudSet{T}(folders...; kwargs...)
+
+PrimarySet(folders::String...; kwargs...) = CloudSet{Float32}(folders...; kwargs...)
+
+PrimarySet{T}(cloud::CloudSet) where T<:AbstractFloat = CloudSet{T}(cloud)

@@ -18,6 +18,7 @@
 
 ### Changed
 
+- Update compatibility of dependencies
 - Rename `convertFloats!` and `convertUTC` to `convert_floats!` and `convert_utc`, respectively,
   to be in line with Julia conventions
 - Refactor `convert_floats!` without type piracy

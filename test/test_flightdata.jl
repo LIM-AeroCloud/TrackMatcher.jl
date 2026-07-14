@@ -1,3 +1,12 @@
+"""
+    approx_vec(v1, v2; atol=1e-5)
+
+Test that `v1` and `v2` are equal within `atol`.
+Missing values are considered equal to each other.
+"""
+approx_vec(v1, v2; atol=1e-5) = all(((ismissing(x) || ismissing(y)) ?
+                                     x === y : isapprox(x, y; atol=atol, rtol=0)) for (x, y) in zip(v1, v2))
+
 @testset "flight data" begin
     @testset "VOLPE" begin
         flight = FlightSet(volpe=joinpath(@__DIR__, "data", "volpe"))
@@ -42,8 +51,6 @@
             primary64 = PrimarySet{Float64}(volpe=joinpath(@__DIR__, "data", "volpe"))
             flightprimary = PrimarySet{Float64}(flight)
             alt_atol = 2e-3
-            approx_vec(v1, v2; atol=1e-5) = all(((ismissing(x) || ismissing(y)) ?
-                x === y : isapprox(x, y; atol=atol, rtol=0)) for (x, y) in zip(v1, v2))
             fields, fields64 = [], []
             for field in fieldnames(FlightData)
                 push!(fields, getproperty(flight.volpe[1], field))
