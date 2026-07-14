@@ -3,6 +3,7 @@
 !test/**/*.txt
 !test/**/*.h5
 !test/**/*.csv
+!test/**/*.mat
 # Ensure Lidar Altitudes data files are not ignored
 !data/CPro_lidar_Altitudes_m.dat
 # Ignore Manifest
