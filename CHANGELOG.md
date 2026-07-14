@@ -18,6 +18,7 @@
 
 ### Changed
 
+- Update compatibility of dependencies
 - Rename `convertFloats!` and `convertUTC` to `convert_floats!` and `convert_utc`, respectively,
   to be in line with Julia conventions
 - Refactor `convert_floats!` without type piracy
@@ -61,6 +62,8 @@
 
 ### Fixed
 
+- Fix constructor for empty `CloudSet` ([#71])
+- Ensure empty `Cloudset` is returned, if no cloud data is found in the given path(s) ([#71])
 - Fixed errors in UTC time conversion by rounding the converted seconds of the day from the 
   fraction of the day to 3 digits
 - Fix and issue that did not load flight webdata with the given time zone but always used the
