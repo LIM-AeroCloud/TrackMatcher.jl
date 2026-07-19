@@ -292,18 +292,18 @@ end
             )
         end
         @testset "atmospheric info" begin
-            @test TrackMatcher.atmosphericinfo(cpro, lidarprofile.fine, 16, missing, 1) == invalid
-            @test TrackMatcher.atmosphericinfo(cpro, Float32[], 16, 10_000, 1) == invalid
+            @test TrackMatcher.atmosphericinfo(cpro, lidarprofile.fine, 16, missing, Int32(1)) == invalid
+            @test TrackMatcher.atmosphericinfo(cpro, Float32[], 16, 10_000, Int32(1)) == invalid
             @test (@test_logs(
                 (:warn, "insufficient altitudes for lidar data saved; invalid used for feature in intersections of flight 1"),
-                TrackMatcher.atmosphericinfo(cpro, lidarprofile.fine, 16, 15_067, 1)
+                TrackMatcher.atmosphericinfo(cpro, lidarprofile.fine, 16, 15_067, Int32(1))
             )) == invalid
             @test (@test_logs(
                 (:error, "failed to retrieve atmospheric state for flight 1 at altitude 9977.261; setting to 'invalid'"),
-                TrackMatcher.atmosphericinfo(cpro, lidarprofile.fine, 42, 10_000, 1)
+                TrackMatcher.atmosphericinfo(cpro, lidarprofile.fine, 42, 10_000, Int32(1))
             )) == invalid
-            @test TrackMatcher.atmosphericinfo(cpro, lidarprofile.fine, 16, 13960, 1) == ci
-            @test TrackMatcher.atmosphericinfo(cpro, lidarprofile.fine, 16, 13959, 1) == clear
+            @test TrackMatcher.atmosphericinfo(cpro, lidarprofile.fine, 16, 13960, Int32(1)) == ci
+            @test TrackMatcher.atmosphericinfo(cpro, lidarprofile.fine, 16, 13959, Int32(1)) == clear
         end
     end
     @testset "CLay" begin

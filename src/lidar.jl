@@ -211,7 +211,7 @@ end
         [hlevels::Vector{<:AbstractFloat},]
         isat::Int,
         flightalt::Union{Missing,Real},
-        flight_num::Union{Int,String}
+        track_num::Union{Int,String}
     ) -> Enum{UInt16}
 
 From the `CPro` or `CLay` cloud profile data at data point `isat` in `Intersection`
@@ -226,7 +226,7 @@ atmospheric conditions at flight level.
 `atmosphericinfo` returns `invalid` if `flightalt` is missing, no suitable lidar level
 is found near flight altitude, or the feature array cannot be accessed.
 
-`flight_num` is used in warnings to identify the source of retrieval issues.
+`track_num` is used in warnings to identify the source of retrieval issues.
 """
 function atmosphericinfo end
 
@@ -235,20 +235,20 @@ function atmosphericinfo(
     hlevels::Vector{<:AbstractFloat},
     isat::Int,
     flightalt::Union{Missing,Real},
-    flight_num::Union{Int,String}
+    track_num::Union{Int32,String}
 )::Enum{UInt16}
     ismissing(flightalt) && return invalid
     isempty(hlevels) && return invalid
     i = argmin(abs.(hlevels .- flightalt))
     if abs(hlevels[i] - flightalt) > 60
         println(); @warn string("insufficient altitudes for lidar data saved; ",
-        "invalid used for feature in intersections of flight $(flight_num)")
+        "invalid used for feature in intersections of flight $(track_num)")
         invalid
     else
         state = get(sat.atmos_state, isat, Enum{UInt16}[])
         feature = get(state, i, invalid)
         if feature == invalid && (isat ∉ eachindex(sat.atmos_state) || i ∉ eachindex(state))
-            @error "failed to retrieve atmospheric state for flight $(flight_num) "*
+            @error "failed to retrieve atmospheric state for flight $(track_num) "*
                 "at altitude $(hlevels[i]); setting to 'invalid'"
         end
         feature
@@ -259,14 +259,14 @@ function atmosphericinfo(
     sat::CLay,
     isat::Int,
     alt::Union{Missing,Real},
-    flight_num::Union{Int,String}
+    track_num::Union{Int32,String}
 )::Enum{UInt16}
     ismissing(alt) && return invalid
     top = get(sat.layer_top, isat, nothing)
     base = get(sat.layer_base, isat, nothing)
     state = get(sat.atmos_state, isat, nothing)
     if isnothing(top) || isnothing(base) || isnothing(state)
-        @error("failed to retrieve atmospheric state for flight $(flight_num) at altitude $alt; "*
+        @error("failed to retrieve atmospheric state for flight $(track_num) at altitude $alt; "*
             "setting to 'invalid'")
         return invalid
     end

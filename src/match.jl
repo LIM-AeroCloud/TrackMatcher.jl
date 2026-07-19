@@ -55,7 +55,7 @@ function find_intersections(
     sat::SatSet,
     sectracks::Vector,
     dataset::AbstractString,
-    trackID::Union{Missing,Int,AbstractString},
+    trackID::Union{Missing,Int32,AbstractString},
     maxtimediff::Int,
     stepwidth::Real,
     Xradius::Real,
