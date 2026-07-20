@@ -259,19 +259,17 @@ function findXcoords(
     xdata, ydata = Float64.(xdata), Float64.(ydata)
     # Define function to find minimum distance between both tracks
     pc = pchip(xdata, ydata)
-    function coorddist(x)
-        if x isa intar.Interval
-            # Evaluate at interval bounds to get a conservative interval result
-            xlo, xhi = intar.inf(x), intar.sup(x)
-            ylo, yhi = interpolate(pc, xlo), interpolate(pc, xhi)
-            return min(ylo, yhi) .. max(ylo, yhi)
-        else
-            return interpolate(pc, x)
-        end
+    function coorddist(x::intar.Interval)::intar.Interval{Float64}
+        # Evaluate at interval bounds to get a conservative interval result
+        xlo, xhi = intar.inf(x), intar.sup(x)
+        ylo, yhi = interpolate(pc, xlo), interpolate(pc, xhi)
+        return min(ylo, yhi) .. max(ylo, yhi)
     end
+    coorddist(x::Real)::Float64 = interpolate(pc, x)
+
     # Find minimum distance by solving primary track - sat track = 0
     # Disable automatic differentiation to avoid ForwardDiff with intervals
-    rts = root.roots(coorddist, xdata[1] .. xdata[end], derivative=Returns(1 .. 1))
+    rts = root.roots(coorddist, xdata[1] .. xdata[end], derivative=Returns(1 .. 1), infer_root_type=false)
     X = Float.([intar.mid(r.region) for r in rts])
 
     # Return Vector with coordinate pairs

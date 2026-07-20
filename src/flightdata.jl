@@ -33,7 +33,7 @@ function load_volpe(
         # Load data file
         flightdata = CSV.read(joinpath(path.root, file), DataFrame, skipto=3, footerskip=2,
             ignoreemptyrows=true, silencewarnings=true, dateformat="HH:MM:SS.sssm",
-            types = Dict("FLIGHT_ID" => Int, "LATITUDE" => Float, "LONGITUDE" => Float,
+            types = Dict("FLIGHT_ID" => Int32, "LATITUDE" => Float, "LONGITUDE" => Float,
             "ALTITUDE" => Float, "SPEED" => Float, "SEGMENT_YEAR" => Int,
             "SEGMENT_MONTH" => Int, "SEGMENT_DAY" => Int, "SEGMENT_HOUR" => Int,
             "SEGMENT_MIN" => Int, "SEGMENT_SEC" => Int), select = [1;3:11;16])

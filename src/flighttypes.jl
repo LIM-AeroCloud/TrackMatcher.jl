@@ -113,7 +113,7 @@ Or construct `FlightMetadata` by directly handing over every field:
     ) where T<:AbstractFloat -> struct FlightMetadata
 """
 struct FlightMetadata{T<:AbstractFloat} <: FlightTrack{T}
-    id::Union{Int,AbstractString}
+    id::Union{Int32,AbstractString}
     flight_num::Union{Missing,AbstractString}
     route::Union{Missing,NamedTuple{(:orig,:dest),Tuple{AbstractString,AbstractString}}}
     aircraft::Union{Missing,AbstractString}
@@ -128,7 +128,7 @@ end
 
 #* Main constructor with limited tests and limited automated data construction
 function FlightMetadata{T}(
-    id::Union{Int,AbstractString},
+    id::Union{Int32,AbstractString},
     flight_num::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
     aircraft::Union{Missing,AbstractString},
@@ -278,7 +278,7 @@ end #struct FlightData
 #* Main constructor parsing a DataFrame from file input and ensuring UTC time
 function FlightData{T}(
     track::DataFrame,
-    id::Union{Int,<:AbstractString},
+    id::Union{Int32,<:AbstractString},
     flight_num::Union{Missing,<:AbstractString},
     aircraft::Union{Missing,<:AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{<:AbstractString,<:AbstractString}}},
