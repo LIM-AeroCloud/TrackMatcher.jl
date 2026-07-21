@@ -1,11 +1,11 @@
 @testset "cloud data" begin
     # Test data
-    t = [DateTime(2017, 1, 1, 0, 15, 0), DateTime(2017, 1, 1, 0, 30, 0), DateTime(2017, 1, 1, 0, 45, 0)]
-    lat = [54.7767333984375, 54.71883773803711, 54.66445541381836]
-    lon = [34.37068557739258, 34.40447998046875, 34.47409439086914]
+    t = [DateTime(2017, 1, 1, 2, 30, 0), DateTime(2017, 1, 1, 2, 45, 0), DateTime(2017, 1, 1, 3, 0, 0)]
+    lat = [39.21921157836914, 39.219390869140625, 39.25949478149414]
+    lon = [4.196620941162109, 4.21476936340332, 4.199347019195557]
     # Instantiate test sets
-    cloud = CloudSet(joinpath(@__DIR__, "data", "cloudtracks"))
-    cloud64 = CloudSet{Float64}(joinpath(@__DIR__, "data", "cloudtracks"))
+    cloud = CloudSet(joinpath(@__DIR__, "data", "cloud"))
+    cloud64 = CloudSet{Float64}(joinpath(@__DIR__, "data", "cloud"))
     cloud16 = CloudSet{Float16}(cloud64)
     t0 = now()
     cloud_empty = CloudSet()
@@ -13,7 +13,7 @@
     # Test data
     @testset "data integrity" begin
         @test_throws Base.IOError CloudSet(joinpath(@__DIR__, "data", "foo"))
-        @test length(cloud.tracks) == 2
+        @test length(cloud.tracks) == 3
         @test cloud.tracks.time[1] isa Vector{<:DateTime}
         @test cloud.tracks.lat[1] isa Vector{<:Float32}
         @test cloud.tracks.lon[1] isa Vector{<:Float32}
@@ -41,8 +41,8 @@
     end
     @testset "constructors" begin
         # Define datasets
-        primary = PrimarySet(joinpath(@__DIR__, "data", "cloudtracks"))
-        primary64 = PrimarySet{Float64}(joinpath(@__DIR__, "data", "cloudtracks"))
+        primary = PrimarySet(joinpath(@__DIR__, "data", "cloud"))
+        primary64 = PrimarySet{Float64}(joinpath(@__DIR__, "data", "cloud"))
         cloudprimary = PrimarySet{Float64}(primary)
 
         fields, fields64 = [], []

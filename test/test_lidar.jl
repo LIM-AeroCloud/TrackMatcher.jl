@@ -2,7 +2,7 @@
 
 # Define test data and expected results
 hfile = normpath(@__DIR__, "..", "data", "CPro_Lidar_Altitudes_m.dat")
-h5file = normpath(@__DIR__, "data", "caliop", "cpro", "CPro_23.h5")
+h5file = normpath(@__DIR__, "data", "caliop", "CPro", "2012", "CPro_23.h5")
 hprofile = CSV.read(hfile, DataFrame, copycols = false, types=Float32)
 lidarprofile = TrackMatcher.get_lidarheights((Inf, -Inf), Float32)
 

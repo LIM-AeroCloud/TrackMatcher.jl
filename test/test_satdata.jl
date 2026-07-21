@@ -111,7 +111,7 @@ end
 @testset "SatSet" begin
     @testset "CPro" begin
         mktempdir() do root
-            src = joinpath(@__DIR__, "data", "caliop", "cpro")
+            src = joinpath(@__DIR__, "data", "caliop", "CPro", "2012")
             cp.(joinpath.(src, mini_cpro), joinpath.(root, mini_cpro))
             sat = SatSet(root, type=:CPro)
             @test length(sat.granules) == 2
@@ -140,7 +140,7 @@ end
     end
     @testset "CLay" begin
         mktempdir() do root
-            src = joinpath(@__DIR__, "data", "caliop", "clay")
+            src = joinpath(@__DIR__, "data", "caliop", "CLay", "2012")
             cp.(joinpath.(src, mini_clay), joinpath.(root, mini_clay))
             sat = SatSet(root, type=:CLay)
             @test length(sat.granules) == 2
@@ -174,9 +174,9 @@ end
         @test sat.time == DateTime[]
         @test sat.lat == Float32[]
         @test sat.lon == Float32[]
-        sd = SatData(joinpath(@__DIR__, "data", "caliop", "cpro", "CPro_01.h5"))
-        st = SatTrack(joinpath(@__DIR__, "data", "caliop", "cpro", "CPro_01.h5"))
-        st32 = SatTrack{Float32}(joinpath(@__DIR__, "data", "caliop", "cpro", "CPro_01.h5"))
+        sd = SatData(joinpath(@__DIR__, "data", "caliop", "CPro", "2012", "CPro_01.h5"))
+        st = SatTrack(joinpath(@__DIR__, "data", "caliop", "CPro", "2012", "CPro_01.h5"))
+        st32 = SatTrack{Float32}(joinpath(@__DIR__, "data", "caliop", "CPro", "2012", "CPro_01.h5"))
         @test sd.time == st.time == st32.time
         @test sd.lat == st.lat == st32.lat
         @test sd.lon == st.lon == st32.lon
@@ -189,7 +189,7 @@ end
             latmin = Float32[], latmax = Float32[], elonmin = Float32[], elonmax = Float32[],
             wlonmin = Float32[], wlonmax = Float32[])
         mktempdir() do root
-            src = joinpath(@__DIR__, "data", "caliop", "cpro")
+            src = joinpath(@__DIR__, "data", "caliop", "CPro", "2012")
             cp.(joinpath.(src, mini_cpro), joinpath.(root, mini_cpro))
             sat = SatSet(root, type=:CPro)
             s64 = SatSet{Float64}(sat)
@@ -225,8 +225,8 @@ end
     timeindex = [2035:2065]
     @testset "CPro" begin
         lidarprofile = TrackMatcher.get_lidarheights((15_000, -Inf), Float32)
-        cpro = CPro([joinpath(@__DIR__, "data", "caliop", "cpro", "CPro_23.h5")], timeindex, lidarprofile)
-        cpro_empty = CPro([joinpath(@__DIR__, "data", "caliop", "cpro", "CPro_23.h5")],
+        cpro = CPro([joinpath(@__DIR__, "data", "caliop", "CPro", "2012", "CPro_23.h5")], timeindex, lidarprofile)
+        cpro_empty = CPro([joinpath(@__DIR__, "data", "caliop", "CPro", "2012", "CPro_23.h5")],
             timeindex, lidarprofile, false)
         cpro64 = CPro{Float64}(cpro)
         @testset "data integrity" begin
@@ -307,8 +307,8 @@ end
         end
     end
     @testset "CLay" begin
-        clay = CLay([joinpath(@__DIR__, "data", "caliop", "clay", "CLay_23.h5")], timeindex, (15_000, -Inf))
-        clay_empty = CLay([joinpath(@__DIR__, "data", "caliop", "clay", "CLay_23.h5")],
+        clay = CLay([joinpath(@__DIR__, "data", "caliop", "CLay", "2012","CLay_23.h5")], timeindex, (15_000, -Inf))
+        clay_empty = CLay([joinpath(@__DIR__, "data", "caliop", "CLay",  "2012", "CLay_23.h5")],
             timeindex, (15_000, -Inf), 5000, false)
         clay64 = CLay{Float64}(clay)
         @testset "data integrity" begin
