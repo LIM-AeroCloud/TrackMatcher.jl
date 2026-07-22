@@ -217,6 +217,10 @@ logger = logg.ConsoleLogger(stdout, logg.Info)
 logg.global_logger(logger)
 
 
+# Disable progress bars in test runs or when explicitly requested.
+progress_enabled() = get(ENV, "TRACKMATCHER_PROGRESS", "true") == "true"
+
+
 ## Define time zones for FlightAware online data
 zonedict = Dict{String,tz.TimeZone}(
     "CET" => tz.tz"+0100",

@@ -28,7 +28,7 @@ function load_volpe(
     isempty(paths) && return inventory
     # Loop over files
     n = sum(length.(getfield.(paths, :files)))
-    prog = pm.Progress(n, desc = "load VOLPE...")
+    prog = pm.Progress(n, desc = "load VOLPE...", enabled=progress_enabled())
     for path in paths, file in path.files
         # Load data file
         flightdata = CSV.read(joinpath(path.root, file), DataFrame, skipto=3, footerskip=2,
@@ -100,7 +100,7 @@ function load_flightaware(
     archive = StructArray{FlightData{Float}}(undef, 0)
     isempty(paths) && return archive
     # Loop over database files
-    prog = pm.Progress(sum(length.(getfield.(paths, :files))), desc = "load archive...")
+    prog = pm.Progress(sum(length.(getfield.(paths, :files))), desc = "load archive...", enabled=progress_enabled())
     for path in paths, file in path.files
         # Load data from csv file into standardised DataFrame
         filepath = joinpath(path.root, file)
@@ -173,13 +173,12 @@ function load_webdata(
     nlength = sum(length.(getfield.(paths, :files)))
     sizehint!(archive, nlength)
     # Loop over files with online data
-    prog = pm.Progress(nlength, desc = "load web data...")
+    prog = pm.Progress(nlength, desc = "load web data...", enabled=progress_enabled())
     for path in paths, file in path.files
         # Check file name format
         if !occursin(r"^[A-Za-z0-9]{3,}_\d{2}-[A-Za-z]{3}-\d{4}_[A-Za-z]{4}-[A-Za-z]{4}$",
             splitext(basename(file))[1])
-            println()
-            println()
+            progress_enabled() && println('\n')
             @error "Invalid file name format. Data skipped." file
             continue
         end
@@ -189,7 +188,7 @@ function load_webdata(
             types=Dict(:Latitude => Float, :Longitude => Float, :feet => String, :kts => Float,
             :Course => String, :Rate => String), drop = ["mph", "Reporting_Facility"], stringtype=String)
         catch
-            println('\n')
+            progress_enabled() && println('\n')
             @error "Error reading file. Try to specify column delimiter. Data skipped." file
             continue
         end
@@ -197,7 +196,7 @@ function load_webdata(
         flight.kts = knot2mps.(flight.kts)
         if length(names(flight)) ≠ 7 || names(flight)[2:7] ≠
             ["Latitude", "Longitude", "Course", "kts", "feet", "Rate"]
-            println('\n')
+            progress_enabled() && println('\n')
             @error "Unknown file format.\nTry to specify column delimiter. Data skipped." file
             continue
         end
@@ -331,8 +330,7 @@ function get_date_time_route(filename::String, tzone::String)
     # due to different column names, in which the timezone is included
     timezone = split(tzone, "_")
     if length(timezone) ≠ 3 || lowercase(timezone[1]) ≠ "time" || !isempty(timezone[3])
-        println()
-        println()
+        progress_enabled() && println('\n')
         @warn "Unknown time zone format, expected 'Time_<TZ>_', got '$tzone'. Trying to recover"
         timezone = ["", "", ""]
         for tz in keys(zonedict)
@@ -346,8 +344,7 @@ function get_date_time_route(filename::String, tzone::String)
     timezone = if haskey(zonedict, timezone)
         zonedict[timezone]
     else
-        println()
-        println()
+        progress_enabled() && println('\n')
         @warn "Unknown time zone. Extend the timezone dictionary. Using local time." timezone filename
         tz.localzone()
     end
@@ -357,8 +354,7 @@ function get_date_time_route(filename::String, tzone::String)
     orig, dest = match(r"(.*)[-|_](.*)", course).captures
     date = try Dates.Date(datestr, "d-u-y", locale="english")
     catch
-        println()
-        println()
+        progress_enabled() && println('\n')
         @error "Unable to parse date. Data skipped." filename
         return missing, missing, missing, missing, missing
     end

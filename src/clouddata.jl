@@ -17,7 +17,7 @@ function load_cloudtracks(
     id = Int32(0)
     # Loop over all mat files
     ntracks = sum(length.(getfield.(paths, :files)))
-    prog = pm.Progress(ntracks, desc="load cloud tracks...")
+    prog = pm.Progress(ntracks, desc="load cloud tracks...", enabled=progress_enabled())
     for path in paths, file in path.files
         # Read data from mat files
         tracks = matread(file, path.root, structname, Float)

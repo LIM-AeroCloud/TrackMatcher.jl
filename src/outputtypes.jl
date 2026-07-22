@@ -304,7 +304,7 @@ function XData{T}(
     # Get lidar altitude levels
     lidarprofile = get_lidarheights(lidarrange, T)
     # Loop over data from different datasets and interpolate track data and time, throw error on failure
-    prog = pm.Progress(length(trackdata), desc = "find intersections...")
+    prog = pm.Progress(length(trackdata), desc = "find intersections...", enabled=progress_enabled())
     for (i, track) in enumerate(trackdata)
         # Get dataset source and ID
         dataset = track isa FlightTrack ? trackdata[i].metadata.source : "C"

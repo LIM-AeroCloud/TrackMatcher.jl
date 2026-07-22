@@ -241,7 +241,8 @@ function atmosphericinfo(
     isempty(hlevels) && return invalid
     i = argmin(abs.(hlevels .- flightalt))
     if abs(hlevels[i] - flightalt) > 60
-        println(); @warn string("insufficient altitudes for lidar data saved; ",
+        progress_enabled() && println()
+        @warn string("insufficient altitudes for lidar data saved; ",
         "invalid used for feature in intersections of flight $(track_num)")
         invalid
     else

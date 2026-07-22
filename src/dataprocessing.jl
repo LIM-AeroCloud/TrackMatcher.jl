@@ -440,7 +440,8 @@ function get_satdata(
     else
         try CLay{Float}(secfiles, obsindex.time, lidarrange, altmin)
         catch
-            println(); @warn "could not load additional layer data" trackID
+            progress_enabled() && println()
+            @warn "could not load additional layer data" trackID
             CLay{Float}()
         end
     end
@@ -449,7 +450,8 @@ function get_satdata(
     else
         try CPro{Float}(secfiles, obsindex.time, lidarprofile, saveobs)
         catch
-            println(); @warn "could not load additional profile data" trackID
+            progress_enabled() && println()
+            @warn "could not load additional profile data" trackID
             CPro{Float}()
         end
     end

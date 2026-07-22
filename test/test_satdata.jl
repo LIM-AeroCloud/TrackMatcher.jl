@@ -78,7 +78,7 @@ nested_missing_aware_approx(a, b; atol=0.0, rtol=sqrt(eps(Float64))) =
 
 ## Testsets
 
-@testset "read satellite data" begin
+@testset "read sat data" begin
     @test TrackMatcher.scandir(joinpath("data", "caliop", "correct"), ".h5") == mixed_files
     @test TrackMatcher.scandir(joinpath("data", "caliop", "correct"), [".h5"]) == mixed_files
     @test TrackMatcher.scandir(joinpath("data", "caliop", "correct"), [".h5", ".hdf"]) == mixed_files
