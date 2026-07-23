@@ -5,6 +5,8 @@
 ### Added
 
 - Setup tests ([#55])
+- Output of progress bars can be silenced by setting an environment variable
+  `"TRACKMATCHER_PROGRESS"` to `"true"` ([#73])
 - Improve data checks, error handling and logging for loading webdata ([#67])
 - Add `HDF5` and `StructArrays` as dependency ([#51], [#58])
 - Add method `checklimits` to check array fields of `SatData` are within expected limits ([#51])
