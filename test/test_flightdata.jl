@@ -9,18 +9,18 @@ approx_vec(v1, v2; atol=1e-5) = all(((ismissing(x) || ismissing(y)) ?
 
 @testset "flight data" begin
     @testset "VOLPE" begin
-        flight = FlightSet(volpe=joinpath(@__DIR__, "data", "volpe"))
-        flight64 = FlightSet{Float64}(volpe=joinpath(@__DIR__, "data", "volpe"))
+        flight = FlightSet(volpe=joinpath(@__DIR__, "data", "volpe", "hit"))
+        flight64 = FlightSet{Float64}(volpe=joinpath(@__DIR__, "data", "volpe", "hit"))
         flight16 = FlightSet{Float16}(flight64)
         t0 = now()
         flight_empty = FlightSet()
         flight_nothing = FlightSet(volpe=joinpath(@__DIR__, "data", "caliop", "clay"))
         @testset "data integrity" begin
-            @test length(flight.volpe) == 13
+            @test length(flight.volpe) == 2
             @test isempty(flight.flightaware)
             @test isempty(flight.webdata)
             @test minimum([flight.volpe.alt...;]) ≥ 5000
-            @test all(length.(getproperty.(Ref(flight.volpe[2]), propertynames(flight.volpe))[1:end-1]) .== 77)
+            @test all(length.(getproperty.(Ref(flight.volpe[1]), propertynames(flight.volpe))[1:end-1]) .== 77)
             @test flight.volpe.time isa Vector{<:Vector{DateTime}}
             @test flight.volpe.lat isa Vector{<:Vector{Float32}}
             @test flight.volpe.lon isa Vector{<:Vector{Float32}}
@@ -47,8 +47,8 @@ approx_vec(v1, v2; atol=1e-5) = all(((ismissing(x) || ismissing(y)) ?
         end
         @testset "constructors" begin
             # Define datasets
-            primary = PrimarySet(volpe=joinpath(@__DIR__, "data", "volpe"))
-            primary64 = PrimarySet{Float64}(volpe=joinpath(@__DIR__, "data", "volpe"))
+            primary = PrimarySet(volpe=joinpath(@__DIR__, "data", "volpe", "hit"))
+            primary64 = PrimarySet{Float64}(volpe=joinpath(@__DIR__, "data", "volpe", "hit"))
             flightprimary = PrimarySet{Float64}(flight)
             alt_atol = 2e-3
             fields, fields64 = [], []
@@ -171,9 +171,9 @@ approx_vec(v1, v2; atol=1e-5) = all(((ismissing(x) || ismissing(y)) ?
         end
     end
     flight = FlightSet(
-        volpe=joinpath(@__DIR__, "data", "volpe"),
+        volpe=joinpath(@__DIR__, "data", "volpe", "hit"),
         flightaware=joinpath(@__DIR__, "data", "archive", "new"),
         webdata=joinpath(@__DIR__, "data", "webdata", "ok"), delim='\t'
     )
-    @test length(flight.volpe) == 13 && length(flight.flightaware) == 3 && length(flight.webdata) == 3
+    @test length(flight.volpe) == 2 && length(flight.flightaware) == 3 && length(flight.webdata) == 3
 end

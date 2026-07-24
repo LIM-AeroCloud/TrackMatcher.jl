@@ -1,8 +1,11 @@
 @testset "cloud data" begin
     # Test data
-    t = [DateTime(2017, 1, 1, 2, 30, 0), DateTime(2017, 1, 1, 2, 45, 0), DateTime(2017, 1, 1, 3, 0, 0)]
-    lat = [39.21921157836914, 39.219390869140625, 39.25949478149414]
-    lon = [4.196620941162109, 4.21476936340332, 4.199347019195557]
+    t = [
+        DateTime(2012, 2, 6, 0, 15, 0), DateTime(2012, 2, 6, 0, 30, 0),
+        DateTime(2012, 2, 6, 0, 45, 0), DateTime(2012, 2, 6, 1, 0, 0)
+    ]
+    lat = [6.2779856, 5.648815, 4.928818, 4.211443]
+    lon = [23.687, 23.552141, 23.398176, 23.249731]
     # Instantiate test sets
     cloud = CloudSet(joinpath(@__DIR__, "data", "cloud"))
     cloud64 = CloudSet{Float64}(joinpath(@__DIR__, "data", "cloud"))
@@ -62,14 +65,14 @@
         @test primary isa CloudSet{Float32}
         @test primary64 isa CloudSet{Float64}
         @test cloudprimary isa CloudSet{Float64}
-        @test track.lat == lat
-        @test track.lon == lon
+        @test track.lat == Float32.(lat)
+        @test track.lon == Float32.(lon)
         @test track64.time == t
         @test track64.lat ≈ lat
         @test track64.lon ≈ lon
         @test track_converted.time == t
-        @test track_converted.lat ≈ lat
-        @test track_converted.lon ≈ lon
+        @test track_converted.lat ≈ lat atol = 1e-5
+        @test track_converted.lon ≈ lon atol = 1e-5
         @test track_empty isa CloudData{Float32}
         @test isempty(track_empty.time) && isempty(track_empty.lat) &&
             isempty(track_empty.lon)
