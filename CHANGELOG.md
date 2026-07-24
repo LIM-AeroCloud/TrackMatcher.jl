@@ -61,6 +61,7 @@
 - Ignore Manifest.toml, this should be auto-generated on each system
 - Remove constructors for `Float16`, `Float32`, and `Float64` taking `missing` as input to
   avoid type piracy
+- Removed paperplots from repo. These do not belong in the repo for source code.
 
 ### Fixed
 
