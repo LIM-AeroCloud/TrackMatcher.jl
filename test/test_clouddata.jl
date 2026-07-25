@@ -1,3 +1,6 @@
+#  Load cloud data (and reuse for intercept finding)
+cloud = CloudSet(joinpath(@__DIR__, "data", "cloud"))
+
 @testset "cloud data" begin
     # Test data
     t = [
@@ -6,8 +9,7 @@
     ]
     lat = [6.2779856, 5.648815, 4.928818, 4.211443]
     lon = [23.687, 23.552141, 23.398176, 23.249731]
-    # Instantiate test sets
-    cloud = CloudSet(joinpath(@__DIR__, "data", "cloud"))
+    # Prepare test sets, load data
     cloud64 = CloudSet{Float64}(joinpath(@__DIR__, "data", "cloud"))
     cloud16 = CloudSet{Float16}(cloud64)
     t0 = now()

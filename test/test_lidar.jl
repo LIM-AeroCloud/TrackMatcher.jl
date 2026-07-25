@@ -10,7 +10,7 @@ fcf = [0x0001, 0x0019, 0x041b, 0x061b, 0x0a1b, 0x021a, 0x081a, 0x0a1a, 0x0c1a, 0
 feature = [clear, clear, dust, polluted, polluted_dust, low_opaque, ac, as, ci, cb]
 
 ## Test sets
-@testset "lidar altitude profile" begin
+@testset "lidar profile" begin
     @testset "example test" begin
         @test lidarprofile.coarse == hprofile.CPro
         @test length(lidarprofile.coarse) == 399
@@ -70,7 +70,7 @@ feature = [clear, clear, dust, polluted, polluted_dust, low_opaque, ac, as, ci, 
     end
 end
 
-@testset "feature classification" begin
+@testset "feature flags" begin
     for i in eachindex(fcf)
         @test TrackMatcher.feature_classification(TrackMatcher.classification(fcf[i])...) ==
             feature[i]

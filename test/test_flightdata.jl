@@ -6,11 +6,11 @@ Missing values are considered equal to each other.
 """
 approx_vec(v1, v2; atol=1e-5) = all(((ismissing(x) || ismissing(y)) ?
                                      x === y : isapprox(x, y; atol=atol, rtol=0)) for (x, y) in zip(v1, v2))
-
+# Load flight data as Float32 and Float64 (will also be used for intercept finding)
+flight = FlightSet(volpe=joinpath(@__DIR__, "data", "volpe", "hit"))
+flight64 = FlightSet{Float64}(volpe=joinpath(@__DIR__, "data", "volpe", "hit"))
 @testset "flight data" begin
     @testset "VOLPE" begin
-        flight = FlightSet(volpe=joinpath(@__DIR__, "data", "volpe", "hit"))
-        flight64 = FlightSet{Float64}(volpe=joinpath(@__DIR__, "data", "volpe", "hit"))
         flight16 = FlightSet{Float16}(flight64)
         t0 = now()
         flight_empty = FlightSet()
@@ -25,6 +25,7 @@ approx_vec(v1, v2; atol=1e-5) = all(((ismissing(x) || ismissing(y)) ?
             @test flight.volpe.lat isa Vector{<:Vector{Float32}}
             @test flight.volpe.lon isa Vector{<:Vector{Float32}}
             @test flight.volpe.alt isa Vector{<:Vector{<:Union{Missing,Float32}}}
+            @test flight.volpe.metadata[1].id == 2 # ℹ flight 1 is filtered out because of altmin=5000
             @test isempty(flight_empty.volpe) && isempty(flight_empty.flightaware) &&
                 isempty(flight_empty.webdata)
             @test t0 ≤ flight_empty.metadata.date.start == flight_empty.metadata.date.stop ≤
@@ -170,10 +171,10 @@ approx_vec(v1, v2; atol=1e-5) = all(((ismissing(x) || ismissing(y)) ?
                 DateTime(ZonedDateTime(2016, 09, 24, 7, 27, 07, localzone()), UTC)
         end
     end
-    flight = FlightSet(
+    flight_all = FlightSet(
         volpe=joinpath(@__DIR__, "data", "volpe", "hit"),
         flightaware=joinpath(@__DIR__, "data", "archive", "new"),
         webdata=joinpath(@__DIR__, "data", "webdata", "ok"), delim='\t'
     )
-    @test length(flight.volpe) == 2 && length(flight.flightaware) == 3 && length(flight.webdata) == 3
+    @test length(flight_all.volpe) == 2 && length(flight_all.flightaware) == 3 && length(flight_all.webdata) == 3
 end

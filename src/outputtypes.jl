@@ -342,7 +342,7 @@ function XData{T}(
     end #loop over flights
     pm.finish!(prog)
     # Convert primary observations to correct type
-    observations.primary = [observations.primary...;]
+    isempty(observations.primary) || (observations.primary = [observations.primary...;])
     # Calculate load time
     tend = Dates.now()
     tc = tz.ZonedDateTime(tend, tz.localzone())
@@ -373,7 +373,7 @@ function XData(
 end
 
 #* Alias constructors for `XData{T}`
-Intersection(args...; kwargs...) = XData(args...; kwargs...)
+Intersection(args...; kwargs...) = XData{Float32}(args...; kwargs...)
 Intersection{T}(args...; kwargs...) where T = XData{T}(args...; kwargs...)
 
 
