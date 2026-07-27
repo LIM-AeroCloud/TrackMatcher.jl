@@ -276,8 +276,8 @@ end #struct XData
 
 #* Main constructor with some automated calculations of the flight intersection data.
 function XData{T}(
-    tracks::PrimarySet,
-    sat::SatSet,
+    tracks::PrimarySet{T1},
+    sat::SatSet{T2},
     savesecondsattype::Bool=false;
     maxtimediff::Int=30,
     primspan::Int=0,
@@ -289,7 +289,7 @@ function XData{T}(
     atol::Real=0.1,
     saveobs::Bool=true,
     attachments=nothing
-) where T
+) where {T, T1, T2}
     # Initialise DataFrames with Intersection data and monitor start time
     tstart = Dates.now()
     Xdata = DataFrame(id=String[], lat=T[], lon=T[], alt=Union{Missing,T}[],
@@ -298,6 +298,9 @@ function XData{T}(
     observations = DataFrame(id=String[], primary=PrimaryTrack{T}[], CPro=CPro{T}[], CLay=CLay{T}[])
     accuracy = DataFrame(id=String[], intersection=T[], primdist=T[],
         secdist=T[], primtime=Dates.CompoundPeriod[], sectime=Dates.CompoundPeriod[])
+    # Check input types and promote to correct precision
+    T1 == T || (tracks = PrimarySet{T}(tracks))
+    T2 == T || (sat = SatSet{T}(sat))
     # Combine all flight datasets and find intersections
     trackdata = tracks isa FlightSet ?
         vcat(getfield.(Ref(tracks), propertynames(tracks)[1:end-1])...) : tracks.tracks

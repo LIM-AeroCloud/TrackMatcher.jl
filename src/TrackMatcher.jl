@@ -341,5 +341,6 @@ include("observations.jl")    # concrete types/constructors for satellite observ
 include("match.jl")           # functions related to finding track intersections
 include("dataprocessing.jl")  # helper functions for data processing
 include("lidar.jl")           # functions related to processing CALIOP lidar data
+include("base_overloads.jl")  # overloads for Base equality/approximation functions for TrackMatcher types
 
 end # module TrackMatcher

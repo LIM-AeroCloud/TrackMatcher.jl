@@ -9,11 +9,13 @@ approx_vec(v1, v2; atol=1e-5) = all(((ismissing(x) || ismissing(y)) ?
 # Load flight data as Float32 and Float64 (will also be used for intercept finding)
 flight = FlightSet(volpe=joinpath(@__DIR__, "data", "volpe", "hit"))
 flight64 = FlightSet{Float64}(volpe=joinpath(@__DIR__, "data", "volpe", "hit"))
+t0 = now()
+flight_empty = FlightSet()
+
 @testset "flight data" begin
     @testset "VOLPE" begin
         flight16 = FlightSet{Float16}(flight64)
-        t0 = now()
-        flight_empty = FlightSet()
+        t1 = now()
         flight_nothing = FlightSet(volpe=joinpath(@__DIR__, "data", "caliop", "clay"))
         @testset "data integrity" begin
             @test length(flight.volpe) == 2
@@ -31,7 +33,7 @@ flight64 = FlightSet{Float64}(volpe=joinpath(@__DIR__, "data", "volpe", "hit"))
             @test t0 ≤ flight_empty.metadata.date.start == flight_empty.metadata.date.stop ≤
                 DateTime(flight_empty.metadata.created)
             @test isempty(flight_nothing.volpe)
-            @test t0 ≤ flight_nothing.metadata.date.start == flight_nothing.metadata.date.stop ≤
+            @test t1 ≤ flight_nothing.metadata.date.start == flight_nothing.metadata.date.stop ≤
                 DateTime(flight_nothing.metadata.created)
         end
         @testset "data precision" begin
