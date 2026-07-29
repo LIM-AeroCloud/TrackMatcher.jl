@@ -48,16 +48,25 @@ lon = Float32[23.687, 23.67742, 23.667685, 23.657978, 23.648378, 23.638838, 23.6
     23.523283, 23.513565, 23.504055, 23.494406, 23.484657, 23.47527, 23.465548, 23.4559, 23.446463,
     23.436754, 23.427029, 23.417404, 23.40788, 23.398176]
 
-granules = (
-    start = DateTime(2012, 2, 5, 21, 16, 31, 602),
-    stop = DateTime(2012, 2, 6, 3, 5, 33, 437),
-    latmin = Float32[-81.82188, -68.64167],
-    latmax = Float32[78.177505, 81.821526],
-    elonmin = Float32[0.09188683, 20.686209],
-    elonmax = Float32[44.556667, 179.92279],
-    wlonmin = Float32[-169.5283, -179.86685],
-    wlonmax = Float32[-0.17311835, -170.95845]
-)
+function metadata(meta::SecondaryMetadata)
+    expected = (
+        start = DateTime(2012, 2, 5, 21, 16, 31, 602),
+        stop = DateTime(2012, 2, 6, 3, 5, 33, 437),
+        latmin = Float32[-81.82188, -68.64167],
+        latmax = Float32[78.177505, 81.821526],
+        elonmin = Float32[0.09188683, 20.686209],
+        elonmax = Float32[44.556667, 179.92279],
+        wlonmin = Float32[-169.5283, -179.86685],
+        wlonmax = Float32[-0.17311835, -170.95845]
+    )
+    return meta.date.start == expected.start && meta.date.stop == expected.stop &&
+        all(isapprox.(meta.granules.latmin[1:2], expected.latmin; atol=1e-6)) &&
+        all(isapprox.(meta.granules.latmax[1:2], expected.latmax; atol=1e-6)) &&
+        all(isapprox.(meta.granules.elonmin[1:2], expected.elonmin; atol=1e-6)) &&
+        all(isapprox.(meta.granules.elonmax[1:2], expected.elonmax; atol=1e-6)) &&
+        all(isapprox.(meta.granules.wlonmin[1:2], expected.wlonmin; atol=1e-6)) &&
+        all(isapprox.(meta.granules.wlonmax[1:2], expected.wlonmax; atol=1e-6))
+end
 
 
 ## Helper functions to evaluate tests
@@ -77,14 +86,6 @@ function test_sat_datafiles(files, type, satfiles, expected_type=type)::Bool
     success &= input_files == satfiles
     return success
 end
-
-missing_aware_approx(x, y; atol=0.0, rtol=sqrt(eps(Float64))) =
-    ismissing(x) ? ismissing(y) : (!ismissing(y) && isapprox(x, y; atol, rtol))
-
-nested_missing_aware_approx(a, b; atol=0.0, rtol=sqrt(eps(Float64))) =
-    length(a) == length(b) && all(zip(a, b)) do (u, v)
-        length(u) == length(v) && all(missing_aware_approx.(u, v; atol, rtol))
-    end
 
 
 ## Testsets
@@ -130,14 +131,7 @@ end
         @test cpro.granules.lat isa Vector{Vector{Float32}}
         @test cpro.granules.lon isa Vector{Vector{Float32}}
         @test cpro.metadata.roots[0x0001] == realpath(cpro_src)
-        @test cpro.metadata.date.start == granules.start
-        @test cpro.metadata.date.stop == granules.stop
-        @test all(cpro.metadata.granules.latmin[1:2] .≈ granules.latmin)
-        @test all(cpro.metadata.granules.latmax[1:2] .≈ granules.latmax)
-        @test all(cpro.metadata.granules.elonmin[1:2] .≈ granules.elonmin)
-        @test all(cpro.metadata.granules.elonmax[1:2] .≈ granules.elonmax)
-        @test all(cpro.metadata.granules.wlonmin[1:2] .≈ granules.wlonmin)
-        @test all(cpro.metadata.granules.wlonmax[1:2] .≈ granules.wlonmax)
+        @test metadata(cpro.metadata)
         @test cpro.metadata.type == :CPro
         mktempdir() do root
             touch(joinpath(root, "CPro_01.h5"))
@@ -154,14 +148,7 @@ end
         @test clay.granules.lat isa Vector{Vector{Float32}}
         @test clay.granules.lon isa Vector{Vector{Float32}}
         @test clay.metadata.roots[0x0001] == realpath(clay_src)
-        @test clay.metadata.date.start == granules.start
-        @test clay.metadata.date.stop == granules.stop
-        @test all(clay.metadata.granules.latmin[1:2] .≈ granules.latmin)
-        @test all(clay.metadata.granules.latmax[1:2] .≈ granules.latmax)
-        @test all(clay.metadata.granules.elonmin[1:2] .≈ granules.elonmin)
-        @test all(clay.metadata.granules.elonmax[1:2] .≈ granules.elonmax)
-        @test all(clay.metadata.granules.wlonmin[1:2] .≈ granules.wlonmin)
-        @test all(clay.metadata.granules.wlonmax[1:2] .≈ granules.wlonmax)
+        @test metadata(clay.metadata)
         @test clay.metadata.type == :CLay
         mktempdir() do root
             touch(joinpath(root, "CLay_01.h5"))
@@ -175,17 +162,13 @@ end
     end
     @testset "constructors" begin
         sat = SatSet()
-        @test sat.granules == StructArray{SatData{Float32}}(undef, 0)
+        @test isempty(sat)
         sat = SatData()
-        @test sat.time == DateTime[]
-        @test sat.lat == Float32[]
-        @test sat.lon == Float32[]
+        @test isempty(sat)
         sd = SatData(joinpath(@__DIR__, "data", "caliop", "CPro", "CPro_1.h5"))
         st = SatTrack(joinpath(@__DIR__, "data", "caliop", "CPro", "CPro_1.h5"))
         st32 = SatTrack{Float32}(joinpath(@__DIR__, "data", "caliop", "CPro", "CPro_1.h5"))
-        @test sd.time == st.time == st32.time
-        @test sd.lat == st.lat == st32.lat
-        @test sd.lon == st.lon == st32.lon
+        @test sd == st == st32
         sat = SecondaryMetadata()
         @test sat.type == :undef
         @test isempty(sat.roots)
@@ -199,26 +182,15 @@ end
         sat64 = SatSet{Float64}(cpro_src, type=:CPro)
         sec64 = SecondarySet{Float64}(cpro_src, type=:CPro)
         sec32 = SecondarySet(cpro_src, type=:CPro)
-        @test s64.granules.lat == sat64.granules.lat
-        @test s64.granules.lon == sat64.granules.lon
-        @test s64.granules.time == sat64.granules.time
-        @test sec64.granules.lat == sat64.granules.lat
-        @test sec64.granules.lon == sat64.granules.lon
-        @test sec64.granules.time == sat64.granules.time
+        @test s64 == sat64 == sec64
+        @test sec32 ≈ sec64 atol = 1e-6
         @test sat64.granules.lat isa Vector{Vector{Float64}}
         @test sat64.granules.lon isa Vector{Vector{Float64}}
         @test s64.granules.lat isa Vector{Vector{Float64}}
         @test s64.granules.lon isa Vector{Vector{Float64}}
         @test sec32.granules.lat isa Vector{Vector{Float32}}
         @test sec32.granules.lon isa Vector{Vector{Float32}}
-        @test sat64.metadata.date.start == granules.start
-        @test sat64.metadata.date.stop == granules.stop
-        @test all(isapprox.(sat64.metadata.granules.latmin[1:2], granules.latmin; atol=1e-6))
-        @test all(isapprox.(sat64.metadata.granules.latmax[1:2], granules.latmax; atol=1e-6))
-        @test all(isapprox.(sat64.metadata.granules.elonmin[1:2], granules.elonmin; atol=1e-6))
-        @test all(isapprox.(sat64.metadata.granules.elonmax[1:2], granules.elonmax; atol=1e-6))
-        @test all(isapprox.(sat64.metadata.granules.wlonmin[1:2], granules.wlonmin; atol=1e-6))
-        @test all(isapprox.(sat64.metadata.granules.wlonmax[1:2], granules.wlonmax; atol=1e-6))
+        @test metadata(sat64.metadata)
         @test sat64.metadata.type == :CPro
     end
 end
@@ -252,30 +224,21 @@ end
             @test cpro64.lat ≈ cpro.lat && cpro64.lat isa Vector{Float64}
         end
         @testset "data precision" begin
-            @test cpro64.lon ≈ cpro.lon && cpro64.lon isa Vector{Float64}
-            @test cpro64.EC532 isa Vector{<:Vector{<:Union{Missing,Float64}}} &&
-                nested_missing_aware_approx(cpro64.EC532, cpro.EC532)
-            @test cpro64.h_tropo ≈ cpro.h_tropo && cpro64.h_tropo isa Vector{Float64}
-            @test cpro64.temp isa Vector{<:Vector{<:Union{Missing,Float64}}} &&
-                nested_missing_aware_approx(cpro64.temp, cpro.temp)
-            @test cpro64.pressure isa Vector{<:Vector{<:Union{Missing,Float64}}} &&
-                nested_missing_aware_approx(cpro64.pressure, cpro.pressure)
-            @test cpro64.rH isa Vector{<:Vector{<:Union{Missing,Float64}}} &&
-                nested_missing_aware_approx(cpro64.rH, cpro.rH)
-            @test cpro64.IWC isa Vector{<:Vector{<:Union{Missing,Float64}}} &&
-                nested_missing_aware_approx(cpro64.IWC, cpro.IWC)
-            @test cpro64.deltap isa Vector{<:Vector{<:Union{Missing,Float64}}} &&
-                nested_missing_aware_approx(cpro64.deltap, cpro.deltap)
+            @test cpro64 ≈ cpro atol = 1e-6
+            @test cpro64.lat isa Vector{Float64} && cpro64.lon isa Vector{Float64} &&
+                cpro64.EC532 isa Vector{<:Vector{<:Union{Missing,Float64}}} &&
+                cpro64.temp isa Vector{<:Vector{<:Union{Missing,Float64}}} &&
+                cpro64.pressure isa Vector{<:Vector{<:Union{Missing,Float64}}} &&
+                cpro64.rH isa Vector{<:Vector{<:Union{Missing,Float64}}} &&
+                cpro64.IWC isa Vector{<:Vector{<:Union{Missing,Float64}}} &&
+                cpro64.deltap isa Vector{<:Vector{<:Union{Missing,Float64}}}
         end
         @testset "error handling" begin
             sat = @test_logs(
                 (:error, "ReadError: profile observations could not be read from file, skipping"),
                 CPro([joinpath(@__DIR__, "data", "caliop", "incorrect", "CPro.h5")], timeindex, lidarprofile)
             )
-            @test isempty(sat.time) && isempty(sat.lat) && isempty(sat.lon) && isempty(sat.atmos_state) &&
-                isempty(sat.EC532) && isempty(sat.h_tropo) && isempty(sat.temp) &&
-                isempty(sat.pressure) && isempty(sat.rH) && isempty(sat.IWC) &&
-                isempty(sat.deltap) && isempty(sat.CADscore) && isempty(sat.night)
+            @test isempty(sat)
 
             @test_throws "all per-time-step profile vectors must have consistent lengths in CPro data" CPro{Float32}(
                 [DateTime(2020, 1, 1)],
@@ -326,31 +289,24 @@ end
             @test clay.h_tropo isa Vector{Float32} && length(clay.h_tropo) == 31
             @test clay.night isa BitVector && length(clay.night) == 31
             @test clay.averaging isa Vector{Int8} && length(clay.averaging) == 31
-            @test isempty(clay_empty.time) && isempty(clay_empty.lat) && isempty(clay_empty.lon) && isempty(clay_empty.layer_top) &&
-                isempty(clay_empty.layer_base) && isempty(clay_empty.atmos_state) && isempty(clay_empty.OD) &&
-                isempty(clay_empty.IWP) && isempty(clay_empty.Ttop) && isempty(clay_empty.h_tropo) &&
-                isempty(clay_empty.night) && isempty(clay_empty.averaging)
+            @test isempty(clay_empty)
         end
         @testset "data precision" begin
-            @test clay64.lat ≈ clay.lat && clay64.lat isa Vector{Float64}
-            @test clay64.lon ≈ clay.lon && clay64.lon isa Vector{Float64}
-            @test clay64.layer_top ≈ clay.layer_top && clay64.layer_top isa Vector{Vector{Float64}}
-            @test clay64.layer_base ≈ clay.layer_base && clay64.layer_base isa Vector{Vector{Float64}}
-            @test clay64.OD ≈ clay.OD && clay64.OD isa Vector{Vector{Float64}}
-            @test clay64.IWP isa Vector{<:Vector{<:Union{Missing,Float64}}} &&
-                nested_missing_aware_approx(clay64.IWP, clay.IWP)
-            @test clay64.Ttop ≈ clay.Ttop && clay64.Ttop isa Vector{Vector{Float64}}
-            @test clay64.h_tropo ≈ clay.h_tropo && clay64.h_tropo isa Vector{Float64}
+            @test clay64 ≈ clay atol = 1e-6
+            @test clay64.lat isa Vector{Float64} && clay64.lon isa Vector{Float64} &&
+                clay64.layer_top isa Vector{Vector{Float64}} &&
+                clay64.layer_base isa Vector{Vector{Float64}} &&
+                clay64.OD isa Vector{Vector{Float64}} &&
+                clay64.IWP isa Vector{<:Vector{<:Union{Missing,Float64}}} &&
+                clay64.Ttop isa Vector{Vector{Float64}} &&
+                clay64.h_tropo isa Vector{Float64}
         end
         @testset "error handling" begin
             sat = @test_logs(
                 (:error, "ReadError: layer observations could not be read from file, skipping"),
                 CLay([joinpath(@__DIR__, "data", "caliop", "incorrect", "CLay.h5")], timeindex, (15_000, -Inf))
             )
-            @test isempty(sat.time) && isempty(sat.lat) && isempty(sat.lon) && isempty(sat.layer_top) &&
-                isempty(sat.layer_base) && isempty(sat.atmos_state) && isempty(sat.OD) &&
-                isempty(sat.IWP) && isempty(sat.Ttop) && isempty(sat.h_tropo) &&
-                isempty(sat.night) && isempty(sat.averaging)
+            @test isempty(sat)
 
             @test_throws "all per-time-step layer vectors must have the same length in CLay data" CLay{Float32}(
                 [DateTime(2020, 1, 1)],

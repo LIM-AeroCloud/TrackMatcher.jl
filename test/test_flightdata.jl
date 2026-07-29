@@ -1,11 +1,3 @@
-"""
-    approx_vec(v1, v2; atol=1e-5)
-
-Test that `v1` and `v2` are equal within `atol`.
-Missing values are considered equal to each other.
-"""
-approx_vec(v1, v2; atol=1e-5) = all(((ismissing(x) || ismissing(y)) ?
-                                     x === y : isapprox(x, y; atol=atol, rtol=0)) for (x, y) in zip(v1, v2))
 # Load flight data as Float32 and Float64 (will also be used for intercept finding)
 flight = FlightSet(volpe=joinpath(@__DIR__, "data", "volpe"))
 flight64 = FlightSet{Float64}(volpe=joinpath(@__DIR__, "data", "volpe"))
@@ -16,7 +8,7 @@ flight_empty = FlightSet()
     @testset "VOLPE" begin
         flight16 = FlightSet{Float16}(flight64)
         t1 = now()
-        flight_nothing = FlightSet(volpe=joinpath(@__DIR__, "data", "caliop", "clay"))
+        flight_nothing = FlightSet(volpe=joinpath(@__DIR__, "data", "caliop", "CLay"))
         @testset "data integrity" begin
             @test length(flight.volpe) == 2
             @test isempty(flight.flightaware) && isempty(flight.webdata)

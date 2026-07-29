@@ -6,7 +6,7 @@
 
 - Setup tests ([#55])
 - Add Base overloads for equality/approximation comparisons as well as emptiness tests
-  for _TrackMatcher_ types ([#76])
+  for _TrackMatcher_ types ([#99])
 - Output of progress bars can be silenced by setting an environment variable
   `"TRACKMATCHER_PROGRESS"` to `"true"` ([#73])
 - Improve data checks, error handling and logging for loading webdata ([#67])
