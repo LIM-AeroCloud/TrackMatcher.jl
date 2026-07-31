@@ -283,9 +283,9 @@ end
             @test clay.layer_top isa Vector{Vector{Float32}} && length(clay.layer_top) == 31
             @test clay.layer_base isa Vector{Vector{Float32}} && length(clay.layer_base) == 31
             @test clay.atmos_state isa Vector{Vector{Enum{UInt16}}} && length(clay.atmos_state) == 31
-            @test clay.OD isa Vector{Vector{Float32}} && length(clay.OD) == 31
-            @test clay.IWP isa Vector{<:Vector{<:Union{Missing,Float32}}} && length(clay.IWP) == 31
-            @test clay.Ttop isa Vector{Vector{Float32}} && length(clay.Ttop) == 31
+            @test clay.OD isa Vector{Vector{Union{Missing,Float32}}} && length(clay.OD) == 31
+            @test clay.IWP isa Vector{Vector{Union{Missing,Float32}}} && length(clay.IWP) == 31
+            @test clay.Ttop isa Vector{Vector{Union{Missing,Float32}}} && length(clay.Ttop) == 31
             @test clay.h_tropo isa Vector{Float32} && length(clay.h_tropo) == 31
             @test clay.night isa BitVector && length(clay.night) == 31
             @test clay.averaging isa Vector{Int8} && length(clay.averaging) == 31
@@ -296,9 +296,9 @@ end
             @test clay64.lat isa Vector{Float64} && clay64.lon isa Vector{Float64} &&
                 clay64.layer_top isa Vector{Vector{Float64}} &&
                 clay64.layer_base isa Vector{Vector{Float64}} &&
-                clay64.OD isa Vector{Vector{Float64}} &&
-                clay64.IWP isa Vector{<:Vector{<:Union{Missing,Float64}}} &&
-                clay64.Ttop isa Vector{Vector{Float64}} &&
+                clay64.OD isa Vector{Vector{Union{Missing,Float64}}} &&
+                clay64.IWP isa Vector{Vector{Union{Missing,Float64}}} &&
+                clay64.Ttop isa Vector{Vector{Union{Missing,Float64}}} &&
                 clay64.h_tropo isa Vector{Float64}
         end
         @testset "error handling" begin

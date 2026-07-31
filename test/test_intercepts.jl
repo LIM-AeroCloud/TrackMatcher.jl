@@ -1,22 +1,89 @@
 # ¡ Needs data from test_flightdata.jl, test_clouddata.jl, and test_satdata.jl to run
 
-#=
-T = Float32
-function xresults(T::Type{<:AbstractFloat})
+## Setup and helper functions
+# Debug test data
+# flight = FlightSet(volpe=joinpath(@__DIR__, "data", "volpe"))
+# flight64 = FlightSet{Float64}(volpe=joinpath(@__DIR__, "data", "volpe"))
+# flight_empty = FlightSet()
+# cloud = CloudSet(joinpath(@__DIR__, "data", "cloud"))
+
+# cpro_src = joinpath(@__DIR__, "data", "caliop", "CPro")
+# clay_src = joinpath(@__DIR__, "data", "caliop", "CLay")
+# cpro = SatSet(cpro_src, type=:CPro)
+# clay = SatSet(clay_src, type=:CLay)
+
+function xresults(intersections::XData{T}; obs::Vector{Bool}=[true, true, true], approx::Union{Bool,Int}=true) where T
     data = DataFrame(
-        id = ["V-2-1", "V-2-2"],
-        lat = T[5.589219, 11.3293705],
-        lon = T[14.462531, 12.077299],
-        alt = T[11582.462, 11581.832],
-        tdiff = Dates.CompoundPeriod[
+        id=["V-2-1", "V-2-2"],
+        lat=T[5.589219, 11.3293705],
+        lon=T[14.462531, 12.077299],
+        alt=T[11582.462, 11581.832],
+        tdiff=Dates.CompoundPeriod[
             Dates.CompoundPeriod(Minute(-29), Second(-56)),
             Dates.CompoundPeriod(Minute(23), Second(34))
         ],
-        tprim = [DateTime(2012, 2, 6, 0, 43, 13), DateTime(2012, 2, 6, 1, 27, 1)],
-        tsec = [DateTime(2012, 2, 6, 0, 13, 17), DateTime(2012, 2, 6, 1, 50, 35)],
-        atmos_state = [invalid, ci]
+        tprim=[DateTime(2012, 2, 6, 0, 43, 13), DateTime(2012, 2, 6, 1, 27, 1)],
+        tsec=[DateTime(2012, 2, 6, 0, 13, 17), DateTime(2012, 2, 6, 1, 50, 35)],
+        atmos_state=[clear, ci]
     )
+    accuracy = DataFrame(
+        id=["V-2-1", "V-2-2"],
+        intersection=T[1.0103808f6, 1.337841f6],
+        primdist=T[89937.97f0, 39393.39f0],
+        secdist=T[1559.8745, 3761.1736],
+        primtime=[Dates.CompoundPeriod(Minute(-3), Second(-53)), Dates.CompoundPeriod(Second(21))],
+        sectime=[Dates.CompoundPeriod(Millisecond(172)), Dates.CompoundPeriod(Millisecond(284))]
+    )
+    cpro = obs[2] ? CPro{T}([joinpath(@__DIR__, "data", "caliop", "CPro", "CPro_4.h5")],
+        [2035:2065], TrackMatcher.get_lidarheights((15000, -Inf)), true) : CPro{T}()
+    clay = obs[3] ? CLay{T}([joinpath(@__DIR__, "data", "caliop", "CLay", "CLay_4.h5")],
+        [2035:2065]) : CLay{T}()
+    cpro2 = obs[2] ? CPro{T}([joinpath(@__DIR__, "data", "caliop", "CPro", "CPro_6.h5")],
+        [1906:1936], TrackMatcher.get_lidarheights((15000, -Inf)), true) : CPro{T}()
+    clay2 = obs[3] ? CLay{T}([joinpath(@__DIR__, "data", "caliop", "CLay", "CLay_6.h5")],
+        [1906:1936]) : CLay{T}()
+
+    track = obs[1] ? FlightData{T}(
+        (getproperty(flight.volpe[1], prop)[39:39] for prop in propertynames(flight.volpe[1])[1:(end-1)])...,
+        flight.volpe.metadata[1]
+    ) : FlightData{T}()
+    track2 =  obs[1] ? FlightData{T}(
+        (getproperty(flight.volpe[1], prop)[43:43] for prop in propertynames(flight.volpe[1])[1:(end-1)])...,
+        flight.volpe.metadata[1]
+    ) : FlightData{T}()
+    observations = DataFrame(
+        id = ["V-2-1", "V-2-2"],
+        primary=[track, track2],
+        CPro=[cpro, cpro2],
+        CLay=[clay, clay2]
+    )
+    expected = XData{T}(data, observations, accuracy, intersections.metadata)
+    results = if approx isa Int
+        isapprox(intersections, expected, atol=10.0^-approx)
+    elseif approx === true
+        isapprox(intersections, expected)
+    else
+        intersections == expected
+    end
+    return results
 end
+
+## Test sets
+
+@testset "intersections" begin
+    # Run intercept finding routines
+    xf_pro_lay = Intersection(flight, cpro, true)
+    xf_lay = XData(flight, clay)
+    # Test results
+    @testset "data integrity" begin
+        @test xresults(xf_pro_lay, approx=false)
+        @test xresults(xf_lay, obs=[true, false, true], approx=false)
+    end
+end
+
+#=
+T = Float32
+
 
 
 c = xf.observations.CPro[1]

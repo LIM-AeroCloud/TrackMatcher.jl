@@ -206,7 +206,7 @@ import IntervalArithmetic as intar
 
 # Import structs and functions from packages
 import PCHIP: Polynomial, pchip, interpolate
-import DataFrames: DataFrame
+import DataFrames: DataFrame, AbstractDataFrame
 import StructArrays: StructArray
 import Dates: AbstractDateTime, DateTime, Date, Time
 import TimeZones: ZonedDateTime

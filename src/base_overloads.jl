@@ -21,7 +21,9 @@ end
     if a isa TMType && b isa TMType
         return isapprox(a, b; atol, rtol)
     elseif a isa Number && b isa Number
-        return Base.isapprox(a, b; atol, rtol)
+        return isapprox(a, b; atol, rtol)
+    elseif a isa AbstractString && b isa AbstractString
+        return a == b
     else
         return isequal(a, b)
     end
@@ -31,6 +33,14 @@ end
     axes(a) == axes(b) || return false
     @inbounds for i in eachindex(a, b)
         _nested_approx(a[i], b[i]; atol, rtol) || return false
+    end
+    return true
+end
+
+@inline function _nested_approx(a::AbstractDataFrame, b::AbstractDataFrame; atol::Real=0.0, rtol::Real=sqrt(eps(Float64)))
+    names(a) == names(b) || return false
+    @inbounds for name in names(a)
+        _nested_approx(a[!, name], b[!, name]; atol, rtol) || return false
     end
     return true
 end

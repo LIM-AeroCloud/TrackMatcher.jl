@@ -376,7 +376,7 @@ function XData(
 end
 
 #* Alias constructors for `XData{T}`
-Intersection(args...; kwargs...) = XData{Float32}(args...; kwargs...)
+Intersection(args...; kwargs...) = XData(args...; kwargs...)
 Intersection{T}(args...; kwargs...) where T = XData{T}(args...; kwargs...)
 
 

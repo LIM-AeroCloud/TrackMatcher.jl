@@ -67,6 +67,11 @@
 
 ### Fixed
 
+- Redirect the default `Intersection` constructor to the default `XData` constructor, not
+  `XData{Float32}`, so that `Intersection` uses the promoted precision from the primary and
+  secondary data ([#99])
+- Add conversion of `-9999` to `missing` for `Feature_Optical_Depth_532` and
+  `Layer_Top_Temperature` layer data ([#99])
 - Fix constructor for empty `CloudSet` ([#71])
 - Ensure empty `Cloudset` is returned, if no cloud data is found in the given path(s) ([#71])
 - Fixed errors in UTC time conversion by rounding the converted seconds of the day from the 
