@@ -3,6 +3,20 @@
 ## Type conversions
 
 """
+    copy_for_promotion(x)
+
+Create a distinct copy of mutable state so promotion constructors do not share
+containers with the original object.
+"""
+copy_for_promotion(x::DataFrame) = deepcopy(x)
+copy_for_promotion(x::AbstractDict) = deepcopy(x)
+copy_for_promotion(x::NamedTuple) = map(copy_for_promotion, x)
+copy_for_promotion(x::Tuple) = map(copy_for_promotion, x)
+copy_for_promotion(x::AbstractArray{<:AbstractArray}) = [copy_for_promotion(v) for v in x]
+copy_for_promotion(x::AbstractArray) = copy(x)
+copy_for_promotion(x) = x
+
+"""
     convert_floats!(data::DataFrame, T::Type{<:AbstractFloat}=Float32) -> DataFrame
 
 Transform all columns of Type `<:Union{Missing,AbstractFloat}` or `<:Vector{<:Union{Missing,AbstractFloat}}`

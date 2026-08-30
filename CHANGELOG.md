@@ -67,6 +67,7 @@
 
 ### Fixed
 
+- Fix an issue, where constructors for type promotion mutate the original _TrackMatcher_ type ([#00])
 - Redirect the default `Intersection` constructor to the default `XData` constructor, not
   `XData{Float32}`, so that `Intersection` uses the promoted precision from the primary and
   secondary data ([#99])

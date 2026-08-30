@@ -160,11 +160,11 @@ end
 
 #* Constructor for type promotion from CLay with different float precision
 function CLay{T}(clay::CLay) where T<:AbstractFloat
-    CLay{T}(clay.time, T.(clay.lat), T.(clay.lon), [T.(layer) for layer in clay.layer_top],
-        [T.(layer) for layer in clay.layer_base], clay.atmos_state,
+    CLay{T}(copy_for_promotion(clay.time), T.(clay.lat), T.(clay.lon), [T.(layer) for layer in clay.layer_top],
+        [T.(layer) for layer in clay.layer_base], copy_for_promotion(clay.atmos_state),
         [cast_missing(T, OD) for OD in clay.OD],
         [cast_missing(T, iwp) for iwp in clay.IWP],
-        [cast_missing(T, Ttop) for Ttop in clay.Ttop], T.(clay.h_tropo), clay.night, clay.averaging)
+        [cast_missing(T, Ttop) for Ttop in clay.Ttop], T.(clay.h_tropo), copy_for_promotion(clay.night), copy_for_promotion(clay.averaging))
 end
 
 #* Default constructor for Float32 precision
@@ -332,7 +332,7 @@ CPro{T}() where T = CPro{T}(DateTime[], T[], T[], Vector{Enum{UInt16}}[], Vector
 
 #* Constructor for type promotion from CPro with different float precision
 function CPro{T}(cpro::CPro) where T
-    CPro{T}(cpro.time, T.(cpro.lat), T.(cpro.lon), cpro.atmos_state,
+    CPro{T}(copy_for_promotion(cpro.time), T.(cpro.lat), T.(cpro.lon), copy_for_promotion(cpro.atmos_state),
     [cast_missing(T, EC) for EC in cpro.EC532],
         T.(cpro.h_tropo),
     [cast_missing(T, temp) for temp in cpro.temp],
@@ -341,7 +341,7 @@ function CPro{T}(cpro::CPro) where T
     [cast_missing(T, iwc) for iwc in cpro.IWC],
     [cast_missing(T, dp) for dp in cpro.deltap],
     [cast_missing(Int8, cad) for cad in cpro.CADscore],
-        cpro.night)
+        copy_for_promotion(cpro.night))
 end
 
 #* Default constructor for Float32 precision
