@@ -101,15 +101,14 @@ XMetadata{T}(meta::XMetadata) where T = XMetadata{T}(
     T(meta.atol),
     (top = T(meta.lidarrange.top), bottom = T(meta.lidarrange.bottom)),
     (coarse = T.(meta.lidarprofile.coarse), fine = T.(meta.lidarprofile.fine),
-        ibottom = meta.lidarprofile.ibottom, itop = meta.lidarprofile.itop,
-        i30 = meta.lidarprofile.i30),
+        i = meta.lidarprofile.i),
     meta.sattype,
     meta.satdates,
     T(meta.altmin),
     meta.flightdates,
     meta.created,
     meta.loadtime,
-    meta.attachments
+    copy_for_promotion(meta.attachments)
 )
 
 
@@ -242,6 +241,9 @@ struct XData{T} <: Intersection{T}
         accuracy::DataFrame,
         metadata::XMetadata{T}
     ) where T
+        data = copy_for_promotion(data)
+        observations = copy_for_promotion(observations)
+        accuracy = copy_for_promotion(accuracy)
         # Ensure floats of correct precision
         convert_floats!(data, T)
         convert_floats!(accuracy, T)
@@ -276,8 +278,8 @@ end #struct XData
 
 #* Main constructor with some automated calculations of the flight intersection data.
 function XData{T}(
-    tracks::PrimarySet,
-    sat::SatSet,
+    tracks::PrimarySet{T1},
+    sat::SatSet{T2},
     savesecondsattype::Bool=false;
     maxtimediff::Int=30,
     primspan::Int=0,
@@ -289,7 +291,7 @@ function XData{T}(
     atol::Real=0.1,
     saveobs::Bool=true,
     attachments=nothing
-) where T
+) where {T, T1, T2}
     # Initialise DataFrames with Intersection data and monitor start time
     tstart = Dates.now()
     Xdata = DataFrame(id=String[], lat=T[], lon=T[], alt=Union{Missing,T}[],
@@ -298,13 +300,16 @@ function XData{T}(
     observations = DataFrame(id=String[], primary=PrimaryTrack{T}[], CPro=CPro{T}[], CLay=CLay{T}[])
     accuracy = DataFrame(id=String[], intersection=T[], primdist=T[],
         secdist=T[], primtime=Dates.CompoundPeriod[], sectime=Dates.CompoundPeriod[])
+    # Check input types and promote to correct precision
+    T1 == T || (tracks = PrimarySet{T}(tracks))
+    T2 == T || (sat = SatSet{T}(sat))
     # Combine all flight datasets and find intersections
     trackdata = tracks isa FlightSet ?
         vcat(getfield.(Ref(tracks), propertynames(tracks)[1:end-1])...) : tracks.tracks
     # Get lidar altitude levels
     lidarprofile = get_lidarheights(lidarrange, T)
     # Loop over data from different datasets and interpolate track data and time, throw error on failure
-    prog = pm.Progress(length(trackdata), desc = "find intersections...")
+    prog = pm.Progress(length(trackdata), desc = "find intersections...", enabled=progress_enabled())
     for (i, track) in enumerate(trackdata)
         # Get dataset source and ID
         dataset = track isa FlightTrack ? trackdata[i].metadata.source : "C"
@@ -342,7 +347,7 @@ function XData{T}(
     end #loop over flights
     pm.finish!(prog)
     # Convert primary observations to correct type
-    observations.primary = [observations.primary...;]
+    isempty(observations.primary) || (observations.primary = [observations.primary...;])
     # Calculate load time
     tend = Dates.now()
     tc = tz.ZonedDateTime(tend, tz.localzone())
@@ -357,7 +362,19 @@ function XData{T}(
 end #constructor 2 XData
 
 #* Constructor for type promotion from XData with different float precision
-XData{T}(X::XData) where T = XData{T}(X.data, X.observations, X.accuracy, XMetadata{T}(X.metadata))
+function XData{T}(X::XData) where T
+    observations = copy_for_promotion(X.observations)
+    if hasproperty(observations, :primary)
+        observations.primary = [ismissing(x) ? missing : FlightData{T}(x) for x in observations.primary]
+    end
+    if hasproperty(observations, :CPro)
+        observations.CPro = [ismissing(x) ? missing : CPro{T}(x) for x in observations.CPro]
+    end
+    if hasproperty(observations, :CLay)
+        observations.CLay = [ismissing(x) ? missing : CLay{T}(x) for x in observations.CLay]
+    end
+    XData{T}(copy_for_promotion(X.data), observations, copy_for_promotion(X.accuracy), XMetadata{T}(X.metadata))
+end
 
 #* Constructor for type promtion with different precisions for primary and secondary data
 function XData(

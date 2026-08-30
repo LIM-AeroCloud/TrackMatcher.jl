@@ -41,9 +41,9 @@ struct CLay{T} <: ObservationSet{T}
     layer_top::Vector{Vector{T}}
     layer_base::Vector{Vector{T}}
     atmos_state::Vector{Vector{Enum{UInt16}}}
-    OD::Vector{Vector{T}}
+    OD::Vector{Vector{Union{Missing,T}}}
     IWP::Vector{<:Vector{<:Union{Missing,<:T}}}
-    Ttop::Vector{Vector{T}}
+    Ttop::Vector{Vector{Union{Missing,T}}}
     h_tropo::Vector{T}
     night::BitVector
     averaging::Vector{Int8}
@@ -88,9 +88,9 @@ function CLay{T}(
     layer_top = Vector{Vector{Vector{T}}}(undef, length(files))
     layer_base = Vector{Vector{Vector{T}}}(undef, length(files))
     atmos_state = Vector{Vector{Vector{Enum{UInt16}}}}(undef,length(files))
-    OD = Vector{Vector{Vector{T}}}(undef,length(files))
+    OD = Vector{Vector{Vector{Union{Missing,T}}}}(undef,length(files))
     IWP = Vector{Vector{Vector{Union{Missing,T}}}}(undef,length(files))
-    Ttop = Vector{Vector{Vector{T}}}(undef,length(files))
+    Ttop = Vector{Vector{Vector{Union{Missing,T}}}}(undef,length(files))
     h_tropo = Vector{Vector{T}}(undef, length(files))
     night = Vector{BitVector}(undef, length(files))
     averaging = Vector{Vector{Int8}}(undef,length(files))
@@ -123,9 +123,9 @@ function CLay{T}(
         l_top = Vector{Vector{T}}(undef,length(utc[i]))
         l_base = Vector{Vector{T}}(undef,length(utc[i]))
         atm = Vector{Vector{Enum{UInt16}}}(undef,length(utc[i]))
-        optdepth = Vector{Vector{T}}(undef,length(utc[i]))
+        optdepth = Vector{Vector{Union{Missing,T}}}(undef,length(utc[i]))
         icewater = Vector{Vector{Union{Missing,T}}}(undef,length(utc[i]))
-        toptemp = Vector{Vector{T}}(undef,length(utc[i]))
+        toptemp = Vector{Vector{Union{Missing,T}}}(undef,length(utc[i]))
         for n = 1:length(utc[i])
             l = findall((lbase[n,:] .> 0) .& (ltop[n,:] .> 0) .& (lbase[n,:] .< lidarrange[1]) .&
             (ltop[n,:] .> lidarrange[2]) .& (ltop[n,:] .> altmin))
@@ -137,8 +137,8 @@ function CLay{T}(
                 (ltop[n,:] .> lidarrange[2]))
                 [ltop[n, m] for m in l] , [lbase[n, m] for m in l],
                 Enum{UInt16}[feature_classification(classification(FCF[n,m])...) for m in l],
-                [FOD[n,m] for m in l],
-                [LTT[n,m] for m in l],
+                [FOD[n,m] == -9999 ? missing : FOD[n,m] for m in l],
+                [LTT[n,m] == -9999 ? missing : LTT[n,m] for m in l],
                 [IWPath[n,m] == -9999 ? missing : IWPath[n,m] for m in l]
             end
         end # loop over time steps in current file
@@ -160,11 +160,11 @@ end
 
 #* Constructor for type promotion from CLay with different float precision
 function CLay{T}(clay::CLay) where T<:AbstractFloat
-    CLay{T}(clay.time, T.(clay.lat), T.(clay.lon), [T.(layer) for layer in clay.layer_top],
-        [T.(layer) for layer in clay.layer_base], clay.atmos_state,
-        [T.(OD) for OD in clay.OD],
+    CLay{T}(copy_for_promotion(clay.time), T.(clay.lat), T.(clay.lon), [T.(layer) for layer in clay.layer_top],
+        [T.(layer) for layer in clay.layer_base], copy_for_promotion(clay.atmos_state),
+        [cast_missing(T, OD) for OD in clay.OD],
         [cast_missing(T, iwp) for iwp in clay.IWP],
-        [T.(Ttop) for Ttop in clay.Ttop], T.(clay.h_tropo), clay.night, clay.averaging)
+        [cast_missing(T, Ttop) for Ttop in clay.Ttop], T.(clay.h_tropo), copy_for_promotion(clay.night), copy_for_promotion(clay.averaging))
 end
 
 #* Default constructor for Float32 precision
@@ -332,7 +332,7 @@ CPro{T}() where T = CPro{T}(DateTime[], T[], T[], Vector{Enum{UInt16}}[], Vector
 
 #* Constructor for type promotion from CPro with different float precision
 function CPro{T}(cpro::CPro) where T
-    CPro{T}(cpro.time, T.(cpro.lat), T.(cpro.lon), cpro.atmos_state,
+    CPro{T}(copy_for_promotion(cpro.time), T.(cpro.lat), T.(cpro.lon), copy_for_promotion(cpro.atmos_state),
     [cast_missing(T, EC) for EC in cpro.EC532],
         T.(cpro.h_tropo),
     [cast_missing(T, temp) for temp in cpro.temp],
@@ -341,7 +341,7 @@ function CPro{T}(cpro::CPro) where T
     [cast_missing(T, iwc) for iwc in cpro.IWC],
     [cast_missing(T, dp) for dp in cpro.deltap],
     [cast_missing(Int8, cad) for cad in cpro.CADscore],
-        cpro.night)
+        copy_for_promotion(cpro.night))
 end
 
 #* Default constructor for Float32 precision

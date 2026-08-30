@@ -5,6 +5,10 @@
 ### Added
 
 - Setup tests ([#55])
+- Add Base overloads for equality/approximation comparisons as well as emptiness tests
+  for _TrackMatcher_ types ([#99])
+- Output of progress bars can be silenced by setting an environment variable
+  `"TRACKMATCHER_PROGRESS"` to `"true"` ([#73])
 - Improve data checks, error handling and logging for loading webdata ([#67])
 - Add `HDF5` and `StructArrays` as dependency ([#51], [#58])
 - Add method `checklimits` to check array fields of `SatData` are within expected limits ([#51])
@@ -59,9 +63,16 @@
 - Ignore Manifest.toml, this should be auto-generated on each system
 - Remove constructors for `Float16`, `Float32`, and `Float64` taking `missing` as input to
   avoid type piracy
+- Removed paperplots from repo. These do not belong in the repo for source code.
 
 ### Fixed
 
+- Fix an issue, where constructors for type promotion mutate the original _TrackMatcher_ type ([#00])
+- Redirect the default `Intersection` constructor to the default `XData` constructor, not
+  `XData{Float32}`, so that `Intersection` uses the promoted precision from the primary and
+  secondary data ([#99])
+- Add conversion of `-9999` to `missing` for `Feature_Optical_Depth_532` and
+  `Layer_Top_Temperature` layer data ([#99])
 - Fix constructor for empty `CloudSet` ([#71])
 - Ensure empty `Cloudset` is returned, if no cloud data is found in the given path(s) ([#71])
 - Fixed errors in UTC time conversion by rounding the converted seconds of the day from the 
