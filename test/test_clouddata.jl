@@ -1,4 +1,4 @@
-#  Load cloud data (and reuse for intercept finding)
+# Load cloud data (and reuse for intercept finding)
 cloud = CloudSet(joinpath(@__DIR__, "data", "cloud"))
 
 @testset "cloud data" begin

@@ -1,5 +1,16 @@
 ## Define expected results
 
+# Load satellite data (and reuse for intercept finding)
+cpro_src = joinpath(@__DIR__, "data", "caliop", "CPro")
+clay_src = joinpath(@__DIR__, "data", "caliop", "CLay")
+sat_cpro = SatSet(cpro_src, type=:CPro)
+sat_clay = SatSet(clay_src, type=:CLay)
+timeindex = [2035:2065]
+lidarprofile = TrackMatcher.get_lidarheights((15_000, -Inf), Float32)
+cpro = CPro([joinpath(@__DIR__, "data", "caliop", "CPro", "CPro_4.h5")], timeindex, lidarprofile)
+clay = CLay([joinpath(@__DIR__, "data", "caliop", "CLay", "CLay_4.h5")], timeindex, (15_000, -Inf))
+
+# Target data for sat test sets
 cpro_files = [joinpath("Level1", "CPro1.h5"), joinpath("Level1", "Level2", "CPro2.h5")]
 clay_files = [joinpath("Level1", "CLay.h5")]
 mixed_files = [joinpath("Level1", "CLay.h5"), joinpath("Level1", "CPro1.h5"),
@@ -89,10 +100,6 @@ end
 
 
 ## Testsets
-cpro_src = joinpath(@__DIR__, "data", "caliop", "CPro")
-clay_src = joinpath(@__DIR__, "data", "caliop", "CLay")
-cpro = SatSet(cpro_src, type=:CPro)
-clay = SatSet(clay_src, type=:CLay)
 
 # Test sets
 @testset "read sat data" begin
@@ -127,12 +134,12 @@ end
 
 @testset "SatSet" begin
     @testset "CPro" begin
-        @test length(cpro.granules) == 7
-        @test cpro.granules.lat isa Vector{Vector{Float32}}
-        @test cpro.granules.lon isa Vector{Vector{Float32}}
-        @test cpro.metadata.roots[0x0001] == realpath(cpro_src)
-        @test metadata(cpro.metadata)
-        @test cpro.metadata.type == :CPro
+        @test length(sat_cpro.granules) == 7
+        @test sat_cpro.granules.lat isa Vector{Vector{Float32}}
+        @test sat_cpro.granules.lon isa Vector{Vector{Float32}}
+        @test sat_cpro.metadata.roots[0x0001] == realpath(cpro_src)
+        @test metadata(sat_cpro.metadata)
+        @test sat_cpro.metadata.type == :CPro
         mktempdir() do root
             touch(joinpath(root, "CPro_01.h5"))
             sat = @test_logs(
@@ -144,12 +151,12 @@ end
         end
     end
     @testset "CLay" begin
-        @test length(clay.granules) == 7
-        @test clay.granules.lat isa Vector{Vector{Float32}}
-        @test clay.granules.lon isa Vector{Vector{Float32}}
-        @test clay.metadata.roots[0x0001] == realpath(clay_src)
-        @test metadata(clay.metadata)
-        @test clay.metadata.type == :CLay
+        @test length(sat_clay.granules) == 7
+        @test sat_clay.granules.lat isa Vector{Vector{Float32}}
+        @test sat_clay.granules.lon isa Vector{Vector{Float32}}
+        @test sat_clay.metadata.roots[0x0001] == realpath(clay_src)
+        @test metadata(sat_clay.metadata)
+        @test sat_clay.metadata.type == :CLay
         mktempdir() do root
             touch(joinpath(root, "CLay_01.h5"))
             sat = @test_logs(
@@ -178,7 +185,7 @@ end
             latmin = Float32[], latmax = Float32[], elonmin = Float32[], elonmax = Float32[],
             wlonmin = Float32[], wlonmax = Float32[])
 
-        s64 = SatSet{Float64}(cpro)
+        s64 = SatSet{Float64}(sat_cpro)
         sat64 = SatSet{Float64}(cpro_src, type=:CPro)
         sec64 = SecondarySet{Float64}(cpro_src, type=:CPro)
         sec32 = SecondarySet(cpro_src, type=:CPro)
@@ -196,10 +203,7 @@ end
 end
 
 @testset "Observations" begin
-    timeindex = [2035:2065]
     @testset "CPro" begin
-        lidarprofile = TrackMatcher.get_lidarheights((15_000, -Inf), Float32)
-        cpro = CPro([joinpath(@__DIR__, "data", "caliop", "CPro", "CPro_4.h5")], timeindex, lidarprofile)
         cpro_empty = CPro([joinpath(@__DIR__, "data", "caliop", "CPro", "CPro_4.h5")],
             timeindex, lidarprofile, false)
         cpro64 = CPro{Float64}(cpro)
@@ -272,7 +276,6 @@ end
         end
     end
     @testset "CLay" begin
-        clay = CLay([joinpath(@__DIR__, "data", "caliop", "CLay","CLay_4.h5")], timeindex, (15_000, -Inf))
         clay_empty = CLay([joinpath(@__DIR__, "data", "caliop", "CLay", "CLay_4.h5")],
             timeindex, (15_000, -Inf), 5000, false)
         clay64 = CLay{Float64}(clay)

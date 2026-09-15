@@ -128,7 +128,7 @@ SecondaryMetadata{T}(meta::SecondaryMetadata) where T = SecondaryMetadata{T}(
         elonmin = T.(meta.granules.elonmin), elonmax = T.(meta.granules.elonmax),
         wlonmin = T.(meta.granules.wlonmin), wlonmax = T.(meta.granules.wlonmax)
     ),
-    meta.roots, meta.type, meta.date, meta.created, meta.loadtime, meta.attachments
+    copy_for_promotion(meta.roots), meta.type, meta.date, meta.created, meta.loadtime, copy_for_promotion(meta.attachments)
 )
 
 
@@ -182,7 +182,7 @@ SatData(args...) = SatData{Float32}(args...)
 
 #* Constructor for floating point type promotion
 SatData{T}(sat::SatData) where T<:AbstractFloat = SatData{T}(
-  sat.time, T.(sat.lat), T.(sat.lon)
+  copy_for_promotion(sat.time), T.(sat.lat), T.(sat.lon)
 )
 
 """
