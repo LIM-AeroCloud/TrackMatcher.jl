@@ -133,6 +133,7 @@ end
 end
 
 @testset "SatSet" begin
+    # ℹ Use match_mode=:any in log tests to allow other warnings like deprecation warnings
     @testset "CPro" begin
         @test length(sat_cpro.granules) == 7
         @test sat_cpro.granules.lat isa Vector{Vector{Float32}}
@@ -145,6 +146,7 @@ end
             sat = @test_logs(
                 (:warn, "read error; data skipped"),
                 (:warn, "no satellite data files successfully loaded"),
+                match_mode=:any,
                 SatSet(root, type=:CPro)
             )
             @test sat.metadata.date == (start=DateTime(9999), stop=DateTime(9999))
@@ -162,6 +164,7 @@ end
             sat = @test_logs(
                 (:warn, "read error; data skipped"),
                 (:warn, "no satellite data files successfully loaded"),
+                match_mode=:any,
                 SatSet(root, type=:CLay)
             )
             @test sat.metadata.date == (start=DateTime(9999), stop=DateTime(9999))
