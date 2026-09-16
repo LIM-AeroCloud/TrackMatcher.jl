@@ -5,6 +5,7 @@
 ### Added
 
 - Setup tests ([#55])
+- Export `MeasuredData` ([#76])
 - Add Base overloads for equality/approximation comparisons as well as emptiness tests
   for _TrackMatcher_ types ([#99])
 - Output of progress bars can be silenced by setting an environment variable
@@ -56,6 +57,7 @@
     calculations at the edges (technically **breaking**)
   - revised return value of `get_lidarheights`
 - Use flight number for error handling in `CLay` method of `atmosphericinfo` ([#75])
+- Revise debug logs in the loop over track data during intersection finding ([#76])
 
 ### Removed
 
@@ -67,6 +69,8 @@
 
 ### Fixed
 
+- Fix the constructor of `Data` and `DataSet`, where previously `DataFrames` was mistyped
+  instead of the `Data` constructor, update outdated kwargs ([#76])
 - Fix an issue, where constructors for type promotion mutate the original _TrackMatcher_ type
 - Redirect the default `Intersection` constructor to the default `XData` constructor, not
   `XData{Float32}`, so that `Intersection` uses the promoted precision from the primary and

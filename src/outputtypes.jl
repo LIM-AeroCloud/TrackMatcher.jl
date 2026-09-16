@@ -333,10 +333,7 @@ function XData{T}(
             append!(Xdata, currdata); append!(observations, currobs)
             append!(accuracy, curraccuracy)
         catch err
-            @debug begin
-                @show id
-                rethrow(err)
-            end
+            @debug "primary track ID: $id" exception=(err, catch_backtrace())
             # Issue warning on failure of interpolating track or time data
             @warn("Track data and/or time could not be interpolated. Data ignored.",
             dataset, id)
@@ -536,7 +533,6 @@ function Data{T}(
     sattype::Symbol=:undef,
     altmin::Real=5000,
     delim::Union{Nothing,Char,String}=nothing,
-    savedir::Union{String,Bool}="abs",
     maxtimediff::Int=30,
     primspan::Int=0,
     secspan::Int=15,
@@ -544,11 +540,13 @@ function Data{T}(
     stepwidth::Real=0.01,
     Xradius::Real=20_000,
     expdist::Real=Inf,
+    atol::Real=0.1,
+    saveobs::Bool=true,
     attachments::Vector{<:Pair{String,<:Any}}=Pair{String,Any}[]
 ) where T
 
     # Load data
-    tracks = MeasuredSet{T}(folders; sattype, altmin, delim, savedir, attachments)
+    tracks = MeasuredSet{T}(folders; sattype, altmin, delim, attachments)
 
     # Process function arguments that need to be distributed to several structs
     folders = init_dict(folders, String[])
@@ -556,21 +554,21 @@ function Data{T}(
 
     # Calculate Intersections
     intersections = (
-    flight=Intersection{T}(
+    flight=XData{T}(
         tracks.flight, tracks.sat, savesecondsattype;
         maxtimediff, primspan, secspan, lidarrange,
-        stepwidth, Xradius, expdist, savedir,
+        stepwidth, Xradius, expdist, atol, saveobs,
         attachments = attachments["Xflight"]
     ),
-    cloud = Intersection{T}(
+    cloud = XData{T}(
         tracks.cloud, tracks.sat, savesecondsattype;
         maxtimediff, primspan, secspan, lidarrange,
-        stepwidth, Xradius, expdist, savedir,
+        stepwidth, Xradius, expdist, atol, saveobs,
         attachments = attachments["Xcloud"]
     ))
 
     # Instantiate
-    DataFrames{T}(tracks, intersections)
+    Data{T}(tracks, intersections)
 end
 
 #* Default constructor for `Data` with single floating point precision

@@ -318,8 +318,8 @@ end
 
 
 ## Export types and constructors
-export DataSet, Data, MeasuredSet, ComputedSet, PrimarySet, SecondarySet, ObservationSet,
-       FlightSet, CloudSet, SatSet, PrimaryTrack, SecondaryTrack,
+export DataSet, Data, MeasuredSet, MeasuredData, ComputedSet, PrimarySet, SecondarySet,
+       ObservationSet, FlightSet, CloudSet, SatSet, PrimaryTrack, SecondaryTrack,
        FlightTrack, CloudTrack, SatTrack, FlightData, CloudData, SatData,
        CLay, CPro, Intersection, XData, #APro, ALay,
        FlightMetadata, CloudMetadata, PrimaryMetadata, SecondaryMetadata, XMetadata,

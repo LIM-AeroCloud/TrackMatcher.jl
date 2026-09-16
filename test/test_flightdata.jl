@@ -1,8 +1,4 @@
-# Load flight data as Float32 and Float64 (will also be used for intercept finding)
-flight = FlightSet(volpe=joinpath(@__DIR__, "data", "volpe"))
-flight64 = FlightSet{Float64}(volpe=joinpath(@__DIR__, "data", "volpe"))
-t0 = now()
-flight_empty = FlightSet()
+# ¡ Needs general test data from init.jl
 
 @testset "flight data" begin
     @testset "VOLPE" begin

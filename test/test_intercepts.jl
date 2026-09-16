@@ -1,23 +1,6 @@
-# ¡ Needs data from test_flightdata.jl, test_clouddata.jl, and test_satdata.jl to run
+# ¡ Needs general test data from init.jl
+## Setup helper functions
 
-## Setup and helper functions
-# Debug test data
-# flight = FlightSet(volpe=joinpath(@__DIR__, "data", "volpe"))
-# flight64 = FlightSet{Float64}(volpe=joinpath(@__DIR__, "data", "volpe"))
-# flight_empty = FlightSet()
-# cloud = CloudSet(joinpath(@__DIR__, "data", "cloud"))
-
-# cpro_src = joinpath(@__DIR__, "data", "caliop", "CPro")
-# clay_src = joinpath(@__DIR__, "data", "caliop", "CLay")
-# sat_cpro = SatSet(cpro_src, type=:CPro)
-# sat_clay = SatSet(clay_src, type=:CLay)
-
-# timeindex = [2035:2065]
-# lidarprofile = TrackMatcher.get_lidarheights((15_000, -Inf), Float32)
-# cpro = CPro([joinpath(@__DIR__, "data", "caliop", "CPro", "CPro_4.h5")], timeindex, lidarprofile)
-# clay = CLay([joinpath(@__DIR__, "data", "caliop", "CLay","CLay_4.h5")], timeindex, (15_000, -Inf))
-
-# TODO adjust to cloud data
 function xdata_matches(
     intersections::XData{T},
     expected::XData{T},
@@ -52,27 +35,6 @@ function xdata_matches(
     return true
 end
 
-# function promoted_xdata_matches(a::XData{T}, b::XData{T}; data_atol::Real=1e-3, accuracy_atol::Real=0.2) where T
-#     a.data.id == b.data.id || return false
-#     isapprox(a.data.lat, b.data.lat; atol=data_atol, rtol=0.0) || return false
-#     isapprox(a.data.lon, b.data.lon; atol=data_atol, rtol=0.0) || return false
-#     isapprox(a.data.alt, b.data.alt; atol=data_atol, rtol=0.0) || return false
-#     a.data.tdiff == b.data.tdiff || return false
-#     a.data.tprim == b.data.tprim || return false
-#     a.data.tsec == b.data.tsec || return false
-#     a.data.atmos_state == b.data.atmos_state || return false
-
-#     a.accuracy.id == b.accuracy.id || return false
-#     isapprox(a.accuracy.intersection, b.accuracy.intersection; atol=accuracy_atol, rtol=0.0) || return false
-#     isapprox(a.accuracy.primdist, b.accuracy.primdist; atol=accuracy_atol, rtol=0.0) || return false
-#     isapprox(a.accuracy.secdist, b.accuracy.secdist; atol=accuracy_atol, rtol=0.0) || return false
-#     a.accuracy.primtime == b.accuracy.primtime || return false
-#     a.accuracy.sectime == b.accuracy.sectime || return false
-
-#     a.observations.id == b.observations.id || return false
-#     names(a.observations) == names(b.observations) || return false
-#     return true
-# end
 
 function xresults(
     intersections::XData{T},
@@ -148,7 +110,7 @@ end
 
 @testset "intersections" begin
     # Run intercept finding routines
-    xf_cpro = Intersection(flight, sat_cpro)
+    xf_cpro = Intersection(flight, sat_cpro) # ℹ reused in constructor testset
     xf_clay = XData(flight, sat_clay, true)
     xf64 = Intersection{Float64}(xf_cpro)
     xf64_promoted = Intersection(flight64, sat_cpro)
@@ -205,17 +167,68 @@ end
         @test promoted_clay.time !== clay_obs.time
         @test promoted_clay.lat !== clay_obs.lat
     end
+    @testset "constructors" begin
+        # Instantiate with convenience constructors
+        mdata = MeasuredData([
+            "volpe" => joinpath(@__DIR__, "data", "volpe"),
+            "cloudtracks" => joinpath(@__DIR__, "data", "cloud"),
+            "sat" => cpro_src
+        ])
+        mset = MeasuredSet{Float32}([
+            "volpe" => joinpath(@__DIR__, "data", "volpe"),
+            "cloudtracks" => joinpath(@__DIR__, "data", "cloud"),
+            "sat" => cpro_src
+        ])
+        data = Data([
+            "volpe" => joinpath(@__DIR__, "data", "volpe"),
+            "cloudtracks" => joinpath(@__DIR__, "data", "cloud"),
+            "sat" => cpro_src
+        ])
+        dset = DataSet{Float32}([
+            "volpe" => joinpath(@__DIR__, "data", "volpe"),
+            "cloudtracks" => joinpath(@__DIR__, "data", "cloud"),
+            "sat" => cpro_src
+        ])
+        # Test convenience constructors
+        @test mdata == mset
+        @test mdata.flight.volpe isa StructArray{FlightData{Float32}} && length(mdata.flight.volpe) == 2
+        @test mdata.flight.flightaware isa StructArray{FlightData{Float32}} && isempty(mdata.flight.flightaware)
+        @test mdata.flight.webdata isa StructArray{FlightData{Float32}} && isempty(mdata.flight.webdata)
+        @test mdata.cloud.tracks isa StructArray{CloudData{Float32}} && length(mdata.cloud.tracks) == 3
+        @test mdata.sat.granules isa StructArray{SatData{Float32}} && length(mdata.sat.granules) == 7
+
+        @test data == dset
+        @test data.trackdata.flight.volpe isa StructArray{FlightData{Float32}} &&
+            length(data.trackdata.flight.volpe) == 2
+        @test data.trackdata.flight.flightaware isa StructArray{FlightData{Float32}} &&
+            isempty(data.trackdata.flight.flightaware)
+        @test data.trackdata.flight.webdata isa StructArray{FlightData{Float32}} &&
+            isempty(data.trackdata.flight.webdata)
+        @test data.trackdata.cloud.tracks isa StructArray{CloudData{Float32}} &&
+            length(data.trackdata.cloud.tracks) == 3
+        @test data.trackdata.sat.granules isa StructArray{SatData{Float32}} &&
+            length(data.trackdata.sat.granules) == 7
+        @test data.intersection.flight isa XData{Float32} && size(data.intersection.flight.data) == (2, 8) &&
+            size(data.intersection.flight.observations) == (2, 4) && size(data.intersection.flight.accuracy) == (2, 6)
+        @test data.intersection.cloud isa XData{Float32} && size(data.intersection.cloud.data) == (1, 8) &&
+            size(data.intersection.cloud.observations) == (1, 4) && size(data.intersection.cloud.accuracy) == (1, 6)
+
+        @test XMetadata(getfield.(Ref(xf_cpro.metadata), fieldnames(XMetadata))...) isa XMetadata{Float32}
+    end
     @testset "exception handling" begin
         # Force an exception in the interpolation path
         TrackMatcher.interpolate_trackdata(::FlightTrack) =
             throw(ErrorException("forced failure"))
-        @test_logs (
+        @test_logs min_level = Debug match_mode = :all (
+            :debug, "primary track ID: 2"
+        ) (
             :warn, r"Track data and/or time could not be interpolated"
         ) (
             :info, r"Intersection data \(0 matches\) loaded"
         ) begin
             x = XData(flight, sat_cpro, true)
             @test x isa XData
+            @test isempty(x)
         end
     end
 end
