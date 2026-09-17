@@ -174,21 +174,23 @@ end
             "cloudtracks" => joinpath(@__DIR__, "data", "cloud"),
             "sat" => cpro_src
         ])
-        mset = MeasuredSet{Float32}([
+        mset = MeasuredSet([
             "volpe" => joinpath(@__DIR__, "data", "volpe"),
             "cloudtracks" => joinpath(@__DIR__, "data", "cloud"),
             "sat" => cpro_src
         ])
+        mdata64 = MeasuredData{Float64}(mdata)
         data = Data([
             "volpe" => joinpath(@__DIR__, "data", "volpe"),
             "cloudtracks" => joinpath(@__DIR__, "data", "cloud"),
             "sat" => cpro_src
         ])
-        dset = DataSet{Float32}([
+        dset = DataSet([
             "volpe" => joinpath(@__DIR__, "data", "volpe"),
             "cloudtracks" => joinpath(@__DIR__, "data", "cloud"),
             "sat" => cpro_src
         ])
+        data64 = Data{Float64}(data)
         # Test convenience constructors
         @test mdata == mset
         @test mdata.flight.volpe isa StructArray{FlightData{Float32}} && length(mdata.flight.volpe) == 2
@@ -196,6 +198,13 @@ end
         @test mdata.flight.webdata isa StructArray{FlightData{Float32}} && isempty(mdata.flight.webdata)
         @test mdata.cloud.tracks isa StructArray{CloudData{Float32}} && length(mdata.cloud.tracks) == 3
         @test mdata.sat.granules isa StructArray{SatData{Float32}} && length(mdata.sat.granules) == 7
+
+        @test mdata64 isa MeasuredData{Float64}
+        @test mdata64.flight.volpe isa StructArray{FlightData{Float64}} && length(mdata64.flight.volpe) == 2
+        @test mdata64.flight.flightaware isa StructArray{FlightData{Float64}} && isempty(mdata64.flight.flightaware)
+        @test mdata64.flight.webdata isa StructArray{FlightData{Float64}} && isempty(mdata64.flight.webdata)
+        @test mdata64.cloud.tracks isa StructArray{CloudData{Float64}} && length(mdata64.cloud.tracks) == 3
+        @test mdata64.sat.granules isa StructArray{SatData{Float64}} && length(mdata64.sat.granules) == 7
 
         @test data == dset
         @test data.trackdata.flight.volpe isa StructArray{FlightData{Float32}} &&
@@ -212,6 +221,19 @@ end
             size(data.intersection.flight.observations) == (2, 4) && size(data.intersection.flight.accuracy) == (2, 6)
         @test data.intersection.cloud isa XData{Float32} && size(data.intersection.cloud.data) == (1, 8) &&
             size(data.intersection.cloud.observations) == (1, 4) && size(data.intersection.cloud.accuracy) == (1, 6)
+
+        @test data64 isa Data{Float64}
+        @test data64.trackdata.flight.volpe isa StructArray{FlightData{Float64}} &&
+            length(data64.trackdata.flight.volpe) == 2
+        @test data64.trackdata.flight.flightaware isa StructArray{FlightData{Float64}} &&
+            isempty(data64.trackdata.flight.flightaware)
+        @test data64.trackdata.flight.webdata isa StructArray{FlightData{Float64}} &&
+            isempty(data64.trackdata.flight.webdata)
+        @test data64.trackdata.cloud.tracks isa StructArray{CloudData{Float64}} &&
+            length(data64.trackdata.cloud.tracks) == 3
+        @test data64.trackdata.sat.granules isa StructArray{SatData{Float64}} &&
+            length(data64.trackdata.sat.granules) == 7
+        @test data64.intersection.flight isa XData{Float64} && data64.intersection.cloud isa XData{Float64}
 
         @test XMetadata(getfield.(Ref(xf_cpro.metadata), fieldnames(XMetadata))...) isa XMetadata{Float32}
     end

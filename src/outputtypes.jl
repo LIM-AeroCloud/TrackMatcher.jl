@@ -361,7 +361,11 @@ end #constructor 2 XData
 #* Constructor for type promotion from XData with different float precision
 function XData{T}(X::XData) where T
     observations = copy_for_promotion(X.observations)
-    observations.primary = [ismissing(x) ? missing : FlightData{T}(x) for x in observations.primary]
+    observations.primary = if observations.primary isa Vector{<:FlightTrack}
+        [ismissing(x) ? missing : FlightData{T}(x) for x in observations.primary]
+    else
+        [ismissing(x) ? missing : CloudData{T}(x) for x in observations.primary]
+    end
     observations.CPro = [ismissing(x) ? missing : CPro{T}(x) for x in observations.CPro]
     observations.CLay = [ismissing(x) ? missing : CLay{T}(x) for x in observations.CLay]
     XData{T}(copy_for_promotion(X.data), observations, copy_for_promotion(X.accuracy), XMetadata{T}(X.metadata))
@@ -576,9 +580,7 @@ Data(args...; kwargs...) = Data{Float32}(args...; kwargs...)
 
 #* Constructor for type promotion from `Data` with different float precision
 Data{T}(data::Data) where T = Data{T}(
-    FlightSet{T}(data.trackdata.flight),
-    CloudSet{T}(data.trackdata.cloud),
-    SatSet{T}(data.trackdata.sat),
+    MeasuredSet{T}(data.trackdata),
     (flight = Intersection{T}(data.intersection.flight),
         cloud = Intersection{T}(data.intersection.cloud))
 )

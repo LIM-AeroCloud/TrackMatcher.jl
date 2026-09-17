@@ -71,6 +71,8 @@
 
 - Fix the constructor of `Data` and `DataSet`, where previously `DataFrames` was mistyped
   instead of the `Data` constructor, update outdated kwargs ([#76])
+- Fix `Data` constructor for type promotion ([#76])
+- Fix type promotion for primary data in `XData` constructor for type promotion ([#76])
 - Fix an issue, where constructors for type promotion mutate the original _TrackMatcher_ type
 - Redirect the default `Intersection` constructor to the default `XData` constructor, not
   `XData{Float32}`, so that `Intersection` uses the promoted precision from the primary and
