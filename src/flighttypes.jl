@@ -113,7 +113,7 @@ Or construct `FlightMetadata` by directly handing over every field:
     ) where T<:AbstractFloat -> struct FlightMetadata
 """
 struct FlightMetadata{T<:AbstractFloat} <: FlightTrack{T}
-    id::Union{Int,AbstractString}
+    id::Union{Int32,AbstractString}
     flight_num::Union{Missing,AbstractString}
     route::Union{Missing,NamedTuple{(:orig,:dest),Tuple{AbstractString,AbstractString}}}
     aircraft::Union{Missing,AbstractString}
@@ -128,7 +128,7 @@ end
 
 #* Main constructor with limited tests and limited automated data construction
 function FlightMetadata{T}(
-    id::Union{Int,AbstractString},
+    id::Union{Int32,AbstractString},
     flight_num::Union{Missing,AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
     aircraft::Union{Missing,AbstractString},
@@ -163,7 +163,7 @@ FlightMetadata{T}(meta::FlightMetadata) where T<:AbstractFloat = FlightMetadata{
     meta.id, meta.flight_num, meta.route, meta.aircraft, meta.date,
     (latmin = T(meta.area.latmin), latmax = T(meta.area.latmax), elonmin = T(meta.area.elonmin),
     elonmax = T(meta.area.elonmax), wlonmin = T(meta.area.wlonmin), wlonmax = T(meta.area.wlonmax)),
-    Tuple([(range = m.range, min = T.(m.min), max = T.(m.max)) for m in meta.flex]),
+    copy_for_promotion(Tuple([(range = m.range, min = T.(m.min), max = T.(m.max)) for m in meta.flex])),
     meta.use_lon, meta.source, meta.root, meta.file
 )
 
@@ -203,7 +203,7 @@ PrimaryMetadata(args...) = PrimaryMetadata{Float32}(args...)
 
 #* Constructor for floating point type promotion
 PrimaryMetadata{T}(meta::PrimaryMetadata) where T<:AbstractFloat = PrimaryMetadata{T}(T(meta.altmin),
-    meta.date, meta.lookup, meta.created, meta.loadtime, meta.attachments)
+    meta.date, copy_for_promotion(meta.lookup), meta.created, meta.loadtime, copy_for_promotion(meta.attachments))
 
 
 ## Struct for single flight tracks
@@ -278,7 +278,7 @@ end #struct FlightData
 #* Main constructor parsing a DataFrame from file input and ensuring UTC time
 function FlightData{T}(
     track::DataFrame,
-    id::Union{Int,<:AbstractString},
+    id::Union{Int32,<:AbstractString},
     flight_num::Union{Missing,<:AbstractString},
     aircraft::Union{Missing,<:AbstractString},
     route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{<:AbstractString,<:AbstractString}}},
@@ -311,8 +311,8 @@ FlightData{T}() where T<:AbstractFloat = FlightData{T}(DateTime[], T[], T[],
 
 #* Constructor for type promotion of FlightData
 FlightData{T}(flight::FlightData) where T<:AbstractFloat =
-    FlightData{T}(flight.time, T.(flight.lat), T.(flight.lon),
-        [ismissing(x) ? missing : T(x) for x in flight.alt], flight.heading,
+    FlightData{T}(copy_for_promotion(flight.time), T.(flight.lat), T.(flight.lon),
+        [ismissing(x) ? missing : T(x) for x in flight.alt], copy_for_promotion(flight.heading),
         [ismissing(x) ? missing : T(x) for x in flight.climb],
         [ismissing(x) ? missing : T(x) for x in flight.speed],
         FlightMetadata{T}(flight.metadata)

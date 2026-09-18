@@ -148,7 +148,7 @@ function add_intersections!(
     primspan::Int,
     secspan::Int,
     altmin::Real,
-    trackID::Union{Missing,Int,AbstractString},
+    trackID::Union{Missing,Int32,AbstractString},
     Xradius::Real,
     expdist::Real,
     lidarprofile::NamedTuple,
@@ -238,7 +238,7 @@ function add_intersections!(
   tms::DateTime,
   secspan::Int,
   altmin::Real,
-  trackID::Union{Missing,Int,AbstractString},
+  trackID::Union{Missing,Int32,AbstractString},
   Xradius::Real,
   expdist::Real,
   lidarprofile::NamedTuple,
@@ -412,7 +412,7 @@ function get_satdata(
     tms::DateTime,
     trackalt::Union{Missing,Real},
     altmin::Real,
-    trackID::Union{Int,String},
+    trackID::Union{Int32,String},
     lidarprofile::NamedTuple,
     lidarrange::Tuple{Real,Real},
     saveobs::Union{String,Bool},
@@ -440,7 +440,8 @@ function get_satdata(
     else
         try CLay{Float}(secfiles, obsindex.time, lidarrange, altmin)
         catch
-            println(); @warn "could not load additional layer data" trackID
+            progress_enabled() && println()
+            @warn "could not load additional layer data" trackID
             CLay{Float}()
         end
     end
@@ -449,7 +450,8 @@ function get_satdata(
     else
         try CPro{Float}(secfiles, obsindex.time, lidarprofile, saveobs)
         catch
-            println(); @warn "could not load additional profile data" trackID
+            progress_enabled() && println()
+            @warn "could not load additional profile data" trackID
             CPro{Float}()
         end
     end

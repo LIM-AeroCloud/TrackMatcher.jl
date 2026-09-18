@@ -206,7 +206,7 @@ import IntervalArithmetic as intar
 
 # Import structs and functions from packages
 import PCHIP: Polynomial, pchip, interpolate
-import DataFrames: DataFrame
+import DataFrames: DataFrame, AbstractDataFrame
 import StructArrays: StructArray
 import Dates: AbstractDateTime, DateTime, Date, Time
 import TimeZones: ZonedDateTime
@@ -215,6 +215,10 @@ import IntervalArithmetic.Symbols: (..)
 # Define Logger with log level
 logger = logg.ConsoleLogger(stdout, logg.Info)
 logg.global_logger(logger)
+
+
+# Disable progress bars in test runs or when explicitly requested.
+progress_enabled() = get(ENV, "TRACKMATCHER_PROGRESS", "true") == "true"
 
 
 ## Define time zones for FlightAware online data
@@ -314,8 +318,8 @@ end
 
 
 ## Export types and constructors
-export DataSet, Data, MeasuredSet, ComputedSet, PrimarySet, SecondarySet, ObservationSet,
-       FlightSet, CloudSet, SatSet, PrimaryTrack, SecondaryTrack,
+export DataSet, Data, MeasuredSet, MeasuredData, ComputedSet, PrimarySet, SecondarySet,
+       ObservationSet, FlightSet, CloudSet, SatSet, PrimaryTrack, SecondaryTrack,
        FlightTrack, CloudTrack, SatTrack, FlightData, CloudData, SatData,
        CLay, CPro, Intersection, XData, #APro, ALay,
        FlightMetadata, CloudMetadata, PrimaryMetadata, SecondaryMetadata, XMetadata,
@@ -337,5 +341,6 @@ include("observations.jl")    # concrete types/constructors for satellite observ
 include("match.jl")           # functions related to finding track intersections
 include("dataprocessing.jl")  # helper functions for data processing
 include("lidar.jl")           # functions related to processing CALIOP lidar data
+include("base_overloads.jl")  # overloads for Base equality/approximation functions for TrackMatcher types
 
 end # module TrackMatcher

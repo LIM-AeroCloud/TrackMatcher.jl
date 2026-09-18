@@ -20,6 +20,9 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
 
+[sources]
+PCHIP = {rev = "master", url = "https://github.com/LIM-AeroCloud/PCHIP.jl.git"}
+
 [compat]
 CSV = "0.10"
 DataFrames = "1"
@@ -37,9 +40,6 @@ Statistics = "1"
 StructArrays = "0.7"
 TimeZones = "1"
 julia = "1"
-
-[sources]
-PCHIP = {url = "https://github.com/LIM-AeroCloud/PCHIP.jl.git"}
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
