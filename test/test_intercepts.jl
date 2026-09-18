@@ -109,6 +109,21 @@ end
 ## Test sets
 
 @testset "intersections" begin
+    @testset "longitude-axis intersection coordinates" begin
+        primary = (track = x -> 2x, min = 0.0, max = 2.0)
+        secondary = (track = x -> 3 .- x, min = 0.0, max = 2.0)
+
+        primary_coords, secondary_coords = TrackMatcher.findXcoords(
+            primary, secondary, 0.1, true, Float64)
+
+        @test length(primary_coords) == 1
+        @test length(secondary_coords) == 1
+        @test primary_coords[1][1] ≈ 2.0
+        @test primary_coords[1][2] ≈ 1.0
+        @test secondary_coords[1][1] ≈ 2.0
+        @test secondary_coords[1][2] ≈ 1.0
+    end
+
     # Run intercept finding routines
     xf_cpro = Intersection(flight, sat_cpro) # ℹ reused in constructor testset
     xf_clay = XData(flight, sat_clay, true)
@@ -252,5 +267,8 @@ end
             @test x isa XData
             @test isempty(x)
         end
+        overlap, range = TrackMatcher.findoverlap(flight.volpe[1], SatSet(), 30, 0.1)
+        @test overlap isa Vector{DataFrame} && isempty(overlap)
+        @test range ==0:-1
     end
 end
