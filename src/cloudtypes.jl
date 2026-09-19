@@ -68,7 +68,7 @@ CloudMetadata{T}(meta::CloudMetadata) where T<:AbstractFloat = CloudMetadata{T}(
     meta.id, meta.date, (latmin = T(meta.area.latmin), latmax = T(meta.area.latmax),
     elonmin = T(meta.area.elonmin), elonmax = T(meta.area.elonmax),
     wlonmin = T(meta.area.wlonmin), wlonmax = T(meta.area.wlonmax)),
-    Tuple([(range = m.range, min = T.(m.min), max = T.(m.max)) for m in meta.flex]),
+    copy_for_promotion(Tuple([(range = m.range, min = T.(m.min), max = T.(m.max)) for m in meta.flex])),
     meta.use_lon, meta.root, meta.file
 )
 
@@ -135,7 +135,7 @@ CloudData{T}() where T = CloudData{T}(DateTime[], T[], T[], CloudMetadata{T}())
 
 #* Constructor for type promotion from CloudData with different float precision
 CloudData{T}(cloud::CloudData) where T<:AbstractFloat = CloudData{T}(
-    cloud.time, T.(cloud.lat), T.(cloud.lon), CloudMetadata{T}(cloud.metadata)
+    copy_for_promotion(cloud.time), T.(cloud.lat), T.(cloud.lon), CloudMetadata{T}(cloud.metadata)
 )
 
 """

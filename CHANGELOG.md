@@ -5,6 +5,11 @@
 ### Added
 
 - Setup tests ([#55])
+- Export `MeasuredData` ([#76])
+- Add Base overloads for equality/approximation comparisons as well as emptiness tests
+  for _TrackMatcher_ types ([#99])
+- Output of progress bars can be silenced by setting an environment variable
+  `"TRACKMATCHER_PROGRESS"` to `"false"` ([#73])
 - Improve data checks, error handling and logging for loading webdata ([#67])
 - Add `HDF5` and `StructArrays` as dependency ([#51], [#58])
 - Add method `checklimits` to check array fields of `SatData` are within expected limits ([#51])
@@ -18,6 +23,7 @@
 
 ### Changed
 
+- Use `Int32` instead of `Int` for primary track IDs ([#73])
 - Update compatibility of dependencies
 - Rename `convertFloats!` and `convertUTC` to `convert_floats!` and `convert_utc`, respectively,
   to be in line with Julia conventions
@@ -52,6 +58,7 @@
     calculations at the edges (technically **breaking**)
   - revised return value of `get_lidarheights`
 - Use flight number for error handling in `CLay` method of `atmosphericinfo` ([#75])
+- Revise debug logs in the loop over track data during intersection finding ([#76])
 
 ### Removed
 
@@ -59,9 +66,20 @@
 - Ignore Manifest.toml, this should be auto-generated on each system
 - Remove constructors for `Float16`, `Float32`, and `Float64` taking `missing` as input to
   avoid type piracy
+- Removed paperplots from repo. These do not belong in the repo for source code.
 
 ### Fixed
 
+- Fix the constructor of `Data` and `DataSet`, where previously `DataFrames` was mistyped
+  instead of the `Data` constructor, update outdated kwargs ([#76])
+- Fix `Data` constructor for type promotion ([#76])
+- Fix type promotion for primary data in `XData` constructor for type promotion ([#76])
+- Fix an issue, where constructors for type promotion mutate the original _TrackMatcher_ type
+- Redirect the default `Intersection` constructor to the default `XData` constructor, not
+  `XData{Float32}`, so that `Intersection` uses the promoted precision from the primary and
+  secondary data ([#99])
+- Add conversion of `-9999` to `missing` for `Feature_Optical_Depth_532` and
+  `Layer_Top_Temperature` layer data ([#99])
 - Fix constructor for empty `CloudSet` ([#71])
 - Ensure empty `Cloudset` is returned, if no cloud data is found in the given path(s) ([#71])
 - Fixed errors in UTC time conversion by rounding the converted seconds of the day from the 
@@ -80,7 +98,7 @@
 
 ### Changed
 
-- Updated input format of cloud data to use `centrLatLon` instead of `centrLonLat`, use 
+- Updated input format of cloud data to use `centrLatLon` instead of `centrLonLat`, use
   `"filtered_trajectory"` as default struct name instead of `"cloud"`
 
 ### Fixed

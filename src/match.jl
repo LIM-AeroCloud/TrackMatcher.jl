@@ -55,7 +55,7 @@ function find_intersections(
     sat::SatSet,
     sectracks::Vector,
     dataset::AbstractString,
-    trackID::Union{Missing,Int,AbstractString},
+    trackID::Union{Missing,Int32,AbstractString},
     maxtimediff::Int,
     stepwidth::Real,
     Xradius::Real,
@@ -117,7 +117,7 @@ end #function find_intersections
         sectrack::SatSet,
         maxtimediff::Int,
         atol::Real=0.1
-    ) -> Vector{Vector{DataFrame}}
+    ) -> Tuple{Vector{Vector{DataFrame}},UnitRange{Int}}
 
 Find all track segments in `sectrack` that are within the time frame ± `maxtimediff` of the
 `primtrack` and within the spatial bounding box of `primtrack` and an absolute tolerance `atol`.
@@ -131,12 +131,12 @@ function findoverlap(
     # Select granules within flight time frame ± tolerance
     t1 = findlast(primtrack.metadata.date.start .≥ sectrack.metadata.granules.tstart)
     t2 = findfirst(primtrack.metadata.date.stop .≤ sectrack.metadata.granules.tstop)
-        if isnothing(t1) || isnothing(t2)
+    if isnothing(t1) || isnothing(t2)
         @warn string("no sufficient satellite data for time index ",
             "$(primtrack.time[1] - Dates.Minute(maxtimediff))...",
             "$(primtrack.time[end] + Dates.Minute(maxtimediff))")
         return DataFrame[], 0:-1
-        end
+    end
     dt = t1 < t2 ? (t1:t2) : (t2:t1)
     # Filter granules without an overlapping area
     inarea = [!(granule.elonmin - atol > primtrack.metadata.area.elonmax ||
@@ -259,19 +259,17 @@ function findXcoords(
     xdata, ydata = Float64.(xdata), Float64.(ydata)
     # Define function to find minimum distance between both tracks
     pc = pchip(xdata, ydata)
-    function coorddist(x)
-        if x isa intar.Interval
-            # Evaluate at interval bounds to get a conservative interval result
-            xlo, xhi = intar.inf(x), intar.sup(x)
-            ylo, yhi = interpolate(pc, xlo), interpolate(pc, xhi)
-            return min(ylo, yhi) .. max(ylo, yhi)
-        else
-            return interpolate(pc, x)
-        end
+    function coorddist(x::intar.Interval)::intar.Interval{Float64}
+        # Evaluate at interval bounds to get a conservative interval result
+        xlo, xhi = intar.inf(x), intar.sup(x)
+        ylo, yhi = interpolate(pc, xlo), interpolate(pc, xhi)
+        return min(ylo, yhi) .. max(ylo, yhi)
     end
+    #// coorddist(x::Real)::Float64 = interpolate(pc, x)
+
     # Find minimum distance by solving primary track - sat track = 0
     # Disable automatic differentiation to avoid ForwardDiff with intervals
-    rts = root.roots(coorddist, xdata[1] .. xdata[end], derivative=Returns(1 .. 1))
+    rts = root.roots(coorddist, xdata[1] .. xdata[end], derivative=Returns(1 .. 1), infer_root_type=false)
     X = Float.([intar.mid(r.region) for r in rts])
 
     # Return Vector with coordinate pairs
