@@ -20,8 +20,8 @@ end
 @inline function _nested_approx(a, b; atol::Real=0.0, rtol::Real=sqrt(eps(Float64)))
     if a isa TMType && b isa TMType
         return isapprox(a, b; atol, rtol)
-    elseif a isa Number && b isa Number
-        return isapprox(a, b; atol, rtol)
+    elseif a isa Number && b isa Number # ℹ isequal is needed for NaN-equality
+        return isequal(a, b) || isapprox(a, b; atol, rtol)
     elseif a isa AbstractString && b isa AbstractString
         return a == b
     else

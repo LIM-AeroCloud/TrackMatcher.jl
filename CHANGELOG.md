@@ -9,7 +9,7 @@
 - Add Base overloads for equality/approximation comparisons as well as emptiness tests
   for _TrackMatcher_ types ([#99])
 - Output of progress bars can be silenced by setting an environment variable
-  `"TRACKMATCHER_PROGRESS"` to `"true"` ([#73])
+  `"TRACKMATCHER_PROGRESS"` to `"false"` ([#73])
 - Improve data checks, error handling and logging for loading webdata ([#67])
 - Add `HDF5` and `StructArrays` as dependency ([#51], [#58])
 - Add method `checklimits` to check array fields of `SatData` are within expected limits ([#51])
@@ -23,6 +23,7 @@
 
 ### Changed
 
+- Use `Int32` instead of `Int` for primary track IDs ([#73])
 - Update compatibility of dependencies
 - Rename `convertFloats!` and `convertUTC` to `convert_floats!` and `convert_utc`, respectively,
   to be in line with Julia conventions
@@ -97,7 +98,7 @@
 
 ### Changed
 
-- Updated input format of cloud data to use `centrLatLon` instead of `centrLonLat`, use 
+- Updated input format of cloud data to use `centrLatLon` instead of `centrLonLat`, use
   `"filtered_trajectory"` as default struct name instead of `"cloud"`
 
 ### Fixed

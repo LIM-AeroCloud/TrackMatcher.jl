@@ -82,7 +82,7 @@ vectors, `use_lon`, `flex`, `source`, `root`, and `file`.
 Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
 
     function FlightMetadata{T}(
-        id::Union{Int,AbstractString},
+        id::Union{Int32,AbstractString},
         flight_num::Union{Missing,AbstractString},
         route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
         aircraft::Union{Missing,AbstractString},
@@ -99,7 +99,7 @@ Fields `area` and `date` are calculated from `lat`/`lon`, and `date` vectors.
 Or construct `FlightMetadata` by directly handing over every field:
 
     function FlightMetadata{T}(
-        id::Union{Int,AbstractString},
+        id::Union{Int32,AbstractString},
         flight_num::Union{Missing,AbstractString},
         route::Union{Missing,NamedTuple{(:orig,:dest),<:Tuple{AbstractString,AbstractString}}},
         aircraft::Union{Missing,AbstractString},

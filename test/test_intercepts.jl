@@ -267,7 +267,9 @@ end
             @test x isa XData
             @test isempty(x)
         end
-        overlap, range = TrackMatcher.findoverlap(flight.volpe[1], SatSet(), 30, 0.1)
+        overlap, range = @test_logs (
+            :warn, r"no sufficient satellite data"
+        ) TrackMatcher.findoverlap(flight.volpe[1], SatSet(), 30, 0.1)
         @test overlap isa Vector{DataFrame} && isempty(overlap)
         @test range ==0:-1
     end

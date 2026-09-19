@@ -218,7 +218,7 @@ logg.global_logger(logger)
 
 
 # Disable progress bars in test runs or when explicitly requested.
-progress_enabled() = get(ENV, "TRACKMATCHER_PROGRESS", "true") == "true"
+progress_enabled() = haskey(ENV, "TRACKMATCHER_PROGRESS") ? ENV["TRACKMATCHER_PROGRESS"] == "true" : true
 
 
 ## Define time zones for FlightAware online data
