@@ -43,18 +43,27 @@ function xresults(
     obs::Vector{Bool}=[true, true, true],
     approx::Union{Bool,Int}=true
 ) where T
+    atmos_state = intersections.metadata.sattype == :CLay ?
+        [invalid, ci, invalid, invalid, invalid] : [clear, ci, clear, clear, clear]
     data = primary isa FlightSet ? DataFrame(
-        id=["V-2-1", "V-2-2"],
-        lat=T[5.589219, 11.3293705],
-        lon=T[14.462531, 12.077299],
-        alt=T[11582.462, 11581.832],
+        id=["V-42-1", "V-42-2", "V-42-3", "V-42-4", "V-43-1"],
+        lat=T[20.850319, 29.305733, 40.152092, 49.438873, 49.438488],
+        lon=T[26.92516, 29.0, 32.091255, 35.443886, 35.44373],
+        alt=T[11004.194, 11004.804, 11507.114, 11502.542, 11503.152],
         tdiff=Dates.CompoundPeriod[
-            Dates.CompoundPeriod(Minute(-29), Second(-56)),
-            Dates.CompoundPeriod(Minute(23), Second(34))
+            Dates.CompoundPeriod(Minute(2), Second(14)),
+            Dates.CompoundPeriod(Minute(1), Second(36)),
+            Dates.CompoundPeriod(Second(45)),
+            Dates.CompoundPeriod(),
+            Dates.CompoundPeriod()
         ],
-        tprim=[DateTime(2012, 2, 6, 0, 43, 13), DateTime(2012, 2, 6, 1, 27, 1)],
-        tsec=[DateTime(2012, 2, 6, 0, 13, 17), DateTime(2012, 2, 6, 1, 50, 35)],
-        atmos_state=[clear, ci]
+        tprim=[DateTime(2012, 2, 6, 0, 6, 50), DateTime(2012, 2, 6, 0, 5, 8),
+            DateTime(2012, 2, 6, 0, 2, 58), DateTime(2012, 2, 6, 0, 1, 7),
+            DateTime(2012, 2, 6, 0, 1, 7)],
+        tsec=[DateTime(2012, 2, 6, 0, 9, 4), DateTime(2012, 2, 6, 0, 6, 44),
+            DateTime(2012, 2, 6, 0, 3, 43), DateTime(2012, 2, 6, 0, 1, 7),
+            DateTime(2012, 2, 6, 0, 1, 7)],
+        atmos_state=atmos_state
     ) : DataFrame(
         id=["C-1-1"],
         lat=T[5.24175],
@@ -66,12 +75,16 @@ function xresults(
         atmos_state=[clear]
     )
     accuracy = primary isa FlightSet ? DataFrame(
-        id=["V-2-1", "V-2-2"],
-        intersection=T[1.0103808f6, 1.337841f6],
-        primdist=T[89937.97f0, 39393.39f0],
-        secdist=T[1559.8745, 3761.1736],
-        primtime=[Dates.CompoundPeriod(Minute(-3), Second(-53)), Dates.CompoundPeriod(Second(21))],
-        sectime=[Dates.CompoundPeriod(Millisecond(172)), Dates.CompoundPeriod(Millisecond(284))]
+        id=["V-42-1", "V-42-2", "V-42-3", "V-42-4", "V-43-1"],
+        intersection=T[0.21223556, 0.0, 0.0, 0.4238313, 0.3452892],
+        primdist=T[96857.97, 67541.35, 17558.139, 51154.125, 0.0],
+        secdist=T[2590.4082, 872.12195, 1785.7188, 479.24576, 440.39847],
+        primtime=[Dates.CompoundPeriod(Second(-10)), Dates.CompoundPeriod(Second(8)),
+            Dates.CompoundPeriod(Second(-2)), Dates.CompoundPeriod(Second(7)),
+            Dates.CompoundPeriod()],
+        sectime=[Dates.CompoundPeriod(Millisecond(125)), Dates.CompoundPeriod(Millisecond(-7)),
+            Dates.CompoundPeriod(Millisecond(-220)), Dates.CompoundPeriod(Millisecond(16)),
+            Dates.CompoundPeriod(Millisecond(16))]
     ) : DataFrame(
         id=["C-1-1"],
         intersection=T[34.18339],
@@ -81,11 +94,11 @@ function xresults(
         sectime=[Dates.CompoundPeriod()]
     )
     observations = primary isa FlightSet ? DataFrame(
-        id=["V-2-1", "V-2-2"],
+        id=["V-42-1", "V-42-2", "V-42-3", "V-42-4", "V-43-1"],
         # Non-empty dummy data for observations
-        primary=flight.volpe,
-        CPro=[obsdata[1], obsdata[1]],
-        Clay=[obsdata[2], obsdata[2]]
+        primary=[flight.volpe[1], flight.volpe[1], flight.volpe[1], flight.volpe[1], flight.volpe[2]],
+        CPro=[obsdata[1] for _ in 1:5],
+        Clay=[obsdata[2] for _ in 1:5]
     ) : DataFrame(
         id=["C-1-1"],
         primary=flight[1:1],
@@ -109,19 +122,16 @@ end
 ## Test sets
 
 @testset "intersections" begin
-    @testset "longitude-axis intersection coordinates" begin
-        primary = (track = x -> 2x, min = 0.0, max = 2.0)
-        secondary = (track = x -> 3 .- x, min = 0.0, max = 2.0)
+    @testset "PCHIP interval enclosure includes interior knots" begin
+        primary = (track = x -> zero.(x), min = 0.0, max = 2.0)
+        secondary = (track = x -> 1 .- 2 .* (x .- 1).^2, min = 0.0, max = 2.0)
 
         primary_coords, secondary_coords = TrackMatcher.findXcoords(
-            primary, secondary, 0.1, true, Float64)
+            primary, secondary, 1.0, true, Float64)
 
-        @test length(primary_coords) == 1
-        @test length(secondary_coords) == 1
-        @test primary_coords[1][1] ≈ 2.0
-        @test primary_coords[1][2] ≈ 1.0
-        @test secondary_coords[1][1] ≈ 2.0
-        @test secondary_coords[1][2] ≈ 1.0
+        @test length(primary_coords) == 2
+        @test length(secondary_coords) == 2
+        @test all(0.0 .< getindex.(primary_coords, 2) .< 2.0)
     end
 
     # Run intercept finding routines
@@ -135,14 +145,31 @@ end
     xf_empty = XData(flight_empty, sat_cpro)
     # Test results
     @testset "data integrity" begin
+        overlap, isat = TrackMatcher.findoverlap(flight.volpe[2], sat_cpro, 30)
+        lon_tracks = TrackMatcher.interpolate_trackdata(flight.volpe[2])
+        lon_sat_tracks = TrackMatcher.interpolate_satdata(overlap, isat, true)
+        lon_primary, lon_secondary = TrackMatcher.findXcoords(
+            lon_tracks[1], lon_sat_tracks[1], 0.01, true, Float32)
+        @test !isempty(lon_primary)
+        @test !isempty(lon_secondary)
         @test xresults(xf_cpro, flight, obs=[true, true, false], approx=false)
         @test xresults(xf_clay, flight, approx=false)
+        @test all(id -> !startswith(id, "V-44"), xf_cpro.data.id)
         @test xf64 isa XData{Float64}
         @test xf64 ≈ xf_cpro
         @test xf64_promoted isa XData{Float64}
-        @test xdata_matches(xf64_promoted, xf64, [true, true, false])
+        @test isapprox(xf64_promoted.data.lat, xf64.data.lat; atol=1e-3)
+        @test isapprox(xf64_promoted.data.lon, xf64.data.lon; atol=1e-3)
+        @test xf64_promoted.data.tprim == xf64.data.tprim
+        @test xf64_promoted.data.tsec == xf64.data.tsec
+        @test xf64_promoted.data.atmos_state == xf64.data.atmos_state
         @test xf64_forced isa XData{Float64}
-        @test xdata_matches(xf64_forced, xf64, [true, true, false])
+        @test xf64_forced.data.id == xf64.data.id
+        @test isapprox(xf64_forced.data.lat, xf64.data.lat; atol=1e-3)
+        @test isapprox(xf64_forced.data.lon, xf64.data.lon; atol=1e-3)
+        @test xf64_forced.data.tprim == xf64.data.tprim
+        @test xf64_forced.data.tsec == xf64.data.tsec
+        @test xf64_forced.data.atmos_state == xf64.data.atmos_state
         @test isempty(xf_empty)
         @test xc_lay isa XData{Float32}
         @test xc_pro isa XData{Float32}
@@ -208,14 +235,14 @@ end
         data64 = Data{Float64}(data)
         # Test convenience constructors
         @test mdata == mset
-        @test mdata.flight.volpe isa StructArray{FlightData{Float32}} && length(mdata.flight.volpe) == 2
+        @test mdata.flight.volpe isa StructArray{FlightData{Float32}} && length(mdata.flight.volpe) == 3
         @test mdata.flight.flightaware isa StructArray{FlightData{Float32}} && isempty(mdata.flight.flightaware)
         @test mdata.flight.webdata isa StructArray{FlightData{Float32}} && isempty(mdata.flight.webdata)
         @test mdata.cloud.tracks isa StructArray{CloudData{Float32}} && length(mdata.cloud.tracks) == 3
         @test mdata.sat.granules isa StructArray{SatData{Float32}} && length(mdata.sat.granules) == 7
 
         @test mdata64 isa MeasuredData{Float64}
-        @test mdata64.flight.volpe isa StructArray{FlightData{Float64}} && length(mdata64.flight.volpe) == 2
+        @test mdata64.flight.volpe isa StructArray{FlightData{Float64}} && length(mdata64.flight.volpe) == 3
         @test mdata64.flight.flightaware isa StructArray{FlightData{Float64}} && isempty(mdata64.flight.flightaware)
         @test mdata64.flight.webdata isa StructArray{FlightData{Float64}} && isempty(mdata64.flight.webdata)
         @test mdata64.cloud.tracks isa StructArray{CloudData{Float64}} && length(mdata64.cloud.tracks) == 3
@@ -223,7 +250,7 @@ end
 
         @test data == dset
         @test data.trackdata.flight.volpe isa StructArray{FlightData{Float32}} &&
-            length(data.trackdata.flight.volpe) == 2
+            length(data.trackdata.flight.volpe) == 3
         @test data.trackdata.flight.flightaware isa StructArray{FlightData{Float32}} &&
             isempty(data.trackdata.flight.flightaware)
         @test data.trackdata.flight.webdata isa StructArray{FlightData{Float32}} &&
@@ -232,14 +259,14 @@ end
             length(data.trackdata.cloud.tracks) == 3
         @test data.trackdata.sat.granules isa StructArray{SatData{Float32}} &&
             length(data.trackdata.sat.granules) == 7
-        @test data.intersection.flight isa XData{Float32} && size(data.intersection.flight.data) == (2, 8) &&
-            size(data.intersection.flight.observations) == (2, 4) && size(data.intersection.flight.accuracy) == (2, 6)
-        @test data.intersection.cloud isa XData{Float32} && size(data.intersection.cloud.data) == (1, 8) &&
-            size(data.intersection.cloud.observations) == (1, 4) && size(data.intersection.cloud.accuracy) == (1, 6)
+        @test data.intersection.flight isa XData{Float32} && size(data.intersection.flight.data) == (5, 8) &&
+            size(data.intersection.flight.observations) == (5, 4) && size(data.intersection.flight.accuracy) == (5, 6)
+        @test data.intersection.cloud isa XData{Float32} && size(data.intersection.cloud.data) == (2, 8) &&
+            size(data.intersection.cloud.observations) == (2, 4) && size(data.intersection.cloud.accuracy) == (2, 6)
 
         @test data64 isa Data{Float64}
         @test data64.trackdata.flight.volpe isa StructArray{FlightData{Float64}} &&
-            length(data64.trackdata.flight.volpe) == 2
+            length(data64.trackdata.flight.volpe) == 3
         @test data64.trackdata.flight.flightaware isa StructArray{FlightData{Float64}} &&
             isempty(data64.trackdata.flight.flightaware)
         @test data64.trackdata.flight.webdata isa StructArray{FlightData{Float64}} &&
@@ -256,8 +283,8 @@ end
         # Force an exception in the interpolation path
         TrackMatcher.interpolate_trackdata(::FlightTrack) =
             throw(ErrorException("forced failure"))
-        @test_logs min_level = Debug match_mode = :all (
-            :debug, "primary track ID: 2"
+        @test_logs min_level = Debug match_mode = :any (
+            :debug, "primary track ID: 42"
         ) (
             :warn, r"Track data and/or time could not be interpolated"
         ) (

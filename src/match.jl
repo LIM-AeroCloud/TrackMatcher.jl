@@ -237,7 +237,12 @@ X data is defined by the flag `use_lon` (true for longitude as x data) depending
 the prevailing primary track direction.
 
 Find all intersections between both tracks by finding all roots in the defined
-function using the `IntervalRootFinding` package.
+function using the `IntervalRootFinding` package. The root solver evaluates the
+function both at scalar points and over intervals. For an interval spanning one
+or more PCHIP pieces, the function and its derivative are conservatively
+enclosed by evaluating each covered piece at its endpoints and internal extrema.
+This prevents the solver from discarding an interval that contains an
+intersection between its outer endpoints.
 
 Floating point numbers are of the precision set by `Float`, by default `Float32`.
 """
@@ -257,20 +262,80 @@ function findXcoords(
 
     # Use double precision for intersection finding
     xdata, ydata = Float64.(xdata), Float64.(ydata)
-    # Define function to find minimum distance between both tracks
+    # Fit the sampled difference so the root solver can find d(x) = 0.
     pc = pchip(xdata, ydata)
-    function coorddist(x::intar.Interval)::intar.Interval{Float64}
-        # Evaluate at interval bounds to get a conservative interval result
-        xlo, xhi = intar.inf(x), intar.sup(x)
-        ylo, yhi = interpolate(pc, xlo), interpolate(pc, xhi)
-        return min(ylo, yhi) .. max(ylo, yhi)
-    end
-    #// coorddist(x::Real)::Float64 = interpolate(pc, x)
 
-    # Find minimum distance by solving primary track - sat track = 0
-    # Disable automatic differentiation to avoid ForwardDiff with intervals
-    rts = root.roots(coorddist, xdata[1] .. xdata[end], derivative=Returns(1 .. 1), infer_root_type=false)
-    X = Float.([intar.mid(r.region) for r in rts])
+    """
+    Compute the derivative of the PCHIP polynomial piece `i` at the point `x`
+    p(u) = au^3 + bu^2 + cu + d, where u = x - xdata[i].
+    Its derivative is used by the root contractor to narrow root candidates.
+    """
+    function pchip_derivative(i::Int, x::Real)
+        a, b, c = pc.coeffs[i, 1:3]
+        u = x - xdata[i]
+        return 3a*u^2 + 2b*u + c
+    end
+
+    """
+    Compute the interval enclosure of the derivative of the PCHIP polynomial over the interval `x`.
+    This is used to conservatively estimate the range of the derivative of the difference function `d'(x)`.
+    Test for all potential extrema within the interval to ensure no roots are missed.
+    """
+    function coorddist_derivative(x::intar.Interval)::intar.Interval{Float64}
+        xlo, xhi = intar.inf(x), intar.sup(x)
+        first_segment = clamp(searchsortedlast(xdata, xlo), 1, length(xdata) - 1)
+        last_segment = clamp(searchsortedlast(xdata, xhi), 1, length(xdata) - 1)
+        values = Float64[]
+        for i in first_segment:last_segment
+            lo, hi = max(xlo, xdata[i]), min(xhi, xdata[i+1])
+            push!(values, pchip_derivative(i, lo), pchip_derivative(i, hi))
+            a, b = pc.coeffs[i, 1:2]
+            iszero(a) && continue
+            extremum = -b / (3a) + xdata[i]
+            lo ≤ extremum ≤ hi && push!(values, pchip_derivative(i, extremum))
+        end
+        return minimum(values) .. maximum(values)
+    end
+
+    """ Scalar derivative required when the contractor evaluates a midpoint. """
+    function coorddist_derivative(x::Real)::Float64
+        i = clamp(searchsortedlast(xdata, x), 1, length(xdata) - 1)
+        return pchip_derivative(i, x)
+    end
+
+    """
+    Compute the interval enclosure of the PCHIP polynomial over the interval `x`.
+    This is used to conservatively estimate the range of the difference function `d(x)`.
+    Test for all potential extrema within the interval to ensure no roots are missed.
+    """
+    function coorddist(x::intar.Interval)::intar.Interval{Float64}
+        xlo, xhi = intar.inf(x), intar.sup(x)
+        first_segment = clamp(searchsortedlast(xdata, xlo), 1, length(xdata) - 1)
+        last_segment = clamp(searchsortedlast(xdata, xhi), 1, length(xdata) - 1)
+        values = Float64[]
+        for i in first_segment:last_segment
+            lo, hi = max(xlo, xdata[i]), min(xhi, xdata[i + 1])
+            push!(values, interpolate(pc, lo), interpolate(pc, hi))
+            a, b, c = pc.coeffs[i, 1:3]
+            discriminant = b^2 - 3a * c
+            extrema = iszero(a) ? (iszero(b) ? () : (-c / (2b),)) :
+                discriminant < 0 ? () : ((-b - sqrt(discriminant)) / (3a),
+                    (-b + sqrt(discriminant)) / (3a))
+            for u in extrema
+                lo - xdata[i] ≤ u ≤ hi - xdata[i] && push!(values, interpolate(pc, xdata[i] + u))
+            end
+        end
+        return minimum(values) .. maximum(values)
+    end
+
+    """ Evaluate d at scalar midpoints. """
+    coorddist(x::Real)::Float64 = interpolate(pc, x)
+
+    # Find all zeroes of d(x); the exact scalar and conservative interval methods
+    # let IntervalRootFinding contract candidates without excluding true roots.
+    roots = root.roots(coorddist, xdata[1] .. xdata[end], derivative=coorddist_derivative,
+        infer_root_type=false)
+    X = Float.([intar.mid(r.region) for r in roots])
 
     # Return Vector with coordinate pairs
     Xp, Xs = Tuple{Float,Float}[], Tuple{Float,Float}[]

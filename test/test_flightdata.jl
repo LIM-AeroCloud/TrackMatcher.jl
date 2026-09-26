@@ -6,15 +6,20 @@
         t1 = now()
         flight_nothing = FlightSet(volpe=joinpath(@__DIR__, "data", "caliop", "CLay"))
         @testset "data integrity" begin
-            @test length(flight.volpe) == 2
+            @test length(flight.volpe) == 3
             @test isempty(flight.flightaware) && isempty(flight.webdata)
             @test minimum([flight.volpe.alt...;]) ≥ 5000
-            @test all(length.(getproperty.(Ref(flight.volpe[1]), propertynames(flight.volpe))[1:end-1]) .== 77)
+            @test all(length.(getproperty.(Ref(flight.volpe[1]), propertynames(flight.volpe))[1:end-1]) .== 29)
+            @test all(length.(getproperty.(Ref(flight.volpe[2]), propertynames(flight.volpe))[1:end-1]) .== 10)
+            @test all(length.(getproperty.(Ref(flight.volpe[3]), propertynames(flight.volpe))[1:end-1]) .== 10)
             @test flight.volpe.time isa Vector{<:Vector{DateTime}}
             @test flight.volpe.lat isa Vector{<:Vector{Float32}}
             @test flight.volpe.lon isa Vector{<:Vector{Float32}}
             @test flight.volpe.alt isa Vector{<:Vector{<:Union{Missing,Float32}}}
-            @test flight.volpe.metadata[1].id == 2 # ℹ flight 1 is filtered out because of altmin=5000
+            @test [f.id for f in flight.volpe.metadata] == [42, 43, 44]
+            @test [f.use_lon for f in flight.volpe.metadata] == [false, true, true]
+            no_overlap, _ = TrackMatcher.findoverlap(flight.volpe[3], sat_cpro, 30)
+            @test isempty(no_overlap)
             @test isempty(flight_empty)
             @test t0 ≤ flight_empty.metadata.date.start == flight_empty.metadata.date.stop ≤
                 DateTime(flight_empty.metadata.created)
@@ -138,5 +143,5 @@
         flightaware=joinpath(@__DIR__, "data", "archive", "new"),
         webdata=joinpath(@__DIR__, "data", "webdata", "ok"), delim='\t'
     )
-    @test length(flight_all.volpe) == 2 && length(flight_all.flightaware) == 3 && length(flight_all.webdata) == 3
+    @test length(flight_all.volpe) == 3 && length(flight_all.flightaware) == 3 && length(flight_all.webdata) == 3
 end
