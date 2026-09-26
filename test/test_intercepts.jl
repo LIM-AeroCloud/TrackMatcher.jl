@@ -152,6 +152,7 @@ end
         @test length(primary_coords) == 2
         @test length(secondary_coords) == 2
         @test all(0.0 .< getindex.(primary_coords, 2) .< 2.0)
+        @test all(abs.(getindex.(primary_coords, 1) .- getindex.(secondary_coords, 1)) .≤ 1e-6)
     end
     @testset "data integrity" begin
         overlap, isat = TrackMatcher.findoverlap(flight.volpe[2], sat_cpro, 30)
@@ -167,11 +168,7 @@ end
         @test xf64 isa XData{Float64}
         @test xf64 ≈ xf_cpro
         @test xf64_promoted isa XData{Float64}
-        @test isapprox(xf64_promoted.data.lat, xf64.data.lat; atol=1e-3)
-        @test isapprox(xf64_promoted.data.lon, xf64.data.lon; atol=1e-3)
-        @test xf64_promoted.data.tprim == xf64.data.tprim
-        @test xf64_promoted.data.tsec == xf64.data.tsec
-        @test xf64_promoted.data.atmos_state == xf64.data.atmos_state
+@test xdata_matches(xf64_promoted, xf64, [true, true, false])
         @test xf64_forced isa XData{Float64}
         @test xf64_forced.data.id == xf64.data.id
         @test isapprox(xf64_forced.data.lat, xf64.data.lat; atol=1e-3)
