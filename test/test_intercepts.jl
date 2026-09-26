@@ -122,17 +122,6 @@ end
 ## Test sets
 
 @testset "intersections" begin
-    @testset "PCHIP interval enclosure includes interior knots" begin
-        primary = (track = x -> zero.(x), min = 0.0, max = 2.0)
-        secondary = (track = x -> 1 .- 2 .* (x .- 1).^2, min = 0.0, max = 2.0)
-
-        primary_coords, secondary_coords = TrackMatcher.findXcoords(
-            primary, secondary, 1.0, true, Float64)
-
-        @test length(primary_coords) == 2
-        @test length(secondary_coords) == 2
-        @test all(0.0 .< getindex.(primary_coords, 2) .< 2.0)
-    end
 
     # Run intercept finding routines
     xf_cpro = Intersection(flight, sat_cpro) # ℹ reused in constructor testset
@@ -144,6 +133,26 @@ end
     xc_lay = XData(cloud, sat_clay)
     xf_empty = XData(flight_empty, sat_cpro)
     # Test results
+    @testset "PCHIP interpolation" begin
+        # Interpolation of scalar points
+        coorddist, coorddist_derivative = TrackMatcher.pchip_difference_callbacks(
+            [0.0, 1.0, 2.0], [0.0, 1.0, 4.0])
+        x = 0.5
+
+        @test coorddist(x) ∈ coorddist(x .. x)
+        @test coorddist_derivative(x) ∈ coorddist_derivative(x .. x)
+
+        # Interpolation of interval enclosure
+        primary = (track=x -> zero.(x), min=0.0, max=2.0)
+        secondary = (track=x -> 1 .- 2 .* (x .- 1) .^ 2, min=0.0, max=2.0)
+
+        primary_coords, secondary_coords = TrackMatcher.findXcoords(
+            primary, secondary, 1.0, true, Float64)
+
+        @test length(primary_coords) == 2
+        @test length(secondary_coords) == 2
+        @test all(0.0 .< getindex.(primary_coords, 2) .< 2.0)
+    end
     @testset "data integrity" begin
         overlap, isat = TrackMatcher.findoverlap(flight.volpe[2], sat_cpro, 30)
         lon_tracks = TrackMatcher.interpolate_trackdata(flight.volpe[2])

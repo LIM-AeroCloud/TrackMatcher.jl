@@ -222,6 +222,88 @@ end #function interpolate_satdata
 
 
 """
+    pchip_difference_callbacks(xdata::Vector{Float64}, ydata::Vector{Float64})
+
+Construct a PCHIP interpolant for sampled difference data and return callbacks for
+evaluating the difference and its derivative at scalar points and intervals.
+
+The wrapper function is needed for clarity of the source code and to provide a consistent
+interface for testing.
+"""
+function pchip_difference_callbacks(xdata::Vector{Float64}, ydata::Vector{Float64})
+    pc = pchip(xdata, ydata)
+
+    #=
+    Compute the derivative of the PCHIP polynomial piece `i` at the point `x`
+    p(u) = au^3 + bu^2 + cu + d, where u = x - xdata[i].
+    Its derivative is used by the root contractor to narrow root candidates.
+    =#
+    function pchip_derivative(i::Int, x::Real)
+        a, b, c = pc.coeffs[i, 1:3]
+        u = x - xdata[i]
+        return 3a*u^2 + 2b*u + c
+    end
+
+    #=
+    Compute the interval enclosure of the derivative of the PCHIP polynomial over the interval `x`.
+    This is used to conservatively estimate the range of the derivative of the difference function `d'(x)`.
+    Test for all potential extrema within the interval to ensure no roots are missed.
+    =#
+    function coorddist_derivative(x::intar.Interval)::intar.Interval{Float64}
+        xlo, xhi = intar.inf(x), intar.sup(x)
+        first_segment = clamp(searchsortedlast(xdata, xlo), 1, length(xdata) - 1)
+        last_segment = clamp(searchsortedlast(xdata, xhi), 1, length(xdata) - 1)
+        values = Float64[]
+        for i in first_segment:last_segment
+            lo, hi = max(xlo, xdata[i]), min(xhi, xdata[i+1])
+            push!(values, pchip_derivative(i, lo), pchip_derivative(i, hi))
+            a, b = pc.coeffs[i, 1:2]
+            iszero(a) && continue
+            extremum = -b / (3a) + xdata[i]
+            lo ≤ extremum ≤ hi && push!(values, pchip_derivative(i, extremum))
+        end
+        return minimum(values) .. maximum(values)
+    end
+
+    # Scalar derivative required when the contractor evaluates a midpoint.
+    function coorddist_derivative(x::Real)::Float64
+        i = clamp(searchsortedlast(xdata, x), 1, length(xdata) - 1)
+        return pchip_derivative(i, x)
+    end
+
+    #=
+    Compute the interval enclosure of the PCHIP polynomial over the interval `x`.
+    This is used to conservatively estimate the range of the difference function `d(x)`.
+    Test for all potential extrema within the interval to ensure no roots are missed.
+    =#
+    function coorddist(x::intar.Interval)::intar.Interval{Float64}
+        xlo, xhi = intar.inf(x), intar.sup(x)
+        first_segment = clamp(searchsortedlast(xdata, xlo), 1, length(xdata) - 1)
+        last_segment = clamp(searchsortedlast(xdata, xhi), 1, length(xdata) - 1)
+        values = Float64[]
+        for i in first_segment:last_segment
+            lo, hi = max(xlo, xdata[i]), min(xhi, xdata[i + 1])
+            push!(values, interpolate(pc, lo), interpolate(pc, hi))
+            a, b, c = pc.coeffs[i, 1:3]
+            discriminant = b^2 - 3a * c
+            extrema = iszero(a) ? (iszero(b) ? () : (-c / (2b),)) :
+                discriminant < 0 ? () : ((-b - sqrt(discriminant)) / (3a),
+                    (-b + sqrt(discriminant)) / (3a))
+            for u in extrema
+                lo - xdata[i] ≤ u ≤ hi - xdata[i] && push!(values, interpolate(pc, xdata[i] + u))
+            end
+        end
+        return minimum(values) .. maximum(values)
+    end
+
+    # Evaluate the PCHIP difference at a scalar point.
+    coorddist(x::Real)::Float64 = interpolate(pc, x)
+
+    return coorddist, coorddist_derivative
+end
+
+
+"""
     function findXcoords(
         track::NamedTuple,
         sat::NamedTuple,
@@ -262,74 +344,7 @@ function findXcoords(
 
     # Use double precision for intersection finding
     xdata, ydata = Float64.(xdata), Float64.(ydata)
-    # Fit the sampled difference so the root solver can find d(x) = 0.
-    pc = pchip(xdata, ydata)
-
-    """
-    Compute the derivative of the PCHIP polynomial piece `i` at the point `x`
-    p(u) = au^3 + bu^2 + cu + d, where u = x - xdata[i].
-    Its derivative is used by the root contractor to narrow root candidates.
-    """
-    function pchip_derivative(i::Int, x::Real)
-        a, b, c = pc.coeffs[i, 1:3]
-        u = x - xdata[i]
-        return 3a*u^2 + 2b*u + c
-    end
-
-    """
-    Compute the interval enclosure of the derivative of the PCHIP polynomial over the interval `x`.
-    This is used to conservatively estimate the range of the derivative of the difference function `d'(x)`.
-    Test for all potential extrema within the interval to ensure no roots are missed.
-    """
-    function coorddist_derivative(x::intar.Interval)::intar.Interval{Float64}
-        xlo, xhi = intar.inf(x), intar.sup(x)
-        first_segment = clamp(searchsortedlast(xdata, xlo), 1, length(xdata) - 1)
-        last_segment = clamp(searchsortedlast(xdata, xhi), 1, length(xdata) - 1)
-        values = Float64[]
-        for i in first_segment:last_segment
-            lo, hi = max(xlo, xdata[i]), min(xhi, xdata[i+1])
-            push!(values, pchip_derivative(i, lo), pchip_derivative(i, hi))
-            a, b = pc.coeffs[i, 1:2]
-            iszero(a) && continue
-            extremum = -b / (3a) + xdata[i]
-            lo ≤ extremum ≤ hi && push!(values, pchip_derivative(i, extremum))
-        end
-        return minimum(values) .. maximum(values)
-    end
-
-    """ Scalar derivative required when the contractor evaluates a midpoint. """
-    function coorddist_derivative(x::Real)::Float64
-        i = clamp(searchsortedlast(xdata, x), 1, length(xdata) - 1)
-        return pchip_derivative(i, x)
-    end
-
-    """
-    Compute the interval enclosure of the PCHIP polynomial over the interval `x`.
-    This is used to conservatively estimate the range of the difference function `d(x)`.
-    Test for all potential extrema within the interval to ensure no roots are missed.
-    """
-    function coorddist(x::intar.Interval)::intar.Interval{Float64}
-        xlo, xhi = intar.inf(x), intar.sup(x)
-        first_segment = clamp(searchsortedlast(xdata, xlo), 1, length(xdata) - 1)
-        last_segment = clamp(searchsortedlast(xdata, xhi), 1, length(xdata) - 1)
-        values = Float64[]
-        for i in first_segment:last_segment
-            lo, hi = max(xlo, xdata[i]), min(xhi, xdata[i + 1])
-            push!(values, interpolate(pc, lo), interpolate(pc, hi))
-            a, b, c = pc.coeffs[i, 1:3]
-            discriminant = b^2 - 3a * c
-            extrema = iszero(a) ? (iszero(b) ? () : (-c / (2b),)) :
-                discriminant < 0 ? () : ((-b - sqrt(discriminant)) / (3a),
-                    (-b + sqrt(discriminant)) / (3a))
-            for u in extrema
-                lo - xdata[i] ≤ u ≤ hi - xdata[i] && push!(values, interpolate(pc, xdata[i] + u))
-            end
-        end
-        return minimum(values) .. maximum(values)
-    end
-
-    """ Evaluate d at scalar midpoints. """
-    coorddist(x::Real)::Float64 = interpolate(pc, x)
+    coorddist, coorddist_derivative = pchip_difference_callbacks(xdata, ydata)
 
     # Find all zeroes of d(x); the exact scalar and conservative interval methods
     # let IntervalRootFinding contract candidates without excluding true roots.

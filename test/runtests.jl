@@ -1,5 +1,6 @@
 using Test, TrackMatcher, Logging
 using Dates, TimeZones, DataFrames, StructArrays, HDF5, CSV
+import IntervalArithmetic.Symbols: (..)
 
 global_logger(ConsoleLogger(stderr, Error))
 
