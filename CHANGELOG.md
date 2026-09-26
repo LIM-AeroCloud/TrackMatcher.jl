@@ -44,6 +44,8 @@
   - Rename `dbID` in `FlightData` to `id` and `flightID` to `flight_num` for more consistency
     in the naming scheme and memory usage ([#58])
 - Refine the `XData` struct and the calculation of intersection points ([#51], [#58])
+- Improve root finding algorithm explicitly passing the derivative to the root finding algorithm
+  from _IntervalRootFinding_ and adapt to the latest changes in _IntervalRootFinding_ ([#101])
 - Refine file handling and save root paths and file paths/names separately ([#58])
 - Use look-up dictionaries in the set metadata and reduced Strings or `UInt16` indices in the
   track metadata to reduce struct sizes ([#58])
