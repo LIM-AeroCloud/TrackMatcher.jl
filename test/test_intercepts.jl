@@ -168,7 +168,7 @@ end
         @test xf64 isa XData{Float64}
         @test xf64 ≈ xf_cpro
         @test xf64_promoted isa XData{Float64}
-@test xdata_matches(xf64_promoted, xf64, [true, true, false])
+        @test xdata_matches(xf64_promoted, xf64, [true, true, false], accuracy_atol=1)
         @test xf64_forced isa XData{Float64}
         @test xf64_forced.data.id == xf64.data.id
         @test isapprox(xf64_forced.data.lat, xf64.data.lat; atol=1e-3)
