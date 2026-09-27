@@ -1,134 +1,14 @@
-# ¡ Needs general test data from init.jl
-## Setup helper functions
-
-function xdata_matches(
-    intersections::XData{T},
-    expected::XData{T},
-    obs::Vector{Bool};
-    data_atol::Real=1e-3,
-    accuracy_atol::Real=2e-1
-) where T
-    intersections.data.id == expected.data.id || return false
-    isapprox(intersections.data.lat, expected.data.lat; atol=data_atol) || return false
-    isapprox(intersections.data.lon, expected.data.lon; atol=data_atol) || return false
-    isapprox(intersections.data.alt, expected.data.alt; atol=data_atol) || return false
-    intersections.data.tdiff == expected.data.tdiff || return false
-    intersections.data.tprim == expected.data.tprim || return false
-    intersections.data.tsec == expected.data.tsec || return false
-    intersections.data.atmos_state == expected.data.atmos_state || return false
-
-    intersections.accuracy.id == expected.accuracy.id || return false
-    isapprox(intersections.accuracy.intersection, expected.accuracy.intersection;
-        atol=accuracy_atol) || return false
-    isapprox(intersections.accuracy.primdist, expected.accuracy.primdist;
-        atol=accuracy_atol) || return false
-    isapprox(intersections.accuracy.secdist, expected.accuracy.secdist;
-        atol=accuracy_atol) || return false
-    intersections.accuracy.primtime == expected.accuracy.primtime || return false
-    intersections.accuracy.sectime == expected.accuracy.sectime || return false
-
-    intersections.observations.id == expected.observations.id || return false
-    names(intersections.observations) == names(expected.observations) || return false
-    obs[1] || all(isempty, intersections.observations.primary) || return false
-    obs[2] || all(isempty, intersections.observations.CPro) || return false
-    obs[3] || all(isempty, intersections.observations.CLay) || return false
-    return true
-end
-
-
-function xresults(
-    intersections::XData{T},
-    primary::PrimarySet{T},
-    obsdata::Tuple{CPro,CLay}=(cpro, clay);
-    obs::Vector{Bool}=[true, true, true],
-    approx::Union{Bool,Int}=true
-) where T
-    atmos_state = intersections.metadata.sattype == :CLay ?
-        [invalid, ci, invalid, invalid, invalid] : [clear, ci, clear, clear, clear]
-    data = primary isa FlightSet ? DataFrame(
-        id=["V-42-1", "V-42-2", "V-42-3", "V-42-4", "V-43-1"],
-        lat=T[20.850319, 29.305733, 40.152092, 49.438873, 49.438488],
-        lon=T[26.92516, 29.0, 32.091255, 35.443886, 35.44373],
-        alt=T[11004.194, 11004.804, 11507.114, 11502.542, 11503.152],
-        tdiff=Dates.CompoundPeriod[
-            Dates.CompoundPeriod(Minute(2), Second(14)),
-            Dates.CompoundPeriod(Minute(1), Second(36)),
-            Dates.CompoundPeriod(Second(45)),
-            Dates.CompoundPeriod(),
-            Dates.CompoundPeriod()
-        ],
-        tprim=[DateTime(2012, 2, 6, 0, 6, 50), DateTime(2012, 2, 6, 0, 5, 8),
-            DateTime(2012, 2, 6, 0, 2, 58), DateTime(2012, 2, 6, 0, 1, 7),
-            DateTime(2012, 2, 6, 0, 1, 7)],
-        tsec=[DateTime(2012, 2, 6, 0, 9, 4), DateTime(2012, 2, 6, 0, 6, 44),
-            DateTime(2012, 2, 6, 0, 3, 43), DateTime(2012, 2, 6, 0, 1, 7),
-            DateTime(2012, 2, 6, 0, 1, 7)],
-        atmos_state=atmos_state
-    ) : DataFrame(
-        id=["C-1-1"],
-        lat=T[5.24175],
-        lon=T[23.464722],
-        alt=T[NaN],
-        tdiff=Dates.CompoundPeriod[Dates.CompoundPeriod(Minute(-25), Second(-6))],
-        tprim=[DateTime(2012, 2, 6, 0, 38, 29)],
-        tsec=[DateTime(2012, 2, 6, 0, 13, 23)],
-        atmos_state=[clear]
-    )
-    accuracy = primary isa FlightSet ? DataFrame(
-        id=["V-42-1", "V-42-2", "V-42-3", "V-42-4", "V-43-1"],
-        intersection=T[0.21223556, 0.0, 0.0, 0.4238313, 0.3452892],
-        primdist=T[96857.97, 67541.35, 17558.139, 51154.125, 0.0],
-        secdist=T[2590.4082, 872.12195, 1785.7188, 479.24576, 440.39847],
-        primtime=[Dates.CompoundPeriod(Second(-10)), Dates.CompoundPeriod(Second(8)),
-            Dates.CompoundPeriod(Second(-2)), Dates.CompoundPeriod(Second(7)),
-            Dates.CompoundPeriod()],
-        sectime=[Dates.CompoundPeriod(Millisecond(125)), Dates.CompoundPeriod(Millisecond(-7)),
-            Dates.CompoundPeriod(Millisecond(-220)), Dates.CompoundPeriod(Millisecond(16)),
-            Dates.CompoundPeriod(Millisecond(16))]
-    ) : DataFrame(
-        id=["C-1-1"],
-        intersection=T[34.18339],
-        primdist=T[NaN],
-        secdist=T[NaN],
-        primtime=[Dates.CompoundPeriod()],
-        sectime=[Dates.CompoundPeriod()]
-    )
-    observations = primary isa FlightSet ? DataFrame(
-        id=["V-42-1", "V-42-2", "V-42-3", "V-42-4", "V-43-1"],
-        # Non-empty dummy data for observations
-        primary=[flight.volpe[1], flight.volpe[1], flight.volpe[1], flight.volpe[1], flight.volpe[2]],
-        CPro=[obsdata[1] for _ in 1:5],
-        Clay=[obsdata[2] for _ in 1:5]
-    ) : DataFrame(
-        id=["C-1-1"],
-        primary=flight[1:1],
-        CPro=[obsdata[1]],
-        Clay=[obsdata[2]]
-    )
-    expected = XData{T}(data, observations, accuracy, intersections.metadata)
-    results = if approx isa Int
-        xdata_matches(intersections, expected, obs;
-            data_atol=10.0^-approx, accuracy_atol=10.0^-approx)
-    elseif approx === true
-        xdata_matches(intersections, expected, obs;
-            data_atol=1e-3, accuracy_atol=1e-1)
-    else
-        xdata_matches(intersections, expected, obs;
-            data_atol=1e-3, accuracy_atol=1e-1)
-    end
-    return results
-end
+# ¡ Needs general test data from init.jl and helper functions from setup.jl
 
 ## Test sets
 
 @testset "intersections" begin
 
     # Run intercept finding routines
-    xf_cpro = Intersection(flight, sat_cpro) # ℹ reused in constructor testset
-    xf_clay = XData(flight, sat_clay, true)
+    xf_cpro = Intersection(flight, sat_cpro, expdist=80_000) # ℹ reused in constructor testset
     xf64 = Intersection{Float64}(xf_cpro)
-    xf64_promoted = Intersection(flight64, sat_cpro)
-    xf64_forced = XData{Float64}(flight, sat_cpro)
+    xf64_promoted = Intersection(flight64, sat_cpro, expdist=80_000)
+    xf64_forced = XData{Float64}(flight, sat_cpro, expdist=80_000)
     xc_pro = XData(cloud, sat_cpro)
     xc_lay = XData(cloud, sat_clay)
     xf_empty = XData(flight_empty, sat_cpro)
@@ -163,7 +43,6 @@ end
         @test !isempty(lon_primary)
         @test !isempty(lon_secondary)
         @test xresults(xf_cpro, flight, obs=[true, true, false], approx=false)
-        @test xresults(xf_clay, flight, approx=false)
         @test all(id -> !startswith(id, "V-44"), xf_cpro.data.id)
         @test xf64 isa XData{Float64}
         @test xf64 ≈ xf_cpro
@@ -179,6 +58,17 @@ end
         @test isempty(xf_empty)
         @test xc_lay isa XData{Float32}
         @test xc_pro isa XData{Float32}
+        test_logger = Test.TestLogger()
+        xf_clay = with_logger(test_logger) do
+            XData(flight, sat_clay, true, expdist=80_000)
+        end
+        @test test_logger.logs[1].message == "maximum distance of intersection to next track point exceeded; data excluded"
+        @test test_logger.logs[1].kwargs[:trackID] == 42
+        @test test_logger.logs[1].level == Logging.Info
+        @test test_logger.logs[2].message == "no sufficient satellite data for time index 2012-02-06T02:30:00...2012-02-06T03:39:00"
+        @test test_logger.logs[2].level == Logging.Warn
+        @test startswith(test_logger.logs[3].message, "Intersection data (4 matches) loaded")
+        @test xresults(xf_clay, flight, approx=false)
     end
     @testset "promotion constructors preserve original data" begin
         original_data = deepcopy(xf_cpro.data)
@@ -289,16 +179,21 @@ end
         # Force an exception in the interpolation path
         TrackMatcher.interpolate_trackdata(::FlightTrack) =
             throw(ErrorException("forced failure"))
-        @test_logs min_level = Debug match_mode = :any (
-            :debug, "primary track ID: 42"
-        ) (
-            :warn, r"Track data and/or time could not be interpolated"
-        ) (
-            :info, r"Intersection data \(0 matches\) loaded"
-        ) begin
-            x = XData(flight, sat_cpro, true)
-            @test x isa XData
-            @test isempty(x)
+        mock = which(TrackMatcher.interpolate_trackdata, Tuple{FlightTrack})
+        try
+            @test_logs min_level = Debug match_mode = :any (
+                :debug, "primary track ID: 42"
+            ) (
+                :warn, r"Track data and/or time could not be interpolated"
+            ) (
+                :info, r"Intersection data \(0 matches\) loaded"
+            ) begin
+                x = XData(flight, sat_cpro, true)
+                @test x isa XData
+                @test isempty(x)
+            end
+        finally
+            Base.delete_method(mock)
         end
         overlap, range = @test_logs (
             :warn, r"no sufficient satellite data"

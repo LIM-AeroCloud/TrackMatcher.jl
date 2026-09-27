@@ -1,99 +1,15 @@
-## Define expected results
-# ¡ Needs general test data from init.jl
+## Test satellite data
+# ¡ Needs general test data from init.jl and helper functions from setup.jl
 
-# Target data for sat test sets
-cpro_files = [joinpath("Level1", "CPro1.h5"), joinpath("Level1", "Level2", "CPro2.h5")]
-clay_files = [joinpath("Level1", "CLay.h5")]
-mixed_files = [joinpath("Level1", "CLay.h5"), joinpath("Level1", "CPro1.h5"),
-    joinpath("Level1", "Level2", "CPro2.h5")]
-empty_files = String[]
-mini_cpro, mini_clay = ["CPro_1.h5", "CPro_2.h5"], ["CLay_1.h5", "CLay_2.h5"]
-utc = [
-    DateTime(2012, 2, 6, 0, 13, 5, 668),
-    DateTime(2012, 2, 6, 0, 13, 6, 412),
-    DateTime(2012, 2, 6, 0, 13, 7, 156),
-    DateTime(2012, 2, 6, 0, 13, 7, 900),
-    DateTime(2012, 2, 6, 0, 13, 8, 644),
-    DateTime(2012, 2, 6, 0, 13, 9, 388),
-    DateTime(2012, 2, 6, 0, 13, 10, 132),
-    DateTime(2012, 2, 6, 0, 13, 10, 876),
-    DateTime(2012, 2, 6, 0, 13, 11, 620),
-    DateTime(2012, 2, 6, 0, 13, 12, 364),
-    DateTime(2012, 2, 6, 0, 13, 13, 108),
-    DateTime(2012, 2, 6, 0, 13, 13, 852),
-    DateTime(2012, 2, 6, 0, 13, 14, 596),
-    DateTime(2012, 2, 6, 0, 13, 15, 340),
-    DateTime(2012, 2, 6, 0, 13, 16, 084),
-    DateTime(2012, 2, 6, 0, 13, 16, 828),
-    DateTime(2012, 2, 6, 0, 13, 17, 572),
-    DateTime(2012, 2, 6, 0, 13, 18, 316),
-    DateTime(2012, 2, 6, 0, 13, 19, 060),
-    DateTime(2012, 2, 6, 0, 13, 19, 804),
-    DateTime(2012, 2, 6, 0, 13, 20, 548),
-    DateTime(2012, 2, 6, 0, 13, 21, 292),
-    DateTime(2012, 2, 6, 0, 13, 22, 036),
-    DateTime(2012, 2, 6, 0, 13, 22, 780),
-    DateTime(2012, 2, 6, 0, 13, 23, 524),
-    DateTime(2012, 2, 6, 0, 13, 24, 267),
-    DateTime(2012, 2, 6, 0, 13, 25, 011),
-    DateTime(2012, 2, 6, 0, 13, 25, 755),
-    DateTime(2012, 2, 6, 0, 13, 26, 499),
-    DateTime(2012, 2, 6, 0, 13, 27, 243),
-    DateTime(2012, 2, 6, 0, 13, 27, 987)
-]
-lat = Float32[6.2779856, 6.233021, 6.188323, 6.1434226, 6.0986094, 6.053796, 6.0087543, 5.9637613,
-    5.918778, 5.8737893, 5.8287735, 5.7838264, 5.7388263, 5.693794, 5.648815, 5.604101, 5.559198,
-    5.514163, 5.4691825, 5.424208, 5.3792043, 5.3341794, 5.289179, 5.2441573, 5.1991415, 5.1542006,
-    5.109221, 5.064237, 5.019097, 4.973801, 4.928818]
-lon = Float32[23.687, 23.67742, 23.667685, 23.657978, 23.648378, 23.638838, 23.629349, 23.619642,
-    23.609898, 23.600185, 23.59066, 23.580997, 23.571411, 23.561863, 23.552141, 23.54242, 23.53282,
-    23.523283, 23.513565, 23.504055, 23.494406, 23.484657, 23.47527, 23.465548, 23.4559, 23.446463,
-    23.436754, 23.427029, 23.417404, 23.40788, 23.398176]
-
-function metadata(meta::SecondaryMetadata)
-    expected = (
-        start = DateTime(2012, 2, 5, 21, 16, 31, 602),
-        stop = DateTime(2012, 2, 6, 3, 5, 33, 437),
-        latmin = Float32[-81.82188, -68.64167],
-        latmax = Float32[78.177505, 81.821526],
-        elonmin = Float32[0.09188683, 20.686209],
-        elonmax = Float32[44.556667, 179.92279],
-        wlonmin = Float32[-169.5283, -179.86685],
-        wlonmax = Float32[-0.17311835, -170.95845]
-    )
-    return meta.date.start == expected.start && meta.date.stop == expected.stop &&
-        all(isapprox.(meta.granules.latmin[1:2], expected.latmin; atol=1e-6)) &&
-        all(isapprox.(meta.granules.latmax[1:2], expected.latmax; atol=1e-6)) &&
-        all(isapprox.(meta.granules.elonmin[1:2], expected.elonmin; atol=1e-6)) &&
-        all(isapprox.(meta.granules.elonmax[1:2], expected.elonmax; atol=1e-6)) &&
-        all(isapprox.(meta.granules.wlonmin[1:2], expected.wlonmin; atol=1e-6)) &&
-        all(isapprox.(meta.granules.wlonmax[1:2], expected.wlonmax; atol=1e-6))
-end
-
-
-## Helper functions to evaluate tests
-
-"""
-    test_sat_datafiles(files, type, satfiles, expected_type=type) -> Bool
-
-Test function `TrackMatcher.sat_datafiles` to return the `expected_type` from the given `type`
-and clean `files` to match `satfiles`.
-Returns `true` if both tests pass, `false` otherwise.
-"""
-function test_sat_datafiles(files, type, satfiles, expected_type=type)::Bool
-    success = true
-    input_files = copy(files)
-    sattype = TrackMatcher.sat_datafiles!(input_files, type)
-    success &= sattype == expected_type
-    success &= input_files == satfiles
-    return success
-end
-
-
-## Testsets
-
-# Test sets
 @testset "read sat data" begin
+    # Target files for loading satellite data
+    empty_files = String[]
+    cpro_files = [joinpath("Level1", "CPro1.h5"), joinpath("Level1", "Level2", "CPro2.h5")]
+    clay_files = [joinpath("Level1", "CLay.h5")]
+    mixed_files = [joinpath("Level1", "CLay.h5"), joinpath("Level1", "CPro1.h5"),
+        joinpath("Level1", "Level2", "CPro2.h5")]
+
+    # Tests
     @test TrackMatcher.scandir(joinpath("data", "caliop", "correct"), ".h5") == mixed_files
     @test TrackMatcher.scandir(joinpath("data", "caliop", "correct"), [".h5"]) == mixed_files
     @test TrackMatcher.scandir(joinpath("data", "caliop", "correct"), [".h5", ".hdf"]) == mixed_files
@@ -197,6 +113,50 @@ end
 end
 
 @testset "Observations" begin
+    # Target results
+    utc = [
+        DateTime(2012, 2, 6, 0, 13, 5, 668),
+        DateTime(2012, 2, 6, 0, 13, 6, 412),
+        DateTime(2012, 2, 6, 0, 13, 7, 156),
+        DateTime(2012, 2, 6, 0, 13, 7, 900),
+        DateTime(2012, 2, 6, 0, 13, 8, 644),
+        DateTime(2012, 2, 6, 0, 13, 9, 388),
+        DateTime(2012, 2, 6, 0, 13, 10, 132),
+        DateTime(2012, 2, 6, 0, 13, 10, 876),
+        DateTime(2012, 2, 6, 0, 13, 11, 620),
+        DateTime(2012, 2, 6, 0, 13, 12, 364),
+        DateTime(2012, 2, 6, 0, 13, 13, 108),
+        DateTime(2012, 2, 6, 0, 13, 13, 852),
+        DateTime(2012, 2, 6, 0, 13, 14, 596),
+        DateTime(2012, 2, 6, 0, 13, 15, 340),
+        DateTime(2012, 2, 6, 0, 13, 16, 084),
+        DateTime(2012, 2, 6, 0, 13, 16, 828),
+        DateTime(2012, 2, 6, 0, 13, 17, 572),
+        DateTime(2012, 2, 6, 0, 13, 18, 316),
+        DateTime(2012, 2, 6, 0, 13, 19, 060),
+        DateTime(2012, 2, 6, 0, 13, 19, 804),
+        DateTime(2012, 2, 6, 0, 13, 20, 548),
+        DateTime(2012, 2, 6, 0, 13, 21, 292),
+        DateTime(2012, 2, 6, 0, 13, 22, 036),
+        DateTime(2012, 2, 6, 0, 13, 22, 780),
+        DateTime(2012, 2, 6, 0, 13, 23, 524),
+        DateTime(2012, 2, 6, 0, 13, 24, 267),
+        DateTime(2012, 2, 6, 0, 13, 25, 011),
+        DateTime(2012, 2, 6, 0, 13, 25, 755),
+        DateTime(2012, 2, 6, 0, 13, 26, 499),
+        DateTime(2012, 2, 6, 0, 13, 27, 243),
+        DateTime(2012, 2, 6, 0, 13, 27, 987)
+    ]
+    lat = Float32[6.2779856, 6.233021, 6.188323, 6.1434226, 6.0986094, 6.053796, 6.0087543, 5.9637613,
+        5.918778, 5.8737893, 5.8287735, 5.7838264, 5.7388263, 5.693794, 5.648815, 5.604101, 5.559198,
+        5.514163, 5.4691825, 5.424208, 5.3792043, 5.3341794, 5.289179, 5.2441573, 5.1991415, 5.1542006,
+        5.109221, 5.064237, 5.019097, 4.973801, 4.928818]
+    lon = Float32[23.687, 23.67742, 23.667685, 23.657978, 23.648378, 23.638838, 23.629349, 23.619642,
+        23.609898, 23.600185, 23.59066, 23.580997, 23.571411, 23.561863, 23.552141, 23.54242, 23.53282,
+        23.523283, 23.513565, 23.504055, 23.494406, 23.484657, 23.47527, 23.465548, 23.4559, 23.446463,
+        23.436754, 23.427029, 23.417404, 23.40788, 23.398176]
+
+    # Run tests
     @testset "CPro" begin
         cpro_empty = CPro([joinpath(@__DIR__, "data", "caliop", "CPro", "CPro_4.h5")],
             timeindex, lidarprofile, false)

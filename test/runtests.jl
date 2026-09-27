@@ -6,7 +6,10 @@ global_logger(ConsoleLogger(stderr, Error))
 
 haskey(ENV, "TRACKMATCHER_PROGRESS") || (ENV["TRACKMATCHER_PROGRESS"] = "false")
 
+@info "Initializing test data"
 include("init.jl")
+include("setup.jl")
+@info "Running tests"
 include("test_flightdata.jl")
 include("test_clouddata.jl")
 include("test_satdata.jl")

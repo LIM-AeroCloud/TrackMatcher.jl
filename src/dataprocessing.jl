@@ -1,7 +1,10 @@
 ### Helper functions for data processing
+"""
+    absperiod(dt::Dates.CompoundPeriod) -> Dates.CompoundPeriod
 
-# Overload abs function from base to get the absolute number of CompoundPeriod
-Base.abs(dt::Dates.CompoundPeriod) = dt > Dates.CompoundPeriod(Dates.Millisecond(0)) ? dt : -dt
+Return the absolute value of the given `Dates.CompoundPeriod`.
+"""
+absperiod(dt::Dates.CompoundPeriod)::Dates.CompoundPeriod = dt > Dates.CompoundPeriod(Dates.Millisecond(0)) ? dt : -dt
 
 ## Storage of intersection data
 
@@ -65,7 +68,7 @@ function addX!(
         if dist.haversine(Xp, (Xdata.lat[i], Xdata.lon[i]), earthradius(Xp[1])) ≤ Xradius
             dx ≤ accuracy.intersection[i] || return counter # previous intersection more accurate
             # previous intersection equally accurate, but smaller delay time:
-            (dx == accuracy.intersection[i] && abs(dt) > abs(Xdata.tdiff[i])) && return counter
+            (dx == accuracy.intersection[i] && absperiod(dt) > absperiod(Xdata.tdiff[i])) && return counter
 
             # Save more accurate duplicate
             Xdata[i, 2:end] = (lat = Xp[1], lon = Xp[2], alt = alt,
@@ -179,7 +182,7 @@ function add_intersections!(
     # Save intersection data
     addX!(Xdata, observations, accuracy, counter, Xp, id, dx, dt, Xradius, Xprim,
         cpro, clay, tmf, tms, atmos, fxmeas, ftmeas, sxmeas, stmeas, alt)
-end #function add_intersections
+end #function add_intersections!
 
 
 """
@@ -247,7 +250,7 @@ function add_intersections!(
   savesecondsattype::Bool
 ) where T<:AbstractFloat
     NA = T(NaN) # set precision of NaNs according to Float
-    # Don't save additional cloud data near intersections at the moment
+    #¡ Don't save additional cloud data near intersections at the moment!
     Xcloud, ift = CloudTrack{T}(), 0
     cpro, clay, atmos, ist = get_satdata(sat, obsindex, secspan, tms, NA, altmin,
         trackID, lidarprofile, lidarrange, saveobs, savesecondsattype, T)
@@ -259,11 +262,12 @@ function add_intersections!(
         dist.haversine(Xs, (Xsat.lat[ist], Xsat.lon[ist]), earthradius(Xs[1])),
         Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.time[ist])))
     # Exclude data with long distances to nearest flight measurement
-    if fxmeas > expdist || sxmeas > expdist
-        @info("maximum distance of intersection to next track point exceeded; data excluded",
-        trackID)
-        return counter
-    end
+    # TODO cannot be reached at the moment, reactivate when saving cloud data
+    # if fxmeas > expdist || sxmeas > expdist
+    #     @info("maximum distance of intersection to next track point exceeded; data excluded",
+    #     trackID)
+    #     return counter
+    # end
     # Save intersection data
     addX!(Xdata, observations, accuracy, counter, Xp, id, dx, dt, Xradius, Xcloud,
         cpro, clay, tmf, tms, atmos, fxmeas, ftmeas, sxmeas, stmeas, NA)
