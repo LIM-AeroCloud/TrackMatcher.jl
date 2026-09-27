@@ -61,4 +61,8 @@
         @test TrackMatcher.knot2mps(missing) === missing
         @test TrackMatcher.knot2mps(Float32(180.)) ≈ 92.59992
     end
+    @testset "helper functions" begin
+        @test TrackMatcher.trim_vec!(collect(1:10), 5) == collect(1:5)
+        @test TrackMatcher.trim_vec!(collect(1:10), 11) == collect(1:10)
+    end
 end

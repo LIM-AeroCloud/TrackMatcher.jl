@@ -180,6 +180,15 @@ end
                 isempty(cpro_empty.pressure) && isempty(cpro_empty.rH) && isempty(cpro_empty.IWC) &&
                 isempty(cpro_empty.deltap) && isempty(cpro_empty.CADscore) && isempty(cpro_empty.night)
             @test cpro64.lat ≈ cpro.lat && cpro64.lat isa Vector{Float64}
+            # Test data storage over multiple granules
+            @test TrackMatcher.find_timespan(sat_cpro, (file=1, time=4220)) == DataFrame(
+                time=[4205:4224, 1:11],
+                file=[1, 2]
+            )
+            @test TrackMatcher.find_timespan(sat_cpro, (file=2, time=3)) == DataFrame(
+                time=[4212:4224, 1:18],
+                file=[1, 2]
+            )
         end
         @testset "data precision" begin
             @test cpro64 ≈ cpro atol = 1e-6

@@ -7,7 +7,7 @@
     # Run intercept finding routines
     xf_cpro = Intersection(flight, sat_cpro, expdist=80_000) # ℹ reused in constructor testset
     xf64 = Intersection{Float64}(xf_cpro)
-    xf64_promoted = Intersection(flight64, sat_cpro, expdist=80_000)
+    xf64_promoted = Intersection(flight64, sat_cpro, true, expdist=80_000)
     xf64_forced = XData{Float64}(flight, sat_cpro, expdist=80_000)
     xc_pro = XData(cloud, sat_cpro)
     xc_lay = XData(cloud, sat_clay)
@@ -47,7 +47,7 @@
         @test xf64 isa XData{Float64}
         @test xf64 ≈ xf_cpro
         @test xf64_promoted isa XData{Float64}
-        @test xdata_matches(xf64_promoted, xf64, [true, true, false], accuracy_atol=1)
+        @test xdata_matches(xf64_promoted, xf64, [true, true, true], accuracy_atol=1)
         @test xf64_forced isa XData{Float64}
         @test xf64_forced.data.id == xf64.data.id
         @test isapprox(xf64_forced.data.lat, xf64.data.lat; atol=1e-3)
@@ -200,5 +200,42 @@
         ) TrackMatcher.findoverlap(flight.volpe[1], SatSet(), 30, 0.1)
         @test overlap isa Vector{DataFrame} && isempty(overlap)
         @test range ==0:-1
+    end
+    @testset "exception handling for secondary sat data" begin
+        # Force an exception loading the secondary CPro data (primary type CLay)
+        TrackMatcher.CPro{Float32}(files::Vector{String}, timeindex::Vector{UnitRange{Int64}},
+            lidarprofile::NamedTuple, saveobs::Bool) = throw(ErrorException("forced failure"))
+        mock_cpro = which(TrackMatcher.CPro{Float32},
+            Tuple{Vector{String},Vector{UnitRange{Int64}},NamedTuple,Bool})
+        try
+            logger = Test.TestLogger()
+            xclay = Logging.with_logger(logger) do
+                XData(flight, sat_clay, true, expdist=80_000)
+            end
+            warns = filter(r -> r.message == "could not load additional profile data", logger.logs)
+            @test !isempty(warns)
+            @test all(r -> r.kwargs[:trackID] in (Int32(42), Int32(43)), warns)
+            @test all(c -> isempty(c.time), xclay.observations.CPro)
+        finally
+            Base.delete_method(mock_cpro)
+        end
+
+        # Force an exception loading the secondary CLay data (primary type CPro)
+        TrackMatcher.CLay{Float32}(files::Vector{String}, timeindex::Vector{UnitRange{Int64}},
+            lidarrange::Tuple{Real,Real}, altmin::Real) = throw(ErrorException("forced failure"))
+        mock_clay = which(TrackMatcher.CLay{Float32},
+            Tuple{Vector{String},Vector{UnitRange{Int64}},Tuple{Real,Real},Real})
+        try
+            logger = Test.TestLogger()
+            xcpro = Logging.with_logger(logger) do
+                XData(flight, sat_cpro, true, expdist=80_000)
+            end
+            warns = filter(r -> r.message == "could not load additional layer data", logger.logs)
+            @test !isempty(warns)
+            @test all(r -> r.kwargs[:trackID] in (Int32(42), Int32(43)), warns)
+            @test all(c -> isempty(c.time), xcpro.observations.CLay)
+        finally
+            Base.delete_method(mock_clay)
+        end
     end
 end
