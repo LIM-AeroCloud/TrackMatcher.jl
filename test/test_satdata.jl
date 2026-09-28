@@ -180,15 +180,6 @@ end
                 isempty(cpro_empty.pressure) && isempty(cpro_empty.rH) && isempty(cpro_empty.IWC) &&
                 isempty(cpro_empty.deltap) && isempty(cpro_empty.CADscore) && isempty(cpro_empty.night)
             @test cpro64.lat ≈ cpro.lat && cpro64.lat isa Vector{Float64}
-            # Test data storage over multiple granules
-            @test TrackMatcher.find_timespan(sat_cpro, (file=1, time=4220)) == DataFrame(
-                time=[4205:4224, 1:11],
-                file=[1, 2]
-            )
-            @test TrackMatcher.find_timespan(sat_cpro, (file=2, time=3)) == DataFrame(
-                time=[4212:4224, 1:18],
-                file=[1, 2]
-            )
         end
         @testset "data precision" begin
             @test cpro64 ≈ cpro atol = 1e-6
@@ -236,6 +227,29 @@ end
             )) == invalid
             @test TrackMatcher.atmosphericinfo(cpro, lidarprofile.fine, 16, 13960, Int32(1)) == ci
             @test TrackMatcher.atmosphericinfo(cpro, lidarprofile.fine, 16, 13959, Int32(1)) == clear
+        end
+        @testset "extract timespan" begin
+            # Test loading of observational data from granules
+            @test TrackMatcher.find_timespan(sat_cpro, (file=2, time=1015)) == DataFrame(
+                time=[1000:1030],
+                file=[2]
+            )
+            @test TrackMatcher.find_timespan(sat_cpro, (file=1, time=4220)) == DataFrame(
+                time=[4205:4224, 1:11],
+                file=[1, 2]
+            )
+            @test TrackMatcher.find_timespan(sat_cpro, (file=2, time=3)) == DataFrame(
+                time=[4212:4224, 1:18],
+                file=[1, 2]
+            )
+            @test TrackMatcher.find_timespan(sat_cpro, (file=3, time=3), 10_000) ==  DataFrame(
+                time=[1:4224, 1:3728, 1:4224, 1:3744, 1:2035],
+                file=[1, 2, 3, 4, 5]
+            )
+            @test TrackMatcher.find_timespan(sat_cpro, (file=6, time=3), 10_000) == DataFrame(
+                time=[2195:4224, 1:3744, 1:4224, 1:3728, 1:4224],
+                file=[3, 4, 5, 6, 7]
+            )
         end
     end
     @testset "CLay" begin
