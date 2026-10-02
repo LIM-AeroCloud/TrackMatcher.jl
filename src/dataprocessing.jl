@@ -300,7 +300,7 @@ function find_timespan(
     nstart, nstop, nfile = [max(1, irow - ispan)], [min(length(sat.granules.time[ifile]), irow + ispan)], [ifile]
 
     # Find file and time indices in granules prior to the intersection
-    while irow - ispan < 0
+    while irow - ispan ≤ 0
         ifile -= 1 # move to previous file
         ifile < 1 && break # stop at first file
         ispan -= irow # reduce data span by number of rows in the last file
@@ -316,8 +316,8 @@ function find_timespan(
     len = length(sat.granules[ifile].time)
     ispan -= len - irow + 1
 
-    # Find file and time indices in granules prior to the intersection
-    while ispan > 0 && ifile < size(sat.metadata.granules, 1)
+    # Find file and time indices in granules following the intersection
+    while ispan ≥ 0 && ifile < size(sat.metadata.granules, 1)
         ifile += 1 # move to next file
         len = length(sat.granules.time[ifile]) # number of time indices in granule
         push!(nstart, 1)

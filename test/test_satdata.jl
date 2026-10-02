@@ -242,6 +242,38 @@ end
                 time=[4212:4224, 1:18],
                 file=[1, 2]
             )
+            # Window ends exactly at a granule boundary: no additional granule required
+            @test TrackMatcher.find_timespan(sat_cpro, (file=2, time=16)) == DataFrame(
+                time=[1:31],
+                file=[2]
+            )
+            @test TrackMatcher.find_timespan(sat_cpro, (file=1, time=4209)) == DataFrame(
+                time=[4194:4224],
+                file=[1]
+            )
+            # Window overshoots a granule boundary by exactly one sample
+            @test TrackMatcher.find_timespan(sat_cpro, (file=2, time=15)) == DataFrame(
+                time=[4224:4224, 1:30],
+                file=[1, 2]
+            )
+            @test TrackMatcher.find_timespan(sat_cpro, (file=1, time=4210)) == DataFrame(
+                time=[4195:4224, 1:1],
+                file=[1, 2]
+            )
+            # Overshoot by one sample at the edges of the data set
+            @test TrackMatcher.find_timespan(sat_cpro, (file=1, time=15)) == DataFrame(
+                time=[1:30],
+                file=[1]
+            )
+            @test TrackMatcher.find_timespan(sat_cpro, (file=7, time=4210)) == DataFrame(
+                time=[4195:4224],
+                file=[7]
+            )
+            # Window size is always 2 * dataspan + 1 away from the data set edges
+            for (file, time) in ((2, 14), (2, 15), (2, 16), (1, 4209), (1, 4210), (1, 4211))
+                span = TrackMatcher.find_timespan(sat_cpro, (; file, time))
+                @test sum(length, span.time) == 31
+            end
             @test TrackMatcher.find_timespan(sat_cpro, (file=3, time=3), 10_000) ==  DataFrame(
                 time=[1:4224, 1:3728, 1:4224, 1:3744, 1:2035],
                 file=[1, 2, 3, 4, 5]
