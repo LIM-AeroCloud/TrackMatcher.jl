@@ -1,7 +1,10 @@
 ### Helper functions for data processing
+"""
+    absperiod(dt::Dates.CompoundPeriod) -> Dates.CompoundPeriod
 
-# Overload abs function from base to get the absolute number of CompoundPeriod
-Base.abs(dt::Dates.CompoundPeriod) = dt > Dates.CompoundPeriod(Dates.Millisecond(0)) ? dt : -dt
+Return the absolute value of the given `Dates.CompoundPeriod`.
+"""
+absperiod(dt::Dates.CompoundPeriod)::Dates.CompoundPeriod = dt > Dates.CompoundPeriod(Dates.Millisecond(0)) ? dt : -dt
 
 ## Storage of intersection data
 
@@ -65,7 +68,7 @@ function addX!(
         if dist.haversine(Xp, (Xdata.lat[i], Xdata.lon[i]), earthradius(Xp[1])) ≤ Xradius
             dx ≤ accuracy.intersection[i] || return counter # previous intersection more accurate
             # previous intersection equally accurate, but smaller delay time:
-            (dx == accuracy.intersection[i] && abs(dt) > abs(Xdata.tdiff[i])) && return counter
+            (dx == accuracy.intersection[i] && absperiod(dt) > absperiod(Xdata.tdiff[i])) && return counter
 
             # Save more accurate duplicate
             Xdata[i, 2:end] = (lat = Xp[1], lon = Xp[2], alt = alt,
@@ -179,7 +182,7 @@ function add_intersections!(
     # Save intersection data
     addX!(Xdata, observations, accuracy, counter, Xp, id, dx, dt, Xradius, Xprim,
         cpro, clay, tmf, tms, atmos, fxmeas, ftmeas, sxmeas, stmeas, alt)
-end #function add_intersections
+end #function add_intersections!
 
 
 """
@@ -247,7 +250,7 @@ function add_intersections!(
   savesecondsattype::Bool
 ) where T<:AbstractFloat
     NA = T(NaN) # set precision of NaNs according to Float
-    # Don't save additional cloud data near intersections at the moment
+    #¡ Don't save additional cloud data near intersections at the moment!
     Xcloud, ift = CloudTrack{T}(), 0
     cpro, clay, atmos, ist = get_satdata(sat, obsindex, secspan, tms, NA, altmin,
         trackID, lidarprofile, lidarrange, saveobs, savesecondsattype, T)
@@ -259,11 +262,12 @@ function add_intersections!(
         dist.haversine(Xs, (Xsat.lat[ist], Xsat.lon[ist]), earthradius(Xs[1])),
         Dates.canonicalize(Dates.CompoundPeriod(tms - Xsat.time[ist])))
     # Exclude data with long distances to nearest flight measurement
-    if fxmeas > expdist || sxmeas > expdist
-        @info("maximum distance of intersection to next track point exceeded; data excluded",
-        trackID)
-        return counter
-    end
+    # TODO cannot be reached at the moment, reactivate when saving cloud data
+    # if fxmeas > expdist || sxmeas > expdist
+    #     @info("maximum distance of intersection to next track point exceeded; data excluded",
+    #     trackID)
+    #     return counter
+    # end
     # Save intersection data
     addX!(Xdata, observations, accuracy, counter, Xp, id, dx, dt, Xradius, Xcloud,
         cpro, clay, tmf, tms, atmos, fxmeas, ftmeas, sxmeas, stmeas, NA)
@@ -291,11 +295,12 @@ function find_timespan(
     obsindex::NamedTuple{(:file,:time),Tuple{Int,Int}},
     dataspan::Int=15
 )
-    # Initialise
+    # Initialise span starting from the given index in the current file
     irow, ifile, ispan = obsindex.time, obsindex.file, dataspan
-    nstart, nstop, nfile = Int[], Int[], Int[ifile]
+    nstart, nstop, nfile = [max(1, irow - ispan)], [min(length(sat.granules.time[ifile]), irow + ispan)], [ifile]
+
     # Find file and time indices in granules prior to the intersection
-    while irow - ispan < 0
+    while irow - ispan ≤ 0
         ifile -= 1 # move to previous file
         ifile < 1 && break # stop at first file
         ispan -= irow # reduce data span by number of rows in the last file
@@ -305,31 +310,20 @@ function find_timespan(
         irow - ispan ≤ 0 ? pushfirst!(nstart, 1) : pushfirst!(nstart, irow - ispan)
         pushfirst!(nfile, ifile)
     end
+
     # Reset row and file indices and dataspan
     irow, ifile, ispan = obsindex.time, obsindex.file, dataspan
-    # Process granule with intersection
-    isempty(nstart) ? push!(nstart, irow - ispan) : push!(nstart, 1)
     len = length(sat.granules[ifile].time)
-    irow + ispan > len ? push!(nstop, len) : push!(nstop, irow + ispan)
-    ifile += 1
     ispan -= len - irow + 1
-    # Find file and time indices in granules past the intersection
-    while ispan > length(sat.granules[ifile].time)
-        len = length(sat.granules[ifile].time) # number of time indices in granule
-        # Save indices
-        push!(nstart, 1)
-        push!(nstop, len)
-        push!(nfile, ifile)
-        ispan -= len # reduce data span by number of rows in the last file
+
+    # Find file and time indices in granules following the intersection
+    while ispan ≥ 0 && ifile < size(sat.metadata.granules, 1)
         ifile += 1 # move to next file
-        # Stop at last file
-        ifile > size(sat.metadata.granules, 1) && break
-    end
-    # At indices of last file (with less time steps considered than data rows)
-    if ispan > 0 && ifile ≤ size(sat.metadata.granules, 1)
+        len = length(sat.granules.time[ifile]) # number of time indices in granule
         push!(nstart, 1)
-        push!(nstop, ispan + 1)
+        push!(nstop, min(ispan + 1, len))
         push!(nfile, ifile)
+        ispan -= len # Adjust remaining time span
     end
 
     # Return a dataframe with time index range and file index
@@ -440,7 +434,7 @@ function get_satdata(
     else
         try CLay{Float}(secfiles, obsindex.time, lidarrange, altmin)
         catch
-            progress_enabled() && println()
+            progress_enabled() && println() # COV_EXCL_LINE
             @warn "could not load additional layer data" trackID
             CLay{Float}()
         end
@@ -450,7 +444,7 @@ function get_satdata(
     else
         try CPro{Float}(secfiles, obsindex.time, lidarprofile, saveobs)
         catch
-            progress_enabled() && println()
+            progress_enabled() && println() # COV_EXCL_LINE
             @warn "could not load additional profile data" trackID
             CPro{Float}()
         end

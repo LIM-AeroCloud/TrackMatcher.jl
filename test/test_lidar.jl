@@ -1,16 +1,15 @@
 ## Tests about lidar data processing and feature classification
 
-# Define test data and expected results
-hfile = normpath(@__DIR__, "..", "data", "CPro_Lidar_Altitudes_m.dat")
-h5file = normpath(@__DIR__, "data", "caliop", "CPro", "CPro_4.h5")
-hprofile = CSV.read(hfile, DataFrame, copycols = false, types=Float32)
-lidarprofile = TrackMatcher.get_lidarheights((Inf, -Inf), Float32)
-
-fcf = [0x0001, 0x0019, 0x041b, 0x061b, 0x0a1b, 0x021a, 0x081a, 0x0a1a, 0x0c1a, 0x0e1a]
-feature = [clear, clear, dust, polluted, polluted_dust, low_opaque, ac, as, ci, cb]
-
-## Test sets
 @testset "lidar profile" begin
+    # Define test data and expected results
+    hfile = normpath(@__DIR__, "..", "data", "CPro_Lidar_Altitudes_m.dat")
+    h5file = normpath(@__DIR__, "data", "caliop", "CPro", "CPro_4.h5")
+    hprofile = CSV.read(hfile, DataFrame, copycols = false, types=Float32)
+    lidarprofile = TrackMatcher.get_lidarheights((Inf, -Inf), Float32)
+
+    fcf = [0x0001, 0x0019, 0x041b, 0x061b, 0x0a1b, 0x021a, 0x081a, 0x0a1a, 0x0c1a, 0x0e1a]
+    feature = [clear, clear, dust, polluted, polluted_dust, low_opaque, ac, as, ci, cb]
+
     @testset "example test" begin
         @test lidarprofile.coarse == hprofile.CPro
         @test length(lidarprofile.coarse) == 399
@@ -68,11 +67,10 @@ feature = [clear, clear, dust, polluted, polluted_dust, low_opaque, ac, as, ci, 
             @test lp_coarse.i.f.bottom == 0
         end
     end
-end
-
-@testset "feature flags" begin
-    for i in eachindex(fcf)
-        @test TrackMatcher.feature_classification(TrackMatcher.classification(fcf[i])...) ==
-            feature[i]
+    @testset "feature flags" begin
+        for i in eachindex(fcf)
+            @test TrackMatcher.feature_classification(TrackMatcher.classification(fcf[i])...) ==
+                feature[i]
+        end
     end
 end

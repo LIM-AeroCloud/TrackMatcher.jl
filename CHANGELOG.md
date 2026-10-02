@@ -61,9 +61,11 @@
   - revised return value of `get_lidarheights`
 - Use flight number for error handling in `CLay` method of `atmosphericinfo` ([#75])
 - Revise debug logs in the loop over track data during intersection finding ([#76])
+- Refactor and simplify internal function `find_timespan` to extract observational data ([#72])
 
 ### Removed
 
+- Remove `abs` method for `Dates.CompoundPeriod` (see Fixed, [#72])
 - Remove MATLAB dependency ([#51])
 - Ignore Manifest.toml, this should be auto-generated on each system
 - Remove constructors for `Float16`, `Float32`, and `Float64` taking `missing` as input to
@@ -72,6 +74,8 @@
 
 ### Fixed
 
+- Remove type piracy for `abs(::Dates.CompoundPeriod)` and rename function to internal function
+  `absperiod(::Dates.CompoundPeriod)` ([#72])
 - Fix the constructor of `Data` and `DataSet`, where previously `DataFrames` was mistyped
   instead of the `Data` constructor, update outdated kwargs ([#76])
 - Fix `Data` constructor for type promotion ([#76])
