@@ -3,7 +3,7 @@
 """
     load_volpe(
         paths::Vector{@NamedTuple{root::String,files::Vector{String}}},
-        pathdict::ds.OrderedDict{String,ds.OrderedDict},
+        pathdict::OrderedDict{String,OrderedDict},
         altmin::Real=5_000,
         Float::DataType=Float32
     ) -> StructArray{FlightData{Float}}
@@ -19,7 +19,7 @@ by default `Float32`.
 """
 function load_volpe(
     paths::Vector{@NamedTuple{root::String,files::Vector{String}}},
-    pathdict::ds.OrderedDict{String,ds.OrderedDict},
+    pathdict::OrderedDict{String,OrderedDict},
     altmin::Real=5_000,
     Float::DataType=Float32
 )::StructArray{FlightData{Float}}
@@ -76,7 +76,7 @@ end #function loadVOLPE
 """
     load_flightaware(
         paths::Vector{@NamedTuple{root::String,files::Vector{String}}},
-        pathdict::ds.OrderedDict{String,ds.OrderedDict},
+        pathdict::OrderedDict{String,OrderedDict},
         altmin::Real=5_000,
         Float::DataType=Float32
     ) -> StructArray{FlightData{Float}}
@@ -92,7 +92,7 @@ by default `Float32`.
 """
 function load_flightaware(
     paths::Vector{@NamedTuple{root::String,files::Vector{String}}},
-    pathdict::ds.OrderedDict{String,ds.OrderedDict},
+    pathdict::OrderedDict{String,OrderedDict},
     altmin::Real=5_000,
     Float::DataType=Float32
 )::StructArray{FlightData{Float}}
@@ -142,7 +142,7 @@ end #function load_flightaware
 """
     load_webdata(
         paths::Vector{@NamedTuple{root::String,files::Vector{String}}},
-        pathdict::ds.OrderedDict{String,ds.OrderedDict},
+        pathdict::OrderedDict{String,OrderedDict},
         altmin::Real=5_000,
         Float::DataType=Float32,
         delim::Union{Nothing,Char,String}=nothing
@@ -162,7 +162,7 @@ by default `Float32`.
 """
 function load_webdata(
     paths::Vector{@NamedTuple{root::String,files::Vector{String}}},
-    pathdict::ds.OrderedDict{String,ds.OrderedDict},
+    pathdict::OrderedDict{String,OrderedDict},
     altmin::Real=5_000,
     Float::DataType=Float32,
     delim::Union{Nothing,Char,String}=nothing

@@ -1,11 +1,64 @@
 ## structs for satellite data
 
+struct SatMetadata{T<:AbstractFloat} <: SatTrack{T}
+    date::NamedTuple{(:start, :stop),Tuple{DateTime,DateTime}}
+    area::NamedTuple{(:latmin, :latmax, :elonmin, :elonmax, :wlonmin, :wlonmax),NTuple{6,T}}
+    # REFACTOR source::SatProduct > move to secondary metadata
+    file::String
+    root::UInt16
+
+    #* Internal constructor with data checks
+    function SatMetadata{T}(
+        date::NamedTuple{(:start, :stop),Tuple{DateTime,DateTime}},
+        area::NamedTuple{(:latmin, :latmax, :elonmin, :elonmax, :wlonmin, :wlonmax),NTuple{6,T}},
+        file::AbstractString,
+        root::UInt16
+    ) where T<:AbstractFloat
+        date.start ≤ date.stop ||
+            throw(ArgumentError("Unordered SatMetadata in $file: $date"))
+        # NaN is valid for hemispheres without data, but only for both limits at once
+        inrange(a, b, lo, hi) = isnan(a) ? isnan(b) : lo ≤ a ≤ b ≤ hi
+        inrange(area.latmin, area.latmax, T(-90), T(90)) &&
+            inrange(area.elonmin, area.elonmax, T(0), T(180)) &&
+            inrange(area.wlonmin, area.wlonmax, T(-180), T(0)) ||
+            throw(ArgumentError("SatMetadata area is out of range or inconsistent in $file: $area"))
+        new{T}(date, area, file, root)
+    end
+end
+
+#* Main constructor with limited tests and limited automated data construction
+function SatMetadata{T}(
+    date::Vector{DateTime},
+    lat::Vector{T},
+    lon::Vector{T},
+    file::AbstractString,
+    root::UInt16
+) where T<:AbstractFloat
+    elonmin, elonmax, wlonmin, wlonmax = lonextrema(lon)
+    area = (latmin=minimum(lat), latmax=maximum(lat), elonmin, elonmax, wlonmin, wlonmax)
+    SatMetadata{T}((start=date[begin], stop=date[end]), area, file, root)
+end
+
+#* Constructor for empty SatMetadata
+SatMetadata{T}() where T<:AbstractFloat = SatMetadata{T}(
+    (start=Dates.now(), stop=Dates.now()),
+    (latmin=T(NaN), latmax=T(NaN), elonmin=T(NaN), elonmax=T(NaN), wlonmin=T(NaN), wlonmax=T(NaN)),
+    "", 0x0000
+)
+
+#* Constructor for default Float32 SatMetadata
+SatMetadata(args...) = SatMetadata{Float32}(args...)
+
+#* Constructor for floating point type promotion
+SatMetadata{T}(meta::SatMetadata) where T<:AbstractFloat =
+    SatMetadata{T}(meta.date, map(T, meta.area), meta.file, meta.root)
+
 """
 # struct SecondaryMetadata{T<:AbstractFloat} <: SecondarySet{T}
 
 Immutable struct to hold metadata for `SatSet{T}` with fields
 - `granules::DataFrame`
-- `roots::ds.OrderedDict{UInt16,String}`
+- `roots::OrderedDict{UInt16,String}`
 - `type::Symbol`
 - `date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}`
 - `created::AbstractDateTime`
@@ -57,9 +110,10 @@ floating point type of an existing `SecondaryMetadata`. The floating point type 
 in which case `Float32` will be used by default.
 """
 struct SecondaryMetadata{T<:AbstractFloat} <: SecondarySet{T}
-    granules::DataFrame
-    roots::ds.OrderedDict{UInt16,String}
-    type::Symbol #TODO save version
+    roots::OrderedDict{UInt16,String}
+    # TODO mission::Enum{Caliop,EarthCare}
+    product::SatProduct
+    version::Union{String,SortedSet{String}}
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
     created::AbstractDateTime
     loadtime::Dates.CompoundPeriod
@@ -67,8 +121,7 @@ struct SecondaryMetadata{T<:AbstractFloat} <: SecondarySet{T}
 
     #* Internal constructor with data checks
     function SecondaryMetadata{T}(
-        granules::DataFrame,
-        roots::ds.OrderedDict{UInt16,String},
+        roots::OrderedDict{UInt16,String},
         type::Symbol,
         date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}},
         created::AbstractDateTime,
@@ -113,7 +166,7 @@ SecondaryMetadata{T}() where T = SecondaryMetadata{T}(
     DataFrame(file = String[], root = UInt16[], tstart = DateTime[], tstop = DateTime[],
         latmin = T[], latmax = T[], elonmin = T[], elonmax = T[], wlonmin = T[], wlonmax = T[]
     ),
-    ds.OrderedDict{UInt16,String}(),
+    OrderedDict{UInt16,String}(),
     :undef, (start=Dates.now(), stop=Dates.now()), Dates.now(), Dates.CompoundPeriod(), nothing
 )
 
@@ -147,42 +200,61 @@ struct SatData{T<:AbstractFloat} <: SatTrack{T}
     time::Vector{DateTime}
     lat::Vector{T}
     lon::Vector{T}
+    metadata::SatMetadata{T}
 
     #* Internal constructor with data checks
-    function SatData{T}(time::Vector{DateTime}, lat::Vector{<:AbstractFloat}, lon::Vector{<:AbstractFloat}) where T
+    function SatData{T}(
+        time::Vector{DateTime},
+        lat::Vector{T},
+        lon::Vector{T},
+        metadata::SatMetadata{T}
+    ) where T<:AbstractFloat
         length(time) == length(lat) == length(lon) ||
             throw(DimensionMismatch("SatData vectors must have equal length"))
-        checklimits(time, DateTime(2000), Dates.now(), "time")
-        checklimits(lat, T(-90), T(90), "latitude")
-        checklimits(lon, T(-180), T(180), "longitude")
-        new{T}(time, lat, lon)
+        if !isempty(time)
+            issorted(time) || throw(ArgumentError("SatData time must be sorted"))
+            checklimits(time, DateTime(2000), Dates.now(), "time")
+            checklimits(lat, T(-90), T(90), "latitude")
+            checklimits(lon, T(-180), T(180), "longitude")
+            metadata.date == (start=time[begin], stop=time[end]) ||
+                throw(ArgumentError("sat metadata does not seem to match sat data for granule $(metadata.file)"))
+        end
+        new{T}(time, lat, lon, metadata)
     end
 end
 
 
 #* Main constructor for SatData from file
-function SatData{T}(file::AbstractString) where T<:AbstractFloat
+function SatData{T}(
+    file::AbstractString,
+    root::AbstractString,
+    roots::OrderedDict{String,UInt16}=OrderedDict{String,UInt16}()
+) where T<:AbstractFloat
     # Open HDF5 file and read relevant datasets
-    t, lat, lon = h5.h5open(file, "r") do data
+    t, lat, lon = h5.h5open(joinpath(root, file), "r") do data
         read(data, "Profile_UTC_Time")[2,:],
         read(data, "Latitude")[2,:],
         read(data, "Longitude")[2,:]
     end
-    # Convert time to DateTime UTC
+    # Convert data to TrackMatcher format
     time = convert_utc.(t)
-    # CReturn SatData
-    return SatData{T}(time, lat, lon)
+    lat, lon = convert(Vector{T}, lat), convert(Vector{T}, lon)
+    # Construct metadata
+    rootid = get(roots, root, UInt16(length(roots) + 1))
+    metadata = SatMetadata{T}(time, lat, lon, file, rootid)
+    # Return SatData
+    return SatData{T}(time, lat, lon, metadata)
 end #constructor 2 SatData
 
 #* Constructor for empty SatData
-SatData{T}() where T<:AbstractFloat = SatData{T}(DateTime[], T[], T[])
+SatData{T}() where T<:AbstractFloat = SatData{T}(DateTime[], T[], T[], SatMetadata{T}())
 
 #* Constructor for default Float32 SatData
 SatData(args...) = SatData{Float32}(args...)
 
 #* Constructor for floating point type promotion
 SatData{T}(sat::SatData) where T<:AbstractFloat = SatData{T}(
-  copy_for_promotion(sat.time), T.(sat.lat), T.(sat.lon)
+  copy_for_promotion(sat.time), T.(sat.lat), T.(sat.lon), SatMetadata{T}(sat.metadata)
 )
 
 """
@@ -240,13 +312,16 @@ struct SatSet{T<:AbstractFloat} <: SecondarySet{T}
     metadata::SecondaryMetadata{T}
 
     #* Internal constructor with data checks
+    # REFACTOR
     function SatSet{T}(
         granules::StructArray{SatData{T}},
         metadata::SecondaryMetadata{T}
     ) where T<:AbstractFloat
-        # Check that granules and metadata lengths match
-        length(granules) == df.nrow(metadata.granules) ||
-            throw(DimensionMismatch("SatSet granules and metadata length mismatch"))
+        # Granules must be ordered in time without duplicates (required for granule selection)
+        tstart = [m.date.start for m in granules.metadata]
+        tstop = [m.date.stop for m in granules.metadata]
+        issorted(tstart; lt = ≤) && issorted(tstop) ||
+            throw(ArgumentError("SatSet granules must be sorted by time without duplicates"))
         new{T}(granules, metadata)
     end
 end
@@ -255,58 +330,84 @@ end
 #* Main constructor for SatSet
 function SatSet{T}(
     folders::String...;
-    type::Symbol = :undef,
+    type::SatProduct = undef,
     attachments = nothing
 )::SatSet{T} where T<:AbstractFloat
     # Scan folders for satellite data files
     t0 = Dates.now()
-    paths = []
-    for folder in folders
-        files = scandir(folder, ".h5")
+    paths = Vector{@NamedTuple{root::String,files::Vector{String}}}()
+    for root in unique(realpath.(folders)) # ℹ skip duplicate folders
+        files = scandir(root, ".h5")
         type = sat_datafiles!(files, type)
-        push!(paths, (; root = folder, files))
+        push!(paths, (;root, files))
     end
     # Loop over found files and load data
     granules = StructArray{SatData{T}}(undef, 0)
-    metadata = DataFrame(file = String[], root = UInt16[], tstart = DateTime[], tstop = DateTime[],
-        latmin = T[], latmax = T[], elonmin = T[], elonmax = T[], wlonmin = T[], wlonmax = T[])
-    roots = ds.OrderedDict{String,UInt16}()
+    #// metadata = DataFrame(file = String[], root = UInt16[], tstart = DateTime[], tstop = DateTime[],
+    #//     latmin = T[], latmax = T[], elonmin = T[], elonmax = T[], wlonmin = T[], wlonmax = T[])
+    roots = OrderedDict{String,UInt16}()
     total_files = sum(length(data.files) for data in paths)
     progress = pm.Progress(total_files; desc="Loading satellite data... ", enabled=progress_enabled())
-    for data in paths
-        root = realpath(data.root)
-        haskey(roots, root) || (roots[root] = length(roots) + 1)
-        for file in data.files
-            datafile = joinpath(root, file)
+    for (root, files) in paths
+        for file in files
+            #// datafile = joinpath(root, file)
             try
-                granule = SatData{T}(datafile)
-                elonmin, elonmax = lonextrema(granule.lon, ≥)
-                wlonmin, wlonmax = lonextrema(granule.lon, <)
-                push!(metadata, (;file, root = roots[root],
-                    tstart = granule.time[1], tstop = granule.time[end],
-                    latmin = minimum(granule.lat), latmax = maximum(granule.lat),
-                    elonmin, elonmax, wlonmin, wlonmax
-                ))
+                granule = SatData{T}(file, root, roots)
+                #// elonmin, elonmax = lonextrema(granule.lon, ≥)
+                #// wlonmin, wlonmax = lonextrema(granule.lon, <)
+                #// push!(metadata, (;file, root = roots[root],
+                #//     tstart = granule.time[1], tstop = granule.time[end],
+                #//     latmin = minimum(granule.lat), latmax = maximum(granule.lat),
+                #//     elonmin, elonmax, wlonmin, wlonmax
+                #// ))
                 push!(granules, granule)
+                haskey(roots, root) || (roots[root] = granule.metadata.root)
             catch e
                 @warn "read error; data skipped" file exception=(e, catch_backtrace())
-                roots[root] in metadata.root || delete!(roots, root)
             end
             pm.next!(progress)
         end
     end
     pm.finish!(progress)
-    # Return SatSet constructor
-    tend = Dates.now()
-    if isempty(metadata)
-        @warn "no satellite data files successfully loaded"
-        date = (start = DateTime(9999), stop = DateTime(9999))
-    else
-        date = (start = minimum(metadata.tstart), stop = maximum(metadata.tstop))
+    # Sort granules by time and drop duplicates (same start and stop time), e.g., from copies
+    # of the same data in different folders
+    by(m) = (m.date.start, m.date.stop, basename(m.file), m.root, m.file)
+    issorted(granules.metadata; by) || (granules = granules[sortperm(granules.metadata; by)])
+    meta = granules.metadata
+    keep = (reverse∘unique)(i -> meta[i].date, Iterators.reverse(eachindex(meta))) # ℹ keep last (highest version)
+    if length(keep) < length(meta)
+        @warn "$(length(meta) - length(keep)) duplicate granules skipped"
+        # Same time but different file names point to different product versions or renamed data files
+        kept = Dict(meta[i].date => basename(meta[i].file) for i in keep)
+        any(i -> basename(meta[i].file) ≠ kept[meta[i].date], setdiff(eachindex(meta), keep)) &&
+            @warn "duplicate granules differ in file names (different product versions?); last one kept"
+        granules = granules[keep]
     end
+    # Return SatSet constructor
+    # REFACTOR
+    tend = Dates.now()
+    date = if isempty(granules)
+        @warn "no satellite data files successfully loaded"
+        (start = DateTime(9999), stop = DateTime(9999))
+    else
+        tstart = [granule.metadata.date.start for granule in granules]
+        tstop = [granule.metadata.date.stop for granule in granules]
+        (start = minimum(tstart), stop = maximum(tstop))
+    end
+    # TODO: Secondary metadata and instantiation
+    #=
+    roots::OrderedDict{UInt16,String}
+    # TODO mission::Enum{Caliop,EarthCare}
+    product::SatProduct
+    version::Union{String,SortedSet{String}}
+    date::NamedTuple{(:start, :stop),Tuple{DateTime,DateTime}}
+    created::AbstractDateTime
+    loadtime::Dates.CompoundPeriod
+    attachments
+    =#
     return SatSet{T}(granules, SecondaryMetadata{T}(
         metadata,
-        ds.OrderedDict(v => k for (k,v) in roots),
+        OrderedDict(v => k for (k,v) in roots),
         type,
         date,
         tz.ZonedDateTime(tend, tz.localzone()),

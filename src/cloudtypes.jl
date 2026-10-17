@@ -185,9 +185,9 @@ function CloudSet{T}(
     # Track computing time
     tstart = Dates.now()
     # Scan folders for mat files
-    pathdict = ds.OrderedDict{String,ds.OrderedDict}(
-        "roots" => ds.OrderedDict{String,UInt16}(),
-        "files" => ds.OrderedDict{String,UInt16}()
+    pathdict = OrderedDict{String,OrderedDict}(
+        "roots" => OrderedDict{String,UInt16}(),
+        "files" => OrderedDict{String,UInt16}()
     )
     paths = findfiles!(pathdict, collect(folders), ".mat")
 
@@ -203,9 +203,9 @@ function CloudSet{T}(
     tmin = minimum(t.time[1] for t in tracks)
     tmax = maximum(t.time[end] for t in tracks)
     # Define lookup dictionary for metadata
-    roots = ds.OrderedDict{UInt16,String}(v => k for (k, v) in pathdict["roots"])
-    files = ds.OrderedDict{UInt16,String}(v => k for (k, v) in pathdict["files"])
-    pathdict = ds.OrderedDict{String,ds.OrderedDict}("roots" => roots, "files" => files)
+    roots = OrderedDict{UInt16,String}(v => k for (k, v) in pathdict["roots"])
+    files = OrderedDict{UInt16,String}(v => k for (k, v) in pathdict["files"])
+    pathdict = OrderedDict{String,OrderedDict}("roots" => roots, "files" => files)
 
     @info string("CloudSet loaded in ",
         "$(join(loadtime.periods[1:min(2,length(loadtime.periods))], ", ")) to",

@@ -24,6 +24,7 @@ DataSet──Data
 │ │ ├─SatSet
 │ │ └─SecondaryTrack
 │ │   └─SatTrack──SatData
+│ │     └─SatMetadata
 │ └─ObservationSet
 │   ├─CPro
 │   ├─CLay
@@ -36,14 +37,14 @@ DataSet──Data
 
 ## Exported structs
 
-### `DataSet`
+### DataSet
 
 - top level abstract type that combines all kinds of TrackMatcher data
 - alias constructor for `Data` to load data of 2 different sets (primary and secondary data)
   and calculate intersections in 1 step
 
 
-### `Data`
+### Data
 
 - concrete type to store all types of measured and calculated TrackMatcher data
 - constructor to load all primary and secondary data and calculate intersections
@@ -117,6 +118,17 @@ DataSet──Data
 
 - concrete type with metadata to individual `CloudData`
 
+### SecondarySet
+
+- abstract type for all secondary (satellite) data
+
+### SatSet
+
+- concrete type to store satellite track data
+
+### SecondaryMetadata
+
+- concrete type with metadata to `SatSet`
 
 ### SecondaryTrack
 
@@ -136,7 +148,7 @@ DataSet──Data
 
 ### SatMetadata
 
-- concrete type with metadata to `SatData`
+- concrete type with metadata to `SatSet`
 
 
 ### ObservationSet
@@ -208,6 +220,7 @@ import IntervalArithmetic as intar
 import PCHIP: Polynomial, pchip, interpolate
 import DataFrames: DataFrame, AbstractDataFrame
 import StructArrays: StructArray
+import DataStructures: OrderedDict, SortedSet
 import Dates: AbstractDateTime, DateTime, Date, Time
 import TimeZones: ZonedDateTime
 import IntervalArithmetic.Symbols: (..)
@@ -228,95 +241,6 @@ zonedict = Dict{String,tz.TimeZone}(
 )
 
 
-## Define type tree of abstract types
-abstract type DataSet{T<:AbstractFloat} end
-abstract type MeasuredSet{T<:AbstractFloat} <: DataSet{T} end
-abstract type PrimarySet{T<:AbstractFloat} <: MeasuredSet{T} end
-abstract type PrimaryTrack{T<:AbstractFloat} <: PrimarySet{T} end
-abstract type FlightTrack{T<:AbstractFloat} <: PrimaryTrack{T} end
-abstract type CloudTrack{T<:AbstractFloat} <: PrimaryTrack{T} end
-abstract type SecondarySet{T<:AbstractFloat} <: MeasuredSet{T} end
-abstract type SecondaryTrack{T<:AbstractFloat} <: SecondarySet{T} end
-abstract type SatTrack{T<:AbstractFloat} <: SecondaryTrack{T} end
-abstract type ObservationSet{T<:AbstractFloat} <: MeasuredSet{T} end
-abstract type ComputedSet{T<:AbstractFloat} <: DataSet{T} end
-abstract type Intersection{T<:AbstractFloat} <: ComputedSet{T} end
-
-
-## Define Enums for aerosol and cloud classification
-
-"""
-# Enum SkyCondition
-
-- `invalid (0)` (bad or missing data)
-- `clear (1)`
-- `cloud (2)`
-- `aerosol (3)`
-- `stratospheric (4)` (polar stratospheric cloud (PSC) or stratospheric aerosol)
-- `surface (5)`
-- `subsurface (6)`
-- `no_signal (7)` (totally attenuated)
-"""
-@enum SkyCondition::UInt16 begin
-    invalid
-    clear
-    cloud
-    aerosol
-    stratospheric
-    surface
-    subsurface
-    no_signal
-end
-
-
-"""
-# Enum AerosolType
-
-- `undetermined (0)` (subtype not determined)
-- `marine (1)` (clean marine)
-- `dust (2)`
-- `polluted (3)` (polluted continental)
-- `remote (4)` (remote continental)
-- `polluted_dust (5)`
-- `smoke (6)`
-- `other (7)`
-"""
-@enum AerosolType::UInt16 begin
-    undetermined
-    marine
-    dust
-    polluted
-    remote
-    polluted_dust
-    smoke
-    other
-end
-
-
-"""
-# Enum CloudType
-
-- `low_trasparent (0)` (low overcast, transparent)
-- `low_opaque (1)` (low overcast, opaque)
-- `transition_sc (2)` (transition stratocumulus)
-- `cu (3)` (low, broken cumulus)
-- `ac (4)` (altocumulus, transparent)
-- `as (5)` (altostratus, opaque)
-- `ci (6)` (cirrus, transparent)
-- `cb (7)` (cumulonimbus, opaque)
-"""
-@enum CloudType::UInt16 begin
-    low_trasparent
-    low_opaque
-    transition_sc
-    cu
-    ac
-    as
-    ci
-    cb
-end
-
-
 ## Export types and constructors
 export DataSet, Data, MeasuredSet, MeasuredData, ComputedSet, PrimarySet, SecondarySet,
        ObservationSet, FlightSet, CloudSet, SatSet, PrimaryTrack, SecondaryTrack,
@@ -325,10 +249,12 @@ export DataSet, Data, MeasuredSet, MeasuredData, ComputedSet, PrimarySet, Second
        FlightMetadata, CloudMetadata, PrimaryMetadata, SecondaryMetadata, XMetadata,
        AerosolType, CloudType, SkyCondition, invalid, clear, cloud, aerosol, stratospheric,
        surface, subsurface, no_signal, undetermined, marine, dust, polluted, remote, polluted_dust,
-       smoke, other, low_trasparent, low_opaque, transition_sc, cu, ac, as, ci, cb
+       smoke, other, low_trasparent, low_opaque, transition_sc, cu, ac, as, ci, cb,
+       unknown, clay, cpro, apro, alay
 
 
 ## Source files
+include("types.jl")           # type tree and enums
 include("flighttypes.jl")     # concrete types/constructors for flight data/datasets
 include("flightdata.jl")      # functions related to loading flight databases/datasets
 include("cloudtypes.jl")      # concrete types/constructors for cloud data/datasets
