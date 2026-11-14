@@ -23,6 +23,12 @@
 
 ### Changed
 
+- Refactor satellite metadata to use `StructArray` instead of `DataFrame` and for `SatData` to
+  have a dedicated `SatMetadata`. Fields in `SecondaryMetadata` are refined to hold set
+  information only. ([#111])
+- Use a dedicated `load_satdata` function as for primary data and outsource code for imports to
+  _satdata.jl_ ([#111])
+- Add routines to process HDF5 satellite metadata and store it in a dictionary ([#111])
 - Use `Int32` instead of `Int` for primary track IDs ([#73])
 - Update compatibility of dependencies
 - Rename `convertFloats!` and `convertUTC` to `convert_floats!` and `convert_utc`, respectively,

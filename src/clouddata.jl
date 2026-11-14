@@ -8,7 +8,7 @@ Set the floating point precision to `Float` (default: `Float32`).
 """
 function load_cloudtracks(
     paths::Vector{@NamedTuple{root::String,files::Vector{String}}},
-    pathdict::ds.OrderedDict{String,ds.OrderedDict},
+    pathdict::OrderedDict{String,OrderedDict},
     structname::String="filtered_trajectories",
     Float::DataType=Float32
 )
@@ -65,7 +65,7 @@ end
         tracks::StructArray{<:CloudData},
         trackdata::NamedTuple{(:time,:lat,:lon)},
         id::Int32,
-        pathdict::ds.OrderedDict,
+        pathdict::OrderedDict,
         file::AbstractString,
         root::AbstractString,
         Float::DataType=Float32
@@ -79,7 +79,7 @@ function matsave!(
     tracks::StructArray{<:CloudData},
     trackdata::NamedTuple{(:time,:lat,:lon)},
     id::Int32,
-    pathdict::ds.OrderedDict,
+    pathdict::OrderedDict,
     file::AbstractString,
     root::AbstractString,
     Float::DataType=Float32

@@ -7,8 +7,8 @@ cloud = CloudSet(joinpath(@__DIR__, "data", "cloud"))
 
 cpro_src = joinpath(@__DIR__, "data", "caliop", "CPro")
 clay_src = joinpath(@__DIR__, "data", "caliop", "CLay")
-sat_cpro = SatSet(cpro_src, type=:CPro)
-sat_clay = SatSet(clay_src, type=:CLay)
+sat_cpro = SatSet(cpro_src, type=cpro)
+sat_clay = SatSet(clay_src, type=clay)
 
 timeindex = [2035:2065]
 lidarprofile = TrackMatcher.get_lidarheights((15_000, -Inf), Float32)

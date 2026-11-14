@@ -17,25 +17,25 @@
     @test @test_logs(
         (:info, "satellite data type auto-detected as CPro"),
         (:warn, "the given folder contains 1 non-CPro files which will be ignored"),
-        test_sat_datafiles(mixed_files, :undef, cpro_files, :CPro)
+        test_sat_datafiles(mixed_files, unknown, cpro_files, cpro)
     )
     @test @test_logs(
         (:warn, "the given folder contains 1 non-CPro files which will be ignored"),
-        test_sat_datafiles(mixed_files, :CPro, cpro_files)
+        test_sat_datafiles(mixed_files, cpro, cpro_files)
     )
     @test @test_logs(
         (:warn, "the given folder contains 2 non-CLay files which will be ignored"),
-        test_sat_datafiles(mixed_files, :CLay, clay_files)
+        test_sat_datafiles(mixed_files, clay, clay_files)
     )
-    @test test_sat_datafiles(cpro_files, :CPro, cpro_files)
+    @test test_sat_datafiles(cpro_files, cpro, cpro_files)
     @test @test_logs(
         (:warn, "the given folder contains 2 non-CLay files which will be ignored"),
         (:warn, "no CLay data files found, TrackMatcher requires CALIOP data"),
-        test_sat_datafiles(cpro_files, :CLay, empty_files)
+        test_sat_datafiles(cpro_files, clay, empty_files)
     )
     @test @test_logs(
         (:warn, "no satellite data files found, TrackMatcher requires CALIOP data"),
-        test_sat_datafiles(empty_files, :undef, empty_files, :undef)
+        test_sat_datafiles(empty_files, unknown, empty_files, unknown)
     )
 end
 

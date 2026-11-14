@@ -141,8 +141,7 @@ function FlightMetadata{T}(
     root::UInt16,
     file::UInt16
 ) where T<:AbstractFloat
-    elonmin, elonmax = lonextrema(lon, ≥)
-    wlonmin, wlonmax = lonextrema(lon, <)
+    elonmin, elonmax, wlonmin, wlonmax = lonextrema(lon)
     area = (latmin=minimum(lat), latmax=maximum(lat), elonmin, elonmax, wlonmin, wlonmax)
     FlightMetadata{T}(id, flight_num, route, aircraft, (start=date[1], stop=date[end]), area,
         flex, use_lon, source, root, file)
@@ -185,7 +184,7 @@ See also [`FlightMetadata`](@ref), [`FlightData`](@ref), [`FlightTrack`](@ref), 
 struct PrimaryMetadata{T<:AbstractFloat} <: PrimarySet{T}
     altmin::T
     date::NamedTuple{(:start,:stop),Tuple{DateTime,DateTime}}
-    lookup::ds.OrderedDict{String,AbstractDict}
+    lookup::OrderedDict{String,AbstractDict}
     created::Union{DateTime,ZonedDateTime}
     loadtime::Dates.CompoundPeriod
     attachments
@@ -194,7 +193,7 @@ end #struct PrimaryMetadata
 #* Constructor for empty PrimaryMetadata
 PrimaryMetadata{T}() where T<:AbstractFloat = begin
     t0 = Dates.now()
-    PrimaryMetadata{T}(0, (start=t0, stop=t0), ds.OrderedDict{String,AbstractDict}(),
+    PrimaryMetadata{T}(0, (start=t0, stop=t0), OrderedDict{String,AbstractDict}(),
         t0, Dates.CompoundPeriod(), nothing)
 end
 
@@ -398,6 +397,7 @@ struct FlightSet{T<:AbstractFloat} <: PrimarySet{T}
         webdata::StructArray{FlightData{T}}, metadata::PrimaryMetadata{T}) where T<:AbstractFloat
 
         # Check for correct dataset type in each vector and for correct floating point precision
+        # TODO logging¡
         deleteat!(volpe, findall(data -> data.metadata.source ≠ "V", volpe))
         deleteat!(flightaware, findall(data -> data.metadata.source ≠ "FA", flightaware))
         deleteat!(webdata, findall(data -> data.metadata.source ≠ "W", webdata))
@@ -427,9 +427,9 @@ function FlightSet{T}(;
     tstart = Dates.now()
 
     ## Load databases for each type
-    pathdict = ds.OrderedDict{String,ds.OrderedDict}(
-        "roots" => ds.OrderedDict{String,UInt16}(),
-        "files" => ds.OrderedDict{String,UInt16}()
+    pathdict = OrderedDict{String,OrderedDict}(
+        "roots" => OrderedDict{String,UInt16}(),
+        "files" => OrderedDict{String,UInt16}()
     )
     # VOLPE AEDT dataset
     files = findfiles!(pathdict, volpe, ".csv")
@@ -464,16 +464,16 @@ function FlightSet{T}(;
         "▪ webdata ($(length(webdata)) entries)\n▪ metadata")
 
     # Create lookup dictionaries for source and root IDs
-    sources = ds.OrderedDict{String,String}(
+    sources = OrderedDict{String,String}(
         "V" => "VOLPE",
         "FA" => "FlightAware",
         "W" => "web (flightaware.com)"
     )
-    roots = ds.OrderedDict(v => k for (k,v) in pathdict["roots"])
-    files = ds.OrderedDict(v => k for (k,v) in pathdict["files"])
+    roots = OrderedDict(v => k for (k,v) in pathdict["roots"])
+    files = OrderedDict(v => k for (k,v) in pathdict["files"])
     # Instantiate
     FlightSet{T}(volpe, flightaware, webdata,
-        PrimaryMetadata{T}(altmin, (start=tmin, stop=tmax), ds.OrderedDict(
+        PrimaryMetadata{T}(altmin, (start=tmin, stop=tmax), OrderedDict(
             "sources" => sources, "roots" => roots, "files" => files
         ), tc, loadtime, attachments))
 end # Main constructor FlightSet

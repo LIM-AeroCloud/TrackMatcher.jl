@@ -4,7 +4,7 @@
 
 """
     findfiles!(
-        pathdict::ds.OrderedDict{String,ds.OrderedDict},
+        pathdict::OrderedDict{String,OrderedDict},
         roots::Union{AbstractString,Vector{<:AbstractString}},
         ext::Union{AbstractString,Vector{<:AbstractString}}
     ) -> Vector{@NamedTuple{root::String,files::Vector{String}}}
@@ -14,7 +14,7 @@ vector of named tuples with the root and the found files. Assign a unique ID to 
 in `pathdict`.
 """
 function findfiles!(
-    pathdict::ds.OrderedDict{String,ds.OrderedDict},
+    pathdict::OrderedDict{String,OrderedDict},
     roots::Union{AbstractString,Vector{<:AbstractString}},
     ext::Union{AbstractString,Vector{<:AbstractString}}
 )::Vector{@NamedTuple{root::String,files::Vector{String}}}
@@ -55,15 +55,15 @@ end
 
 
 """
-    sat_datafiles!(files::Vector{String}, type::Symbol) -> Symbol
+    sat_datafiles!(files::Vector{String}, type::SatProduct) -> SatProduct
 
-Determine the satellite data type from `type` or, if type is `:undef`, from the given files
+Determine the satellite data type from `type` or, if type is `undef`, from the given files
 names and clean `files` of other data types.
-Returns the detected data type as a symbol (`:CPro` or `:CLay`).
+Returns the detected data type as a `SatProduct` (`CPro` or `CLay`).
 """
-function sat_datafiles!(files::Vector{String}, type::Symbol)::Symbol
+function sat_datafiles!(files::Vector{String}, type::SatProduct)::SatProduct
     # Determine satellite data type
-    if type === :undef
+    if type === unknown
         nclay = count(occursin.("CLay", files))
         ncpro = count(occursin.("CPro", files))
         if nclay == ncpro == 0
@@ -71,11 +71,11 @@ function sat_datafiles!(files::Vector{String}, type::Symbol)::Symbol
             empty!(files)
             return type
         end
-        type = ncpro ≥ nclay ? :CPro : :CLay
+        type = ncpro ≥ nclay ? cpro : clay
         @info "satellite data type auto-detected as $type"
     end
     # Clean files from other data types
-    i = findall(!contains(string(type)), files)
+    i = findall(!contains(string(type)), lowercase.(files))
     if length(i) > 0
         @warn "the given folder contains $(length(i)) non-$type files which will be ignored"
         deleteat!(files, i)
@@ -484,23 +484,20 @@ end #function closest_points
 
 
 """
-    lonextrema(lon::Vector{T}, rel::Function) where T
+    lonextrema(lon::AbstractVector{T}) where T<:AbstractFloat
 
-Find extrema in `lon`gitude values for eastern and western hemisphere by defining
-`rel` as `>` or `<` 0 filtering for the respective longitude values.
+Find extrema in `lon`gitude values for eastern and western hemisphere.
 """
-function lonextrema(lon::Vector{T}, rel::Function) where T
-    # Return minimum or NaN for non-existing track data in current hemisphere
-    try minimum(filter(rel(0), lon))
-    catch
-        T(NaN)
-    end,
-    # Return maximum or NaN for non-existing track data in current hemisphere
-    try maximum(filter(rel(0), lon))
-    catch
-        T(NaN)
+function lonextrema(lon::AbstractVector{T}) where T<:AbstractFloat
+    # Initialize extrema for eastern and western hemispheres
+    emin, emax, wmin, wmax = T(Inf), T(-Inf), T(Inf), T(-Inf)
+    for x in lon
+        x ≥ 0 ? (emin=min(emin, x); emax=max(emax, x)) :
+        (wmin=min(wmin, x); wmax=max(wmax, x))
     end
-end #function lonextrema
+    nan(a, b) = isinf(a) ? (T(NaN), T(NaN)) : (a, b)
+    (nan(emin, emax)..., nan(wmin, wmax)...)
+end
 
 
 
